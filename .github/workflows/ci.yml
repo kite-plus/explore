@@ -58,3 +58,26 @@ jobs:
       - run: make check-tidy
       - run: make lint
       - run: go test -race -count=1 ./...
+
+  web:
+    name: Web
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web check
+      - run: pnpm --dir web build
+      # The built site against a stub API: no scripts, no cookies, no third
+      # parties, and the SEO tags; see docs/design/frontend.md section 10.
+      - run: pnpm --dir web test
