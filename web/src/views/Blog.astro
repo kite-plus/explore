@@ -7,18 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { dict, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
-import type { Loaded } from "@/lib/loaders";
-import type { BlogPage } from "@/lib/types";
+import type { BlogView, Loaded } from "@/lib/loaders";
+import { tagNames } from "@/lib/tags";
 
 interface Props {
   lang: Lang;
   host: string;
-  result: Loaded<BlogPage>;
+  result: Loaded<BlogView>;
 }
 
 const { lang, host, result } = Astro.props;
 const t = dict(lang);
 const data = result.kind === "ok" ? result.data : undefined;
+const names = data ? tagNames(data.tags, lang) : {};
 const title = data ? data.blog.name : t.errors.notFound;
 const description = data
   ? t.blog.description(
@@ -39,6 +40,7 @@ const description = data
             <p class="truncate text-sm text-muted-foreground">{data.blog.host}</p>
           </div>
         </header>
+        {data.blog.description && <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground" lang={data.blog.language}>{data.blog.description}</p>}
         <div class="mt-4 flex flex-wrap items-center gap-2">
           <ExternalLink lang={lang} href={data.blog.site_url} class={buttonVariants({ size: "sm" })}>
             {t.blog.visit}
@@ -58,7 +60,7 @@ const description = data
         ) : (
           <div class="divide-y">
             {data.entries.map((entry) => (
-              <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} />
+              <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} tagNames={names} />
             ))}
           </div>
         )}

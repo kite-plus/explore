@@ -93,11 +93,13 @@ type BlogUpdate struct {
 	ShowExcerpt  *bool
 	Status       *model.BlogStatus
 	StatusNote   *string
+	DefaultTags  *[]string
 }
 
 // UpdateBlog applies a maintainer's changes. Changing anything that shapes
 // normalization forgets the fetch cache, so the next fetch rebuilds the
-// snapshot instead of finding the feed unchanged.
+// snapshot instead of finding the feed unchanged. New default tags send the
+// blog's entries back to the tagger with the new hint.
 func (s *Store) UpdateBlog(ctx context.Context, host string, u BlogUpdate) (model.Blog, error) {
 	var status *string
 	if u.Status != nil {
@@ -105,13 +107,28 @@ func (s *Store) UpdateBlog(ctx context.Context, host string, u BlogUpdate) (mode
 		status = &st
 	}
 	reset := u.FeedURL != nil || u.ExtraDomains != nil || u.ShowExcerpt != nil
-	return scanBlog(s.pool.QueryRow(ctx, `
+	var blog model.Blog
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		blog, err = updateBlog(ctx, tx, host, u, status, reset)
+		if err != nil || u.DefaultTags == nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE entries SET tagged_at = NULL WHERE blog_id = $1`, blog.ID)
+		return err
+	})
+	return blog, err
+}
+
+func updateBlog(ctx context.Context, tx pgx.Tx, host string, u BlogUpdate, status *string, reset bool) (model.Blog, error) {
+	return scanBlog(tx.QueryRow(ctx, `
 		UPDATE blogs SET
 			name          = coalesce(@name, name),
 			language      = coalesce(@language, language),
 			feed_url      = coalesce(@feed_url, feed_url),
 			extra_domains = coalesce(@extra_domains, extra_domains),
 			show_excerpt  = coalesce(@show_excerpt, show_excerpt),
+			default_tags  = coalesce(@default_tags, default_tags),
 			status        = coalesce(@status, status),
 			status_note   = CASE WHEN @set_note THEN nullif(@status_note, '') ELSE status_note END,
 			etag          = CASE WHEN @reset THEN NULL ELSE etag END,
@@ -123,7 +140,7 @@ func (s *Store) UpdateBlog(ctx context.Context, host string, u BlogUpdate) (mode
 		RETURNING `+blogColumns,
 		pgx.NamedArgs{
 			"host": host, "name": u.Name, "language": u.Language, "feed_url": u.FeedURL,
-			"extra_domains": u.ExtraDomains, "show_excerpt": u.ShowExcerpt, "status": status,
+			"extra_domains": u.ExtraDomains, "show_excerpt": u.ShowExcerpt, "status": status, "default_tags": u.DefaultTags,
 			"set_note": u.StatusNote != nil, "status_note": deref(u.StatusNote), "reset": reset,
 		}))
 }
@@ -156,6 +173,16 @@ func (s *Store) FetchNow(ctx context.Context, host string) error {
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	return err
+}
+
+// SetDescription records a metadata check. An empty result leaves the last
+// useful description in place while still delaying the next check.
+func (s *Store) SetDescription(ctx context.Context, blogID int64, description string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE blogs SET description = coalesce(nullif($2, ''), description),
+		    description_checked_at = now(), updated_at = now()
+		WHERE id = $1`, blogID, description)
 	return err
 }
 

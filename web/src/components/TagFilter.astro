@@ -1,0 +1,35 @@
+---
+import { dict, localePath, type Lang } from "@/i18n";
+import type { Tag } from "@/lib/types";
+import { withQuery } from "@/lib/utils";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  tags: Tag[];
+  current?: string;
+  /** The blog-language filter in use, kept when the tag changes. */
+  filter?: string;
+}
+
+const { lang, path, tags, current, filter } = Astro.props;
+const t = dict(lang).filter;
+const base = localePath(lang, path);
+const options = [{ value: undefined, label: t.all }, ...tags.map((tag) => ({ value: tag.slug, label: tag.name[lang] }))];
+---
+
+{
+  tags.length > 0 && (
+    <nav aria-label={t.tags} class="flex flex-wrap gap-1 text-sm">
+      {options.map((o) => (
+        <a
+          href={withQuery(base, { lang: filter, tag: o.value })}
+          aria-current={o.value === current ? "page" : undefined}
+          class="rounded-md px-2.5 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-secondary-foreground"
+        >
+          {o.label}
+        </a>
+      ))}
+    </nav>
+  )
+}

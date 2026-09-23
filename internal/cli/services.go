@@ -16,6 +16,7 @@ import (
 	"github.com/kite-plus/explore/internal/config"
 	"github.com/kite-plus/explore/internal/fetch"
 	"github.com/kite-plus/explore/internal/store"
+	"github.com/kite-plus/explore/internal/tagger"
 	"github.com/kite-plus/explore/internal/worker"
 )
 
@@ -63,6 +64,7 @@ func newServeCmd() *cobra.Command {
 			srv := &api.Server{
 				Store:          st,
 				Checker:        &check.Checker{Fetch: newFetcher(cfg)},
+				ImageFetch:     fetch.New(fetch.Options{UserAgent: fetch.UserAgent(buildinfo.Version, cfg.PublicURL), AllowPrivate: cfg.AllowPrivateNetworks, Timeout: 8 * time.Second}),
 				PublicURL:      cfg.PublicURL,
 				Admins:         admins,
 				TrustedProxies: cfg.TrustedProxies,
@@ -116,7 +118,13 @@ func newWorkerCmd() *cobra.Command {
 			}
 			defer st.Close()
 			w := &worker.Worker{Store: st, Fetch: newFetcher(cfg), Log: log, Concurrency: cfg.WorkerConcurrency}
-			log.Info("worker started", "concurrency", cfg.WorkerConcurrency, "version", buildinfo.Version)
+			if cfg.Tagger.Enabled() {
+				w.Tagger = entryTagger{tagger.New(tagger.Options{
+					APIKey: cfg.Tagger.APIKey, Model: cfg.Tagger.Model, Effort: cfg.Tagger.Effort,
+				})}
+			}
+			log.Info("worker started", "concurrency", cfg.WorkerConcurrency, "tagger_model", cfg.Tagger.Model,
+				"version", buildinfo.Version)
 			return w.Run(ctx)
 		},
 	}
@@ -145,4 +153,13 @@ func newMigrateCmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+// entryTagger hands the worker's tag jobs to the tagger.
+type entryTagger struct{ t *tagger.Tagger }
+
+func (e entryTagger) Tag(ctx context.Context, j store.TagJob) ([]string, error) {
+	return e.t.Tag(ctx, tagger.Post{
+		Title: j.Title, Excerpt: j.Excerpt, Categories: j.Categories, Language: j.Language, BlogTags: j.BlogTags,
+	})
 }

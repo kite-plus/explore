@@ -15,9 +15,9 @@
 | `submissions` | 流程记录：提交与审核 | 能，按保留期清理 | 只备份待审核的 |
 | `excluded_hosts` | 真相源：已退出或被屏蔽的主机名 | 不能 | 要备份 |
 
-读者账号的表（`users`、`sessions`、`login_codes`、`subscriptions`）和文章标签的列还没实现，设计见 [accounts.md §6](accounts.md#6-数据模型)，实现时并入本节和 §2：账号数据是真相源，不能清空（删除账号时整体删除），要备份；标签跟着 `entries`，是缓存。维护者目前用配置里的访问令牌（[api.md §4](api.md#4-管理接口)）。
+读者账号的表（`users`、`sessions`、`login_codes`、`subscriptions`）还没实现，设计见 [accounts.md §6](accounts.md#6-数据模型)，实现时并入本节和 §2：账号数据是真相源，不能清空（删除账号时整体删除），要备份。文章标签已经实现，是 `entries` 里的缓存列（§2.2）。维护者目前用配置里的访问令牌（[api.md §4](api.md#4-管理接口)）。
 
-数据库里**永远不出现**的东西：文章正文、HTML、图片；读者的浏览记录、点击记录、IP；账号之外的任何读者信息。账号本身只有 [accounts.md §1](accounts.md#1-原则怎么改) 列出的几项。§6 的 schema 守护会在有人加列时让 CI 失败。
+数据库里**永远不出现**的东西：文章正文、HTML、图片文件；读者的浏览记录、点击记录、IP；账号之外的任何读者信息。图片地址只是可丢弃的元数据。账号本身只有 [accounts.md §1](accounts.md#1-原则怎么改) 列出的几项。§6 的 schema 守护会在有人加列时让 CI 失败。
 
 ---
 
@@ -32,6 +32,8 @@ CREATE TABLE blogs (
     id                   bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     host                 text        NOT NULL UNIQUE,
     name                 text        NOT NULL CHECK (char_length(name) <= 100),
+    description          text        NOT NULL DEFAULT '' CHECK (char_length(description) <= 240),
+    description_checked_at timestamptz,
     site_url             text        NOT NULL,
     feed_url             text        NOT NULL,
     language             text        NOT NULL,
@@ -41,6 +43,7 @@ CREATE TABLE blogs (
     status_note          text,
     show_excerpt         boolean     NOT NULL DEFAULT true,
     extra_domains        text[]      NOT NULL DEFAULT '{}',
+    default_tags         text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(default_tags) <= 3),
 
     etag                 text,
     last_modified        text,
@@ -63,11 +66,13 @@ CREATE INDEX blogs_due ON blogs (next_fetch_at) WHERE status = 'active';
 | 字段 | 说明 |
 |---|---|
 | `host` | 站点地址的主机名：小写，国际化域名转成 punycode，不去掉 `www.`。对外用它标识博客（`/blogs/{host}`）。一个主机只能收录一个博客 |
+| `description`、`description_checked_at` | 首页 `meta description`，缺失时取订阅源描述；worker 每 7 天检查一次，最长 240 字；没有可用描述时保留上次值 |
 | `language` | BCP 47 标签（如 `zh-CN`），由提交时声明或取订阅源的 `<language>` |
 | `generator` | 从订阅源识别的博客系统：`wordpress`、`halo`、`hugo`、`hexo`、`typecho`、`jekyll`、`ghost`、`kite`、`other`、`unknown`。用于统计和检查提示，**不影响**抓取与展示（[architecture.md §0.2](architecture.md#0-两个核心判断)） |
 | `status` | 只由维护者改：`active` 正常抓取和展示；`paused` 既不抓取也不展示，原因写在 `status_note` |
 | `show_excerpt` | 作者关闭摘要时为 `false`，此时 `entries.excerpt` 不入库 |
 | `extra_domains` | 文章链接允许出现的额外域名（[architecture.md §6.3](architecture.md#6-抓取与展示规则)） |
+| `default_tags` | 维护者给这个博客设的默认标签，打标签时给模型当提示，不直接贴到文章上。修改后，这个博客的文章会重新打标签（[accounts.md §5.2](accounts.md#52-怎么打)） |
 | `etag` … `last_error` | 抓取状态，属于缓存性质，丢了只是多一轮完整下载 |
 | `gone_since` | 第一次收到退出信号（`410 Gone`，或 robots.txt 明确禁止）的时间；恢复正常后清空（[worker.md §3.4](worker.md#34-结果分类)） |
 
@@ -91,22 +96,31 @@ CREATE TABLE entries (
     url           text        NOT NULL CHECK (char_length(url) <= 2000),
     title         text        NOT NULL CHECK (char_length(title) <= 300),
     excerpt       text                 CHECK (char_length(excerpt) <= 140),
+    image_url     text                 CHECK (char_length(image_url) <= 2000),
     published_at  timestamptz,
     date_trusted  boolean     NOT NULL,
     synced_at     timestamptz NOT NULL DEFAULT now(),
+    categories    text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(categories) <= 10),
+    tags          text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(tags) <= 3),
+    tagged_at     timestamptz,
 
     UNIQUE (blog_id, identity),
     CHECK (published_at IS NOT NULL OR NOT date_trusted)
 );
 
-CREATE INDEX entries_stream  ON entries (published_at DESC, id DESC) WHERE date_trusted;
-CREATE INDEX entries_by_blog ON entries (blog_id, published_at DESC NULLS LAST);
+CREATE INDEX entries_stream   ON entries (published_at DESC, id DESC) WHERE date_trusted;
+CREATE INDEX entries_by_blog  ON entries (blog_id, published_at DESC NULLS LAST);
+CREATE INDEX entries_tags     ON entries USING gin (tags);
+CREATE INDEX entries_untagged ON entries (published_at DESC NULLS LAST, id DESC) WHERE tagged_at IS NULL;
 ```
 
 - **没有正文字段**，`excerpt` 在数据库层面限制在 140 字以内：不是"约定不存"，而是"存不进去"。140 是 [architecture.md §6.5](architecture.md#6-抓取与展示规则) 的 `[待定]` 值，E0 改动它需要一个迁移。
+- `image_url` 只缓存订阅源给出的图片地址，不保存图片文件；代理加载图片时仅在内存中短时缓存。作者关闭摘要时也不展示缩略图。
 - `identity` 的取法见 [worker.md §5](worker.md#5-规范化)。
 - `date_trusted` 由规范化计算（没有日期、零值日期、"日期不可信"时为 `false`）；未来时间不在入库时判断，而在查询时比较 `now()`，因为它会随时间变化。
 - 每个博客最多 20 行（[architecture.md §0.1](architecture.md#0-两个核心判断) 的 N）。1,000 个博客约 2 万行，完全不需要分区。
+- `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
+- `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
 
 ### 2.3 `submissions`
 

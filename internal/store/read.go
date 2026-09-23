@@ -35,6 +35,7 @@ type Cursor struct {
 // StreamQuery selects a page of the home stream.
 type StreamQuery struct {
 	Lang   string // a lower-case language prefix such as "zh", or empty
+	Tag    string // a tag slug, or empty
 	Limit  int
 	Cursor *Cursor
 }
@@ -49,6 +50,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 		"future_tolerance": seconds(policy.FutureTolerance),
 		"per_day":          policy.StreamPerBlogPerDay,
 		"lang":             q.Lang,
+		"tag":              q.Tag,
 		"has_cursor":       q.Cursor != nil,
 		"cursor_at":        time.Time{},
 		"cursor_id":        int64(0),
@@ -59,7 +61,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 	}
 	rows, err := s.pool.Query(ctx, `
 		WITH ranked AS (
-			SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(e.excerpt, '') AS excerpt, e.published_at,
+			SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(e.excerpt, '') AS excerpt, coalesce(e.image_url, '') AS image_url, e.published_at, e.tags,
 			       b.host, b.name, b.site_url, b.feed_url, b.language,
 			       row_number() OVER (
 			           PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE 'UTC')
@@ -72,8 +74,9 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 			  AND e.published_at >  now() - (@window * interval '1 second')
 			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
+			  AND (@tag::text = '' OR @tag = ANY (e.tags))
 		)
-		SELECT id, blog_id, identity, url, title, excerpt, published_at, host, name, site_url, feed_url, language
+		SELECT id, blog_id, identity, url, title, excerpt, image_url, published_at, tags, host, name, site_url, feed_url, language
 		FROM ranked
 		WHERE rank_in_day <= @per_day
 		  AND (NOT @has_cursor OR (published_at, id) < (@cursor_at, @cursor_id))
@@ -84,7 +87,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (StreamEntry, error) {
 		var e StreamEntry
-		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.PublishedAt,
+		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.ImageURL, &e.PublishedAt, &e.Tags,
 			&e.Blog.Host, &e.Blog.Name, &e.Blog.SiteURL, &e.Blog.FeedURL, &e.Blog.Language)
 		e.DateTrusted = true
 		return e, err
@@ -96,6 +99,7 @@ type ListedBlog struct {
 	ID              int64
 	Host            string
 	Name            string
+	Description     string
 	SiteURL         string
 	FeedURL         string
 	Language        string
@@ -127,7 +131,7 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 	}
 	rows, err := s.pool.Query(ctx, `
 		WITH listed AS (
-			SELECT b.id, b.host, b.name, b.site_url, b.feed_url, b.language, b.generator,
+			SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 			       (SELECT max(e.published_at) FROM entries e
 			        WHERE e.blog_id = b.id AND e.date_trusted
 			          AND e.published_at <= now() + (@future_tolerance * interval '1 second')) AS last_published_at
@@ -135,7 +139,7 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 			WHERE `+visible+`
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 		)
-		SELECT id, host, name, site_url, feed_url, language, generator, last_published_at
+		SELECT id, host, name, description, site_url, feed_url, language, generator, last_published_at
 		FROM listed
 		WHERE NOT @has_cursor OR (coalesce(last_published_at, 'epoch'), id) < (@cursor_at, @cursor_id)
 		ORDER BY coalesce(last_published_at, 'epoch') DESC, id DESC
@@ -148,7 +152,7 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 
 func scanListed(row pgx.CollectableRow) (ListedBlog, error) {
 	var b ListedBlog
-	err := row.Scan(&b.ID, &b.Host, &b.Name, &b.SiteURL, &b.FeedURL, &b.Language, &b.Generator, &b.LastPublishedAt)
+	err := row.Scan(&b.ID, &b.Host, &b.Name, &b.Description, &b.SiteURL, &b.FeedURL, &b.Language, &b.Generator, &b.LastPublishedAt)
 	return b, err
 }
 
@@ -161,7 +165,7 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 		"future_tolerance": seconds(policy.FutureTolerance),
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT b.id, b.host, b.name, b.site_url, b.feed_url, b.language, b.generator,
+		SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 		       (SELECT max(e.published_at) FROM entries e
 		        WHERE e.blog_id = b.id AND e.date_trusted
 		          AND e.published_at <= now() + (@future_tolerance * interval '1 second'))
@@ -179,7 +183,7 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 	}
 
 	rows, err = s.pool.Query(ctx, `
-		SELECT id, blog_id, identity, url, title, coalesce(excerpt, ''), published_at, date_trusted
+		SELECT id, blog_id, identity, url, title, coalesce(excerpt, ''), coalesce(image_url, ''), published_at, date_trusted, tags
 		FROM entries
 		WHERE blog_id = @id AND (published_at IS NULL OR published_at <= now() + (@future_tolerance * interval '1 second'))
 		ORDER BY published_at DESC NULLS LAST, id`,
@@ -189,7 +193,7 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 	}
 	entries, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (model.Entry, error) {
 		var e model.Entry
-		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.PublishedAt, &e.DateTrusted)
+		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.ImageURL, &e.PublishedAt, &e.DateTrusted, &e.Tags)
 		return e, err
 	})
 	return blog, entries, err

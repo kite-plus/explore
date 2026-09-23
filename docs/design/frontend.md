@@ -1,8 +1,8 @@
 # 前端（web）
 
-> 状态：E2 已按本文实现，标 `[待定]` 的部分除外 · 最近更新：2026-09-23
+> 状态：E2 公开读者页面与文章标签已实现；账号和订阅页面待实现 · 最近更新：2026-09-23
 > 不能动摇的约束见 [architecture.md §8](architecture.md#8-前端与-seo)；接口见 [api.md](api.md)。本文写前端怎么满足它们。
-> 登录、订阅流、设置页和标签筛选还没实现，设计见 [accounts.md §8](accounts.md#8-前端)，实现时并入本文。
+> 登录、订阅流和设置页还没实现，设计见 [accounts.md §8](accounts.md#8-前端)，实现时并入本文。文章标签和首页标签筛选已实现。
 
 ---
 
@@ -45,9 +45,9 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 
 | 路由 | 内容 | 数据 | 渲染 | `Cache-Control` | 搜索引擎 |
 |---|---|---|---|---|---|
-| `/` | 首页时间流 | `GET /api/v1/entries` | 按需 | `public, max-age=60` | 收录 |
-| `/blogs` | 博客目录 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
-| `/blogs/{host}` | 一个博客的最新文章和订阅地址 | `GET /api/v1/blogs/{host}` | 按需 | `public, max-age=300` | 收录 |
+| `/` | 首页时间流，含可用的文章缩略图；可按博客语言和文章标签筛选 | `GET /api/v1/entries`、`GET /api/v1/tags` | 按需 | `public, max-age=60` | 无筛选时收录 |
+| `/blogs` | 博客目录，含 favicon 和简短介绍 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
+| `/blogs/{host}` | 一个博客的介绍、最新文章、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
 | `/submit` | 提交博客的表单 | —— | 按需 | `no-store` | `noindex` |
 | `/submissions/{id}` | 提交进度 | `GET /api/v1/submissions/{id}` | 按需 | `no-store` | `noindex` |
@@ -60,7 +60,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/sitemap.xml` | 两种语言的首页、目录、说明页和全部博客页 | 按需，`public, max-age=3600` |
 | `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面 | 按需，`public, max-age=86400`；写成接口而不是静态文件，sitemap 地址才能跟着 `EXPLORE_PUBLIC_URL` |
 
-- **带查询参数的列表页**（翻页的 `?cursor=`、博客语言筛选的 `?lang=`）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
+- **带筛选或翻页的列表页**（`?lang=`、`?tag=`、`?cursor=`，可以组合）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
 - `/feed.xml`、`/blogs.opml`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
 - **没有文章页**。文章只以指向原文的链接出现（[architecture.md §8](architecture.md#8-前端与-seo)）。
 - 匿名读者没有 Cookie，公开页面对所有人相同；两种语言又是不同的地址，所以公开页面都可以被反向代理和 CDN 直接缓存。登录后的请求带会话 Cookie，返回个人化的页面，不缓存（[accounts.md §8](accounts.md#8-前端)）。
@@ -103,6 +103,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 - 博客的标题和摘要**永远保持原文**，不做机器翻译。翻译会改变作者写下的内容，Explore 也就不再只是源站的索引（[architecture.md §0.1](architecture.md#0-两个核心判断)）。
 - 每篇文章按所属博客声明的语言加 `lang` 属性。例如中文界面里的英文文章是 `<article lang="en">`，读屏软件和搜索引擎都能正确识别混排的内容。
 - 博客语言筛选用查询参数 `?lang=`，对应接口的 `lang`，与界面语言无关：英文界面也可以只看中文博客。
+- 首页标签筛选用 `?tag=`，取值是标签表里的英文短名。切换博客语言时保留标签，切换标签时保留博客语言；翻页同时保留两种筛选。
 - 默认不筛选，两种界面都展示全部博客 `[待定]`，E2 看首批博客的语言分布再定。
 
 ### 3.4 文案
@@ -148,7 +149,7 @@ import SubmitForm from "@/components/submit-form";
 4. 每个岛是独立的 React 实例，彼此不共享 Context。依赖 Provider 的组件（Toast、主题等）要和用它的组件放在同一个岛里；跨岛共享状态用 nanostores。
 5. 不引入 CSS-in-JS 组件库（§1.2）。
 6. 不加载外部字体：用系统字体栈。中文网络字体动辄几 MB，还会产生第三方请求。
-7. 博客头像用博客名的首字加上由主机名算出的颜色，在服务端渲染，不请求任何图片。
+7. 博客目录和博客页的大头像通过本站 `/api/v1/blogs/{host}/favicon` 加载源站 favicon；缺失时显示博客名首字和由主机名算出的颜色。文章列表的小头像仍使用首字。浏览器不向源站发图片请求。
 8. **离开 Explore 的链接在新标签页打开**（原文、博客首页、订阅源、GitHub），读者看完还能回到信息流。提示要轻：文字后面一个淡色的 ↗，给读屏软件一段隐藏的"在新标签页打开"，首页说明里写一句；不用悬停提示，也不弹窗。组件里用 `ExternalLink.astro`，Markdown 页面的外链由 `ExternalLinks.astro` 统一改写。不加 `noreferrer`，作者的统计里仍能看到来自 Explore 的访问（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）。站内链接照常在本页打开。
 
 | 场景 | 做法 | 浏览器里的 JS |
@@ -156,7 +157,7 @@ import SubmitForm from "@/components/submit-form";
 | 按钮、卡片、徽章、表格 | shadcn/ui 组件，不加指令 | 无 |
 | 链接样式的按钮 | `<ButtonLink href="…">`，代替 `asChild`，服务端渲染不需要 slot 原语 | 无 |
 | 导航菜单、折叠内容 | `<details>` | 无 |
-| 翻页、博客语言筛选、界面语言切换 | 链接 | 无 |
+| 翻页、博客语言筛选、文章标签筛选、界面语言切换 | 链接 | 无 |
 | 提交表单 | 第一版用普通 HTML 表单；需要即时校验和加载状态时改成岛 | 无，或只在提交页有 |
 | 深色模式切换 | 页头一个按钮，配一小段内联脚本（`src/scripts/theme.js`）。Astro 只给它打包的脚本加哈希，所以这段脚本的哈希在 `astro.config.mjs` 里算出来，写进 CSP | 每个页面约 2 KB，gzip 后不到 1 KB |
 
@@ -177,6 +178,9 @@ import SubmitForm from "@/components/submit-form";
 - API 地址来自环境变量 `EXPLORE_API_URL`，部署时指向内网的 `serve`。
 - 接口类型目前手写，与 api.md 保持一致；OpenAPI 写好后改为生成（§1）。
 - 游标原样透传：`/?cursor=X` 对应 `GET /api/v1/entries?cursor=X`。
+- 首页与博客页在服务端读取 `GET /api/v1/tags`，按界面语言显示标签名；标签表在前端服务进程内缓存一小时。标签表暂时取不到时，页面仍显示文章，但不显示没有对应名称的标签。
+- 文章缩略图从 `image_url` 指向的本站接口懒加载；本地开发时由 Astro 的同名路由转发给 Gin，部署时反向代理直接把 `/api/` 交给 Gin。图片加载失败不影响标题、摘要和原文链接。
+- 首页的 `lang` 和 `tag` 原样传给时间流接口；未知标签由接口返回 `400`，前端显示真正的 `404` 页面。
 - **前端不做任何数据规则**：摘要截断、过滤、每日上限都在后端（[architecture.md §6](architecture.md#6-抓取与展示规则)），前端只负责展示。
 - 错误处理：
   - API 返回 `404` 时，页面也返回真正的 `404`，而不是一个显示"没找到"的 `200` 页面（搜索引擎称之为"软 404"）。
@@ -273,6 +277,8 @@ web/
 - 公开页面只有主题切换这一段内联脚本，内容与源文件一致，哈希在 CSP 里；没有内联 `style` 属性、不发 Cookie，并带着 CSP 响应头；
 - 主题脚本本身在 `test/theme.test.mjs` 里用一个模拟的页面测试：跟随系统、保存选择、切回系统、存储不可用、其他标签页的选择；
 - 页面不引用任何外部域名的资源；指向站外的链接都在新标签页打开并带提示，站内链接不带 `target`；
+- 文章标签、标签表缓存、语言与标签组合筛选、翻页保留筛选，以及带筛选页面的 `noindex, follow`；
+- 有图文章输出本站缩略图地址，不让浏览器直接请求源站图片；无图文章仍是纯文字条目；
 - 提交流程的各种结果，以及跨站提交被拒绝。
 
 **部署**：`web` 服务和 `serve`、`worker`、`postgres` 在同一个 Compose 里（[project-layout.md §10](project-layout.md#10-部署)）。反向代理把 `/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。

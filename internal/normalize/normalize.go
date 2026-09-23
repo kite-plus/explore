@@ -92,9 +92,11 @@ func Snapshot(f *feed.Feed, b Blog) Result {
 			URL:         link.String(),
 			Title:       title,
 			PublishedAt: published(it),
+			Categories:  categories(it.Categories),
 		}
 		if b.ShowExcerpt {
 			e.Excerpt = excerpt(it)
+			e.ImageURL = imageURL(it, link)
 		}
 		valid = append(valid, e)
 	}
@@ -211,6 +213,30 @@ func published(it feed.Item) *time.Time {
 	}
 	utc := t.UTC()
 	return &utc
+}
+
+// placeholderCategories are what blog systems file a post under when the
+// author picked nothing; they say nothing about the post.
+var placeholderCategories = map[string]bool{"uncategorized": true, "未分类": true, "默认分类": true}
+
+// categories cleans a post's own categories: plain text, no duplicates by
+// case, no placeholders, at most policy.CategoriesPerEntry of them.
+func categories(raw []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, c := range raw {
+		c = Truncate(PlainText(c), policy.CategoryMaxRunes)
+		key := strings.ToLower(c)
+		if c == "" || seen[key] || placeholderCategories[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, c)
+		if len(out) == policy.CategoriesPerEntry {
+			break
+		}
+	}
+	return out
 }
 
 func excerpt(it feed.Item) string {

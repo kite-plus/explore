@@ -1,6 +1,9 @@
 blogs.body_hash bytea
 blogs.consecutive_failures integer
 blogs.created_at timestamp with time zone
+blogs.default_tags ARRAY
+blogs.description text
+blogs.description_checked_at timestamp with time zone
 blogs.etag text
 blogs.extra_domains ARRAY
 blogs.feed_url text
@@ -22,12 +25,16 @@ blogs.status text
 blogs.status_note text
 blogs.updated_at timestamp with time zone
 entries.blog_id bigint
+entries.categories ARRAY
 entries.date_trusted boolean
 entries.excerpt text
 entries.id bigint
 entries.identity text
+entries.image_url text
 entries.published_at timestamp with time zone
 entries.synced_at timestamp with time zone
+entries.tagged_at timestamp with time zone
+entries.tags ARRAY
 entries.title text
 entries.url text
 excluded_hosts.created_at timestamp with time zone

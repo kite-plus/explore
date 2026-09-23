@@ -34,6 +34,7 @@ type Blog struct {
 	ID           int64
 	Host         string
 	Name         string
+	Description  string
 	SiteURL      string
 	FeedURL      string
 	Language     string
@@ -42,6 +43,7 @@ type Blog struct {
 	StatusNote   string
 	ShowExcerpt  bool
 	ExtraDomains []string
+	DefaultTags  []string // a maintainer's hint for the tagger
 
 	ETag                string
 	LastModified        string
@@ -66,8 +68,13 @@ type Entry struct {
 	URL         string
 	Title       string
 	Excerpt     string // empty when hidden by the author or absent
+	ImageURL    string // source URL only; image bytes are not stored
 	PublishedAt *time.Time
 	DateTrusted bool
+	// Categories are the post's own, as its feed gives them; they only guide
+	// the tagger. Tags are slugs from Tags.
+	Categories []string
+	Tags       []string
 }
 
 // SubmissionStatus tracks a submission through review.

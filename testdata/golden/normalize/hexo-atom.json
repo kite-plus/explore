@@ -6,7 +6,10 @@
       "title": "用 Hexo 写博客的第三年",
       "excerpt": "三年前我开始用 Hexo 写博客。 这是正文的第二段，不应该出现在聚合站里。",
       "published_at": "2026-09-19T12:00:00Z",
-      "date_trusted": true
+      "date_trusted": true,
+      "categories": [
+        "随笔"
+      ]
     },
     {
       "identity": "https://hexo.example.com/2026/08/01/hello-world/",

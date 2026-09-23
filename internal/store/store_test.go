@@ -594,3 +594,69 @@ func TestUpdateBlogForgetsTheFetchCache(t *testing.T) {
 		t.Errorf("fetching a missing blog: err = %v", err)
 	}
 }
+
+func TestTagsFollowTheirTitle(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	b := listBlog(t, s, "tags.example.com", "zh")
+	now := time.Now().UTC()
+	first := entry("a", at(now.Add(-time.Hour)), true)
+	first.Categories = []string{"Go", "Web"}
+	second := entry("b", at(now.Add(-2*time.Hour)), true)
+	sync(t, s, b.ID, first, second)
+
+	jobs, err := s.Untagged(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := identities(jobs, func(j TagJob) string { return j.Title }); strings.Join(got, ",") != "Title a,Title b" {
+		t.Fatalf("untagged = %v, want newest first", got)
+	}
+	if strings.Join(jobs[0].Categories, ",") != "Go,Web" || jobs[0].Language != "zh" {
+		t.Errorf("job = %+v", jobs[0])
+	}
+	for _, j := range jobs {
+		if err := s.SetTags(ctx, j.EntryID, j.Title, []string{"backend"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A title that changed after the job was read is left for its own turn.
+	if err := s.SetTags(ctx, jobs[0].EntryID, "an older title", []string{"ai"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same title keeps its tags through a sync; a new one loses them.
+	second.Title = "a new title"
+	sync(t, s, b.ID, first, second)
+	jobs, err = s.Untagged(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].Title != "a new title" {
+		t.Fatalf("untagged after sync = %+v", jobs)
+	}
+
+	page, err := s.Stream(ctx, StreamQuery{Tag: "backend", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page) != 1 || page[0].Title != "Title a" || strings.Join(page[0].Tags, ",") != "backend" {
+		t.Fatalf("stream tagged backend = %+v", page)
+	}
+	if page, err := s.Stream(ctx, StreamQuery{Tag: "design", Limit: 10}); err != nil || len(page) != 0 {
+		t.Errorf("stream tagged design = %+v, %v", page, err)
+	}
+
+	// New default tags send the blog's entries back to the tagger.
+	tags := []string{"backend", "ops"}
+	got, err := s.UpdateBlog(ctx, b.Host, BlogUpdate{DefaultTags: &tags})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got.DefaultTags, ",") != "backend,ops" {
+		t.Errorf("default tags = %v", got.DefaultTags)
+	}
+	if jobs, err := s.Untagged(ctx, 10); err != nil || len(jobs) != 2 || strings.Join(jobs[0].BlogTags, ",") != "backend,ops" {
+		t.Errorf("untagged after new default tags = %+v, %v", jobs, err)
+	}
+}

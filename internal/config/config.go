@@ -24,7 +24,20 @@ type Config struct {
 	WorkerConcurrency    int
 	AllowPrivateNetworks bool
 	LogLevel             slog.Level
+	Tagger               Tagger
 }
+
+// Tagger configures the model that tags entries. Tagging is off until the
+// deployment names both a model and a key; which model is its choice, see
+// docs/design/accounts.md section 5.3.
+type Tagger struct {
+	Model  string
+	APIKey string
+	Effort string // empty sends none, for models that reject it
+}
+
+// Enabled reports whether entries get tagged.
+func (t Tagger) Enabled() bool { return t.Model != "" && t.APIKey != "" }
 
 // AdminToken is a maintainer credential. Only the SHA-256 of the token is
 // configured, so the environment never holds the secret itself.
@@ -74,6 +87,20 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	c.AdminTokens = tokens
+
+	c.Tagger = Tagger{
+		Model:  strings.TrimSpace(getenv("EXPLORE_TAGGER_MODEL")),
+		APIKey: strings.TrimSpace(getenv("EXPLORE_ANTHROPIC_API_KEY")),
+		Effort: strings.TrimSpace(getenv("EXPLORE_TAGGER_EFFORT")),
+	}
+	if (c.Tagger.Model == "") != (c.Tagger.APIKey == "") {
+		return Config{}, errors.New("EXPLORE_TAGGER_MODEL and EXPLORE_ANTHROPIC_API_KEY go together: set both to tag entries, or neither")
+	}
+	switch c.Tagger.Effort {
+	case "", "low", "medium", "high", "xhigh", "max":
+	default:
+		return Config{}, fmt.Errorf("EXPLORE_TAGGER_EFFORT: %q is not low, medium, high, xhigh or max", c.Tagger.Effort)
+	}
 	return c, nil
 }
 

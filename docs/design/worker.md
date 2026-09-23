@@ -11,7 +11,7 @@
 claim due blogs
       |
       v
-    fetch ----- unchanged (304 or same body hash) ----> reschedule
+    fetch ----- unchanged (304 or same body hash) ----> refresh description if due ----> reschedule
       |
       v
     parse (RSS / Atom / JSON Feed)
@@ -20,7 +20,7 @@ claim due blogs
     normalize (links, identity, dates, excerpt, snapshot)
       |
       v
-    sync snapshot in one transaction ----> reschedule
+    sync snapshot in one transaction ----> refresh blog description (weekly) ----> reschedule
 ```
 
 每一步失败都停在原地、只记录失败、按退避重新调度，**不会**碰已有的 `entries`（[data-model.md §3](data-model.md#3-同步事务)）。
@@ -43,7 +43,7 @@ WHERE id IN (
     LIMIT @batch
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, host, feed_url, etag, last_modified, body_hash,
+RETURNING id, host, site_url, feed_url, description_checked_at, etag, last_modified, body_hash,
           fetch_interval, consecutive_failures, show_excerpt, extra_domains;
 ```
 
@@ -156,6 +156,7 @@ If-Modified-Since: ...
 - 日期解析要宽松：Halo 的一位数日期（`Thu, 3 Sep 2026 01:02:03 GMT`）能正确解析 `[EV]`。写了日期却解析不了的条目记 `DateUnreadable`，E0 里有这种条目的订阅源只有 5 个。
 - 解析失败只报错，**绝不**当作空订阅源。
 - `Content`（全文）只在内存里停留到规范化结束，用来在没有 `Summary` 时生成摘要，之后立即丢弃。
+- 订阅源的 `Description` 可作为博客介绍的后备文本；优先使用首页的 `<meta name="description">`，再尝试 `og:description` 和 `twitter:description`。worker 每 7 天最多读取一次首页，使用同一套 robots、重定向、大小和地址限制，描述清理成纯文本并截到 240 字。首页或订阅源没有可用描述时保留上一次的值；`304` 不影响描述刷新。
 
 ---
 
@@ -172,7 +173,8 @@ If-Modified-Since: ...
 3. **标题**：去掉 HTML 标签、还原实体、合并空白。为空时丢弃，记 `no_title`；超过 300 字截断并加省略号。E0 里有无标题条目的订阅源占 2%，多是 Hugo 的零散页面，个别是全是短笔记的博客，它们不适合只列标题的时间流。
 4. **发布时间**：`Published`，没有就用 `Updated`。早于 1990 年的（包括 Hugo 输出的 `0001-01-01`）视为没有。
 5. **摘要**：只在 `show_excerpt` 为真时生成。来源是 `Summary`，为空时用 `Content`；先用 `golang.org/x/net/html` 提取纯文本（去掉脚本和样式的内容，块级元素之间补一个空格，不是 HTML 元素的标签如 `<T>` 保留原样）、合并空白，**再**截断到 140 字（省略号计入 140）。绝不在去掉标签之前截断，Hexo 插件截断 HTML 的问题就出在这里（[architecture.md §5.1](architecture.md#5-接入的博客系统)）。
-6. **去重**：同一快照里身份键重复的，保留第一次出现的那条。
+6. **缩略图地址**：只在 `show_excerpt` 为真时提取。优先取正文或摘要 HTML 中第一张未标为极小尺寸的图片，再取订阅源的独立图片字段；只保留合法的 HTTP(S) 地址，图片字节不入库。展示时由本站图片接口校验并转发（[api.md §2.1.2](api.md#212-get-apiv1entriesidimage)）。
+7. **去重**：同一快照里身份键重复的，保留第一次出现的那条。
 
 ### 5.2 整个快照
 
@@ -376,3 +378,17 @@ worker 每天运行一次（多个 worker 时用 PostgreSQL 的 advisory lock �
 
 - 换一份清单再跑 `explore survey`，就是一次新的实测。E3 调轮询间隔和健康阈值前再跑一次。
 - Typecho（26 个）和 Ghost（29 个）的样本还少，接入 §5.2 的系统之前单独补测。
+
+---
+
+## 11. 打标签（`internal/tagger`）
+
+worker 里除了抓取，还有一个每分钟跑一轮的打标签循环。标签表、模型和费用见 [accounts.md §5](accounts.md#5-文章标签)。
+
+1. 取出还没打标签（`tagged_at` 为空）的文章，新的在前，每轮最多 20 篇（`policy.TagsPerMinute`）。清空缓存后要重打的上万篇文章就这样慢慢补上，模型的费用也有了上限。
+2. 逐篇把标题、摘要、文章自带的分类、博客的语言和维护者给博客设的默认标签发给模型，不发正文。固定的指令和标签表放在请求最前面，打上缓存标记。结构化输出把答案限定在标签表以内；结构化输出不支持数组长度，最多 3 个由代码截断。
+3. 写回时核对标题：取出之后标题变了的，留给下一轮。
+4. 模型拒答或输出被截断，都当作没有合适的标签，不再重试。接口出错时本轮停下，下次等待的时间逐次翻倍，最长一小时：密钥不对、服务中断、额度用完，下一篇多半也会失败。
+5. 没配置模型和密钥时不启动这个循环，文章都不带标签，按标签筛选得到的是空列表。
+
+`internal/tagger` 是唯一调用模型的包，这条依赖规则由 `scripts/check-imports.sh` 守住。worker 只认一个接口，由 `cli` 把两者接起来，所以 worker 的测试用的是假的实现，`tagger` 的测试用的是假的接口服务器。

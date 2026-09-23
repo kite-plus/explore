@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kite-plus/explore/internal/feed"
 	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/policy"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -22,6 +27,7 @@ type goldenEntry struct {
 	Excerpt     string     `json:"excerpt,omitempty"`
 	PublishedAt *time.Time `json:"published_at"`
 	DateTrusted bool       `json:"date_trusted"`
+	Categories  []string   `json:"categories,omitempty"`
 }
 
 type golden struct {
@@ -73,7 +79,7 @@ func view(res Result) golden {
 	for _, e := range res.Entries {
 		g.Entries = append(g.Entries, goldenEntry{
 			Identity: e.Identity, URL: e.URL, Title: e.Title, Excerpt: e.Excerpt,
-			PublishedAt: e.PublishedAt, DateTrusted: e.DateTrusted,
+			PublishedAt: e.PublishedAt, DateTrusted: e.DateTrusted, Categories: e.Categories,
 		})
 	}
 	return g
@@ -152,6 +158,42 @@ func TestPlainText(t *testing.T) {
 	}
 }
 
+func TestSnapshotImage(t *testing.T) {
+	article := "https://blog.example.com/posts/photo/"
+	f := &feed.Feed{Items: []feed.Item{{
+		ID: "photo", Link: article, Title: "Photo post",
+		Content: `<img src="https://tracker.example.net/p.gif" width="1" height="1"><p><img src="../../photos/landscape.jpg" width="800" height="600"></p>`,
+		Image:   "https://tracker.example.net/p.gif",
+	}}}
+	got := Snapshot(f, Blog{Host: "blog.example.com", ShowExcerpt: true, FeedURL: "https://blog.example.com/feed.xml"})
+	if len(got.Entries) != 1 || got.Entries[0].ImageURL != "https://blog.example.com/photos/landscape.jpg" {
+		t.Fatalf("image = %+v", got.Entries)
+	}
+	got = Snapshot(f, Blog{Host: "blog.example.com", FeedURL: "https://blog.example.com/feed.xml"})
+	if got.Entries[0].ImageURL != "" {
+		t.Errorf("image shown with excerpts disabled: %q", got.Entries[0].ImageURL)
+	}
+}
+
+func TestImageCandidate(t *testing.T) {
+	base, _ := url.Parse("https://blog.example.com/post/")
+	for _, c := range []struct {
+		item feed.Item
+		want string
+	}{
+		{feed.Item{Image: "https://cdn.example.net/photo.webp"}, "https://cdn.example.net/photo.webp"},
+		{feed.Item{Content: `<img src="https://blog.example.com/pixel.gif" width="1" height="1">`, Image: "https://blog.example.com/pixel.gif"}, ""},
+		{feed.Item{Content: `<img src="https://blog.example.com/pixel.gif" width="1" height="1">`, Image: "https://cdn.example.net/photo.jpg"}, "https://cdn.example.net/photo.jpg"},
+		{feed.Item{Content: `<img src="data:image/png;base64,aaa">`, Image: "javascript:alert(1)"}, ""},
+		{feed.Item{Content: `<img src="data:image/png;base64,aaa" data-src="/photo.jpg">`}, "https://blog.example.com/photo.jpg"},
+		{feed.Item{Image: "https://blog.example.com/icon.svg"}, ""},
+	} {
+		if got := imageURL(c.item, base); got != c.want {
+			t.Errorf("imageURL(%+v) = %q, want %q", c.item, got, c.want)
+		}
+	}
+}
+
 func TestTruncate(t *testing.T) {
 	if got := Truncate("short", 10); got != "short" {
 		t.Errorf("got %q", got)
@@ -217,5 +259,19 @@ func TestDetectGenerator(t *testing.T) {
 		if got := DetectGenerator(in); got != want {
 			t.Errorf("DetectGenerator(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCategories(t *testing.T) {
+	raw := []string{"Go", "go", "Uncategorized", "  <b>Web</b>  ", "", "未分类", strings.Repeat("长", 60)}
+	for i := range 12 {
+		raw = append(raw, fmt.Sprintf("c%d", i))
+	}
+	got := categories(raw)
+	if len(got) != policy.CategoriesPerEntry {
+		t.Fatalf("len = %d, want %d: %q", len(got), policy.CategoriesPerEntry, got)
+	}
+	if got[0] != "Go" || got[1] != "Web" || utf8.RuneCountInString(got[2]) != policy.CategoryMaxRunes {
+		t.Errorf("categories = %q", got[:3])
 	}
 }

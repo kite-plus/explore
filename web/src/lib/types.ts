@@ -13,13 +13,22 @@ export interface Entry {
   title: string;
   url: string;
   excerpt: string | null;
+  image_url: string | null;
   published_at: string | null;
+  /** Slugs from the tag list, best fit first. */
+  tags: string[];
   blog?: BlogRef;
+}
+
+export interface Tag {
+  slug: string;
+  name: { zh: string; en: string };
 }
 
 export interface Blog {
   host: string;
   name: string;
+  description: string;
   site_url: string;
   feed_url: string;
   language: string;

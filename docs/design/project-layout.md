@@ -20,7 +20,8 @@ explore/
 │   ├── fetch/          polite HTTP client, SSRF guard, robots.txt
 │   ├── check/          feed discovery and source checks
 │   ├── store/          PostgreSQL queries and transactions (pgx)
-│   ├── worker/         scheduling, snapshot sync, daily maintenance
+│   ├── worker/         scheduling, snapshot sync, tagging, daily maintenance
+│   ├── tagger/         file posts under the tag list with a Claude model
 │   ├── publicfeed/     /feed.xml and /blogs.opml
 │   └── api/            Gin router, handlers, middleware
 ├── migrations/         goose SQL migrations, embedded into the binary
@@ -56,7 +57,8 @@ explore/
 | `fetch` | 礼貌抓取、SSRF 防护、robots.txt（[worker.md §3](worker.md#3-抓取internalfetch)） | `policy` |
 | `check` | 发现订阅源、检查、生成报告（[worker.md §6](worker.md#6-检查internalcheck)） | `policy`、`model`、`i18n`、`feed`、`normalize`、`fetch` |
 | `store` | 数据库访问、事务、迁移入口；子包 `storetest` 给每个集成测试一个独立的 schema | `policy`、`model`、`migrations` |
-| `worker` | 调度、同步、每日维护 | `policy`、`model`、`feed`、`normalize`、`fetch`、`store` |
+| `worker` | 调度、同步、打标签的循环、每日维护 | `policy`、`model`、`feed`、`normalize`、`fetch`、`store` |
+| `tagger` | 用 Claude 模型给文章打标签，项目里唯一调用模型的包（[worker.md §11](worker.md#11-打标签internaltagger)） | `model` |
 | `api` | Gin 路由与处理函数 | `policy`、`model`、`i18n`、`check`、`store`、`publicfeed` |
 | `config` | 读取环境变量 | 无 |
 | `cli` | 命令入口，负责组装 | 全部 |
@@ -67,7 +69,7 @@ explore/
 
 1. **纯逻辑包**（`policy`、`model`、`i18n`、`feed`、`normalize`、`publicfeed`）不依赖 `fetch`、`check`、`store`、`worker`、`api`、`cli`、`config`，也不依赖 Gin 和 pgx。它们没有 I/O，全部用夹具做黄金文件测试。
 2. **只有 `api` 可以依赖 Gin**：Web 框架留在最外层，换框架只动一个包。
-3. **只有 `store`（及其子包）可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。
+3. **只有 `store`（及其子包）可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。**只有 `tagger` 可以依赖 Anthropic 的 SDK**：调用模型的地方只有一个，换模型或换服务商只动一个包；worker 通过接口使用它，由 `cli` 接起来。
 4. **`check` 不依赖 `store`**：`explore check` 不需要数据库也能运行，作者和 E0 都要用。
 5. **`api` 和 `worker` 互不依赖**，只通过数据库协作，所以可以分开部署、分开重启。
 
@@ -98,6 +100,9 @@ explore/
 | `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用提交接口（[frontend.md §6](frontend.md#6-提交流程)） |
 | `EXPLORE_ADMIN_TOKENS` | 空 | 维护者令牌，`名字:SHA-256` 逗号分隔；为空时不注册管理接口 |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
+| `EXPLORE_TAGGER_MODEL` | 空 | 打标签用的模型，例如 `claude-opus-5`；和下一项一起设置才会打标签（[accounts.md §5.3](accounts.md#53-模型与费用-待定)） |
+| `EXPLORE_ANTHROPIC_API_KEY` | 空 | Claude API 的密钥；只能和上一项一起设置 |
+| `EXPLORE_TAGGER_EFFORT` | 空 | 可选的 `effort`：`low`、`medium`、`high`、`xhigh`、`max`。Claude Opus 5 和 Claude Sonnet 5 建议 `low`；Claude Haiku 4.5 不支持，留空 |
 | `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 

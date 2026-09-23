@@ -12,6 +12,14 @@ const (
 	TitleMaxRunes    = 300
 	IdentityMaxBytes = 500
 
+	// A post's own categories, kept only as hints for the tagger.
+	CategoriesPerEntry = 10
+	CategoryMaxRunes   = 50
+
+	// The tagger asks about at most this many entries a minute, which caps
+	// the model's bill when a cleared cache has to be tagged again.
+	TagsPerMinute = 20
+
 	// More items than this sharing one minute marks their dates untrusted.
 	SameMinuteLimit = 5
 )

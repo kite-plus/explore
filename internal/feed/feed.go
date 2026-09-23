@@ -16,12 +16,13 @@ var ErrNotFeed = errors.New("not a feed")
 
 // Feed is a parsed feed, whatever its format.
 type Feed struct {
-	Format    string // "rss", "atom" or "json"
-	Title     string
-	SiteURL   string
-	Language  string
-	Generator string
-	Items     []Item
+	Format      string // "rss", "atom" or "json"
+	Title       string
+	Description string
+	SiteURL     string
+	Language    string
+	Generator   string
+	Items       []Item
 }
 
 // Item is one feed entry. Content is only used to derive an excerpt when
@@ -32,11 +33,13 @@ type Item struct {
 	Title     string
 	Summary   string
 	Content   string
+	Image     string
 	Published *time.Time
 	Updated   *time.Time
 	// DateUnreadable means the item carries a date in a form that could
 	// not be parsed, as opposed to no date at all.
 	DateUnreadable bool
+	Categories     []string
 }
 
 // Parse reads a feed document. Character sets other than UTF-8 are converted
@@ -51,12 +54,13 @@ func Parse(body []byte) (*Feed, error) {
 	}
 
 	f := &Feed{
-		Format:    parsed.FeedType,
-		Title:     strings.TrimSpace(parsed.Title),
-		SiteURL:   strings.TrimSpace(parsed.Link),
-		Language:  strings.TrimSpace(parsed.Language),
-		Generator: strings.TrimSpace(parsed.Generator),
-		Items:     make([]Item, 0, len(parsed.Items)),
+		Format:      parsed.FeedType,
+		Title:       strings.TrimSpace(parsed.Title),
+		Description: strings.TrimSpace(parsed.Description),
+		SiteURL:     strings.TrimSpace(parsed.Link),
+		Language:    strings.TrimSpace(parsed.Language),
+		Generator:   strings.TrimSpace(parsed.Generator),
+		Items:       make([]Item, 0, len(parsed.Items)),
 	}
 	for _, it := range parsed.Items {
 		if it == nil {
@@ -72,11 +76,20 @@ func Parse(body []byte) (*Feed, error) {
 			Title:     it.Title,
 			Summary:   it.Description,
 			Content:   it.Content,
+			Image:     imageURL(it),
 			Published: it.PublishedParsed,
 			Updated:   it.UpdatedParsed,
 			DateUnreadable: it.PublishedParsed == nil && it.UpdatedParsed == nil &&
 				strings.TrimSpace(it.Published+it.Updated) != "",
+			Categories: it.Categories,
 		})
 	}
 	return f, nil
+}
+
+func imageURL(item *gofeed.Item) string {
+	if item.Image == nil {
+		return ""
+	}
+	return strings.TrimSpace(item.Image.URL)
 }

@@ -89,8 +89,8 @@ func isUniqueViolation(err error) bool {
 func seconds(d time.Duration) int64 { return int64(d / time.Second) }
 
 // blogColumns and scanBlog read a whole blogs row.
-const blogColumns = `id, host, name, site_url, feed_url, language, generator, status,
-	coalesce(status_note, ''), show_excerpt, extra_domains,
+const blogColumns = `id, host, name, description, site_url, feed_url, language, generator, status,
+	coalesce(status_note, ''), show_excerpt, extra_domains, default_tags,
 	coalesce(etag, ''), coalesce(last_modified, ''), body_hash,
 	extract(epoch FROM fetch_interval)::bigint, next_fetch_at, last_fetched_at,
 	last_succeeded_at, consecutive_failures, coalesce(last_error, ''), gone_since,
@@ -99,8 +99,8 @@ const blogColumns = `id, host, name, site_url, feed_url, language, generator, st
 func scanBlog(row pgx.Row) (model.Blog, error) {
 	var b model.Blog
 	var interval int64
-	err := row.Scan(&b.ID, &b.Host, &b.Name, &b.SiteURL, &b.FeedURL, &b.Language, &b.Generator, &b.Status,
-		&b.StatusNote, &b.ShowExcerpt, &b.ExtraDomains,
+	err := row.Scan(&b.ID, &b.Host, &b.Name, &b.Description, &b.SiteURL, &b.FeedURL, &b.Language, &b.Generator, &b.Status,
+		&b.StatusNote, &b.ShowExcerpt, &b.ExtraDomains, &b.DefaultTags,
 		&b.ETag, &b.LastModified, &b.BodyHash,
 		&interval, &b.NextFetchAt, &b.LastFetchedAt,
 		&b.LastSucceededAt, &b.ConsecutiveFailures, &b.LastError, &b.GoneSince,
@@ -111,6 +111,9 @@ func scanBlog(row pgx.Row) (model.Blog, error) {
 	b.FetchInterval = time.Duration(interval) * time.Second
 	if b.ExtraDomains == nil {
 		b.ExtraDomains = []string{}
+	}
+	if b.DefaultTags == nil {
+		b.DefaultTags = []string{}
 	}
 	return b, err
 }

@@ -2,10 +2,13 @@
 import EntryItem from "@/components/EntryItem.astro";
 import LangFilter from "@/components/LangFilter.astro";
 import Message from "@/components/Message.astro";
+import TagFilter from "@/components/TagFilter.astro";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import type { Loaded, StreamPage } from "@/lib/loaders";
+import { tagNames } from "@/lib/tags";
+import { withQuery } from "@/lib/utils";
 
 interface Props {
   lang: Lang;
@@ -16,15 +19,19 @@ const { lang, result } = Astro.props;
 const t = dict(lang);
 const data = result.kind === "ok" ? result.data : undefined;
 
-let older: string | undefined;
-if (data?.page.next_cursor) {
-  const q = new URLSearchParams({ cursor: data.page.next_cursor });
-  if (data.filter) q.set("lang", data.filter);
-  older = `${localePath(lang, "/")}?${q}`;
-}
+const older =
+  data?.page.next_cursor &&
+  withQuery(localePath(lang, "/"), { cursor: data.page.next_cursor, lang: data.filter, tag: data.tag });
+const names = data ? tagNames(data.tags, lang) : {};
 ---
 
-<Base lang={lang} title={t.home.title} description={t.site.description} path="/" noindex={Boolean(data?.paged || data?.filter)}>
+<Base
+  lang={lang}
+  title={t.home.title}
+  description={t.site.description}
+  path="/"
+  noindex={Boolean(data?.paged || data?.filter || data?.tag)}
+>
   {
     data ? (
       <>
@@ -33,14 +40,17 @@ if (data?.page.next_cursor) {
             <h1 class="text-2xl font-semibold tracking-tight">{t.home.heading}</h1>
             <p class="mt-2 max-w-prose text-sm text-muted-foreground">{t.home.intro}</p>
           </div>
-          <LangFilter lang={lang} path="/" current={data.filter} />
+          <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} />
+        </div>
+        <div class="mt-4">
+          <TagFilter lang={lang} path="/" tags={data.tags} current={data.tag} filter={data.filter} />
         </div>
         {data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
         ) : (
           <div class="mt-4 divide-y">
             {data.page.data.map((entry) => (
-              <EntryItem lang={lang} entry={entry} />
+              <EntryItem lang={lang} entry={entry} tagNames={names} />
             ))}
           </div>
         )}

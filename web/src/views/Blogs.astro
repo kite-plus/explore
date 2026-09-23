@@ -41,13 +41,14 @@ if (data?.page.next_cursor) {
         ) : (
           <ul class="mt-4 divide-y">
             {data.page.data.map((b) => (
-              <li class="flex items-center gap-3 py-4" lang={b.language}>
+              <li class="flex items-start gap-3 py-4" lang={b.language}>
                 <BlogAvatar host={b.host} name={b.name} size="lg" />
                 <div class="min-w-0 flex-1">
                   <a href={localePath(lang, `/blogs/${b.host}`)} class="font-medium hover:underline">
                     {b.name}
                   </a>
                   <p class="truncate text-sm text-muted-foreground">{b.host}</p>
+                  {b.description && <p class="mt-1 line-clamp-2 text-sm text-muted-foreground">{b.description}</p>}
                 </div>
                 <span class="shrink-0 text-xs text-muted-foreground" lang={t.htmlLang}>
                   {b.last_published_at ? (

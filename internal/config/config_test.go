@@ -78,3 +78,28 @@ func TestDuplicateTokenNames(t *testing.T) {
 		t.Error("duplicate names accepted")
 	}
 }
+
+func TestTagger(t *testing.T) {
+	c, err := Load(env(map[string]string{}))
+	if err != nil || c.Tagger.Enabled() {
+		t.Fatalf("tagging must be off by default: %+v, %v", c.Tagger, err)
+	}
+	c, err = Load(env(map[string]string{
+		"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_ANTHROPIC_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "low",
+	}))
+	if err != nil || !c.Tagger.Enabled() || c.Tagger.Effort != "low" {
+		t.Fatalf("tagger = %+v, %v", c.Tagger, err)
+	}
+	for _, m := range []map[string]string{
+		{"EXPLORE_ANTHROPIC_API_KEY": "sk-secret"},
+		{"EXPLORE_TAGGER_MODEL": "claude-opus-5"},
+		{"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_ANTHROPIC_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "turbo"},
+	} {
+		_, err := Load(env(m))
+		if err == nil {
+			t.Errorf("%v: want an error", m)
+		} else if strings.Contains(err.Error(), "sk-secret") {
+			t.Errorf("the error echoes the key: %v", err)
+		}
+	}
+}

@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/kite-plus/explore/internal/check"
+	"github.com/kite-plus/explore/internal/fetch"
 	"github.com/kite-plus/explore/internal/store"
 )
 
@@ -24,10 +26,11 @@ type AdminToken struct {
 
 // Server holds what the handlers need.
 type Server struct {
-	Store     *store.Store
-	Checker   *check.Checker
-	PublicURL string
-	Admins    []AdminToken
+	Store      *store.Store
+	Checker    *check.Checker
+	ImageFetch *fetch.Client
+	PublicURL  string
+	Admins     []AdminToken
 	// TrustedProxies may set X-Forwarded-For; see
 	// docs/design/project-layout.md section 6.
 	TrustedProxies []string
@@ -39,6 +42,10 @@ type Server struct {
 
 	readLimit   *limiter
 	submitLimit *limiter
+	imageMu     sync.Mutex
+	images      map[string]cachedImage
+	faviconMu   sync.Mutex
+	favicons    map[string]cachedImage
 }
 
 // Handler builds the router.
@@ -69,7 +76,10 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	v1 := r.Group("/api/v1")
 	v1.GET("/entries", s.limit(s.readLimit), s.entries)
+	v1.GET("/entries/:id/image", s.limit(s.readLimit), s.entryImage)
+	v1.GET("/tags", s.limit(s.readLimit), s.tags)
 	v1.GET("/blogs", s.limit(s.readLimit), s.blogs)
+	v1.GET("/blogs/:host/favicon", s.limit(s.readLimit), s.blogFavicon)
 	v1.GET("/blogs/:host", s.limit(s.readLimit), s.blog)
 	v1.POST("/submissions", s.limit(s.submitLimit), s.submit)
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)

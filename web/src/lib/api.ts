@@ -1,5 +1,5 @@
 import { apiURL } from "@/lib/config";
-import type { ApiError, BlogPage, Blog, Entry, Page, Submission } from "@/lib/types";
+import type { ApiError, Blog, BlogPage, Entry, Page, Submission, Tag } from "@/lib/types";
 import type { Lang } from "@/i18n";
 
 // Pages call the API from the server only; browsers never reach it. See
@@ -55,8 +55,13 @@ function query(params: Record<string, string | undefined>): string {
 }
 
 export const api = {
-  entries: (lang: Lang, p: { cursor?: string; lang?: string; limit?: number }) =>
-    call<Page<Entry>>(`/api/v1/entries${query({ cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),
+  entries: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }) =>
+    call<Page<Entry>>(
+      `/api/v1/entries${query({ cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
+      { lang },
+    ),
+
+  tags: (lang: Lang) => call<{ data: Tag[] }>("/api/v1/tags", { lang }),
 
   blogs: (lang: Lang, p: { cursor?: string; lang?: string; limit?: number }) =>
     call<Page<Blog>>(`/api/v1/blogs${query({ cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),

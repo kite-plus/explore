@@ -2,7 +2,7 @@
 
 > 状态：设计中 · 最近更新：2026-09-23
 > 服务：`explore serve`（Gin）。读者看到的页面由独立的前端在服务端渲染（[architecture.md §8](architecture.md#8-前端与-seo)），前端只调用本文的公开接口。
-> 读者的登录、会话、订阅和按标签筛选的接口还没实现，设计见 [accounts.md §7](accounts.md#7-接口)，实现时并入本文。
+> 读者的登录、会话和订阅的接口还没实现，设计见 [accounts.md §7](accounts.md#7-接口)，实现时并入本文。标签已经实现（§2.1、§2.1.1）。
 
 ---
 
@@ -30,6 +30,7 @@
 | `cursor` | 上一页返回的 `next_cursor` |
 | `limit` | 默认 30，最大 100 |
 | `lang` | 按博客语言的前缀筛选，例如 `zh` 匹配 `zh-CN` 和 `zh-TW` |
+| `tag` | 只要打了这个标签的文章，取值是标签表里的英文短名；不认识的返回 `400 invalid_request` |
 
 ```json
 {
@@ -39,7 +40,9 @@
       "title": "Hello, world",
       "url": "https://blog.example.com/posts/hello/",
       "excerpt": "First paragraph of the post, cut to 140 characters…",
+      "image_url": "/api/v1/entries/8412/image",
       "published_at": "2026-09-20T02:00:00Z",
+      "tags": ["backend", "ops"],
       "blog": {
         "host": "blog.example.com",
         "name": "Example Blog",
@@ -52,7 +55,21 @@
 }
 ```
 
-作者关闭摘要时，`excerpt` 为 `null`。`url` 是订阅源里的原始链接，前端必须原样输出，不能改写成跳转地址（[architecture.md §6.3](architecture.md#6-抓取与展示规则)）。
+作者关闭摘要时，`excerpt` 和 `image_url` 都为 `null`；订阅源没有可用图片时，`image_url` 也为 `null`。`image_url` 是本站图片接口，不暴露源站图片地址。`tags` 是 Explore 打的标签，最合适的在前；还没打或没有合适的标签时是空数组（[accounts.md §5](accounts.md#5-文章标签)）。博客页（§2.3）的文章也带这些字段。`url` 是订阅源里的原始链接，前端必须原样输出，不能改写成跳转地址（[architecture.md §6.3](architecture.md#6-抓取与展示规则)）。
+
+### 2.1.1 `GET /api/v1/tags`
+
+标签表，按展示顺序排列，缓存一小时：
+
+```json
+{ "data": [{ "slug": "frontend", "name": { "zh": "前端", "en": "Frontend" } }] }
+```
+
+标签表写在代码里（`internal/model`），改动走 code review（[accounts.md §5.1](accounts.md#51-标签表)）。
+
+### 2.1.2 `GET /api/v1/entries/{id}/image`
+
+只给可见文章提供缩略图。服务端从数据库读取源站图片地址，用抓取客户端检查 robots.txt、重定向和公共网络地址，最多读取 2 MiB；只转发尺寸至少 80×80 的 JPEG、PNG、GIF 或 WebP。图片字节只在进程内缓存 5 分钟，成功响应让浏览器缓存 60 秒。缺失图片返回 `404`，源站不可用或图片不合格时不返回源站内容。浏览器只请求本站地址，文章链接仍直接指向原文。
 
 ### 2.2 `GET /api/v1/blogs`
 
@@ -64,6 +81,7 @@
     {
       "host": "blog.example.com",
       "name": "Example Blog",
+      "description": "记录博客与技术笔记。",
       "site_url": "https://blog.example.com/",
       "feed_url": "https://blog.example.com/atom.xml",
       "language": "zh-CN",
@@ -76,6 +94,7 @@
 ```
 
 前端用它生成 `sitemap.xml`，`last_published_at` 就是 `lastmod`。
+`description` 是 worker 抓到的博客首页描述，缺失时取订阅源描述；没有可用描述时为空字符串。博客页（§2.3）也返回此字段。
 
 ### 2.3 `GET /api/v1/blogs/{host}`
 
@@ -97,6 +116,8 @@
 ```
 
 博客不存在或当前不可见（被暂停、7 天没有成功抓取、收到退出信号）时返回 `404 not_found`。
+
+`GET /api/v1/blogs/{host}/favicon` 返回可见博客的站点图标。服务端先读取站点 HTML 中的 `rel=icon` 声明，再尝试根目录 `/favicon.ico`，并沿用抓取器的 robots、跳转和地址安全检查。仅返回经过格式检查的 PNG、JPEG、GIF、WebP、ICO；SVG 不作为本站资源输出。缺图时返回透明 PNG，让前端首字头像透出。接口结果在进程内缓存 6 小时，浏览器缓存 1 小时；不可见博客返回 404。
 
 ### 2.4 `POST /api/v1/submissions`
 
@@ -181,7 +202,7 @@
 | POST | `/api/v1/admin/submissions/{id}/reject` | 拒绝，必须填 `review_note`，作者查询进度时能看到 |
 | GET | `/api/v1/admin/blogs?health=unhealthy` | 全部博客及其抓取状态（`last_error`、`consecutive_failures` 等） |
 | POST | `/api/v1/admin/blogs` | 维护者直接收录，同样先运行检查 `[待定]`，取决于 [architecture.md §13](architecture.md#13-待确认的问题) 的问题 3 |
-| PATCH | `/api/v1/admin/blogs/{host}` | 修改 `name`、`language`、`feed_url`、`extra_domains`、`show_excerpt`；暂停或恢复（`status`、`status_note`）。改动影响规范化结果的字段时强制重建（[data-model.md §3](data-model.md#3-同步事务)） |
+| PATCH | `/api/v1/admin/blogs/{host}` | 修改 `name`、`language`、`feed_url`、`extra_domains`、`show_excerpt`、`default_tags`（最多 3 个标签表里的标签）；暂停或恢复（`status`、`status_note`）。改动影响规范化结果的字段时强制重建（[data-model.md §3](data-model.md#3-同步事务)）；改了默认标签，这个博客的文章重新打标签 |
 | DELETE | `/api/v1/admin/blogs/{host}?exclude=opt_out` | 移除博客，文章级联删除；`exclude` 为 `opt_out` 或 `blocked` 时同时写入排除名单。处理作者的退出申请用 `opt_out` |
 | POST | `/api/v1/admin/blogs/{host}/fetch` | 立即抓取，返回 `202` |
 | GET | `/api/v1/admin/excluded-hosts` | 排除名单 |

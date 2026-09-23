@@ -114,7 +114,7 @@ describe("search engines", () => {
     assert.match(html, /<title>中文博客 - Explore<\/title>/);
   });
 
-  for (const path of ["/?cursor=page-two", "/?lang=zh", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`]) {
+  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`]) {
     test(`${path} stays out of the index`, async () => {
       const { html } = await page(path);
       assert.match(html, /<meta name="robots" content="noindex, follow">/);
@@ -165,6 +165,42 @@ describe("content", () => {
     assert.ok(bot.includes(`open an issue${mark}<span class="sr-only" lang="en"> (opens in a new tab)</span></a>`));
   });
 
+  test("entries show their tags, each a way into the stream", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<a href="\/\?tag=backend" class="[^"]*">后端<\/a>/);
+    assert.match(html, /<a href="\/\?tag=ops" class="[^"]*">运维与云<\/a>/);
+    const en = (await page("/en/blogs/zh.example.com")).html;
+    assert.match(en, /<a href="\/en\/\?tag=backend" class="[^"]*">Backend<\/a>/);
+  });
+
+  test("entry thumbnails use the local image endpoint", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<img src="\/api\/v1\/entries\/2\/image" alt="" loading="lazy" decoding="async"/);
+    const image = await get("/api/v1/entries/2/image");
+    assert.equal(image.status, 200);
+    assert.equal(image.headers.get("content-type"), "image/png");
+    assert.equal(image.headers.get("cache-control"), "public, max-age=60");
+    assert.ok((await image.arrayBuffer()).byteLength > 0);
+  });
+
+  test("the tag and language filters keep each other", async () => {
+    const tagged = (await page("/?tag=backend")).html;
+    assert.match(tagged, /缓存可以随时删掉/);
+    assert.doesNotMatch(tagged, /Notes on feeds/, "only entries with the tag");
+    assert.match(tagged, /<a href="\/\?lang=zh&amp;tag=backend"[^>]*>中文<\/a>/);
+    assert.match(tagged, /<a href="\/\?tag=backend" aria-current="page"[^>]*>后端<\/a>/);
+    const zh = (await page("/?lang=zh")).html;
+    assert.match(zh, /<a href="\/\?lang=zh&amp;tag=life"[^>]*>生活随笔<\/a>/);
+  });
+
+  test("the tag list is asked for once, not on every page", async () => {
+    await page("/");
+    const before = stub.state.tagLists;
+    await page("/en/");
+    await page("/blogs/zh.example.com");
+    assert.equal(stub.state.tagLists, before);
+  });
+
   test("the theme toggle speaks the page's language", async () => {
     const zh = (await page("/")).html;
     const en = (await page("/en/")).html;
@@ -176,10 +212,25 @@ describe("content", () => {
     const { html } = await page("/blogs/zh.example.com");
     assert.match(html, /日期未知/);
   });
+
+  test("the directory and blog page show the source description", async () => {
+    assert.match((await page("/blogs")).html, /记录代码与生活中的新发现。/);
+    assert.match((await page("/blogs/zh.example.com")).html, /记录代码与生活中的新发现。/);
+  });
 });
 
 describe("status codes", () => {
-  for (const [path, status] of [["/blogs/missing.example.com", 404], ["/no/such/page", 404], ["/?cursor=bad", 404], ["/submissions/unknown", 404]]) {
+  test("blog avatars use the site's favicon endpoint", async () => {
+    const { html } = await page("/blogs");
+    assert.match(html, /src="\/api\/v1\/blogs\/zh\.example\.com\/favicon"/);
+    assert.match(html, /src="\/api\/v1\/blogs\/en\.example\.com\/favicon"/);
+    const res = await get("/api/v1/blogs/zh.example.com/favicon");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/png");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=3600");
+  });
+
+  for (const [path, status] of [["/blogs/missing.example.com", 404], ["/no/such/page", 404], ["/?cursor=bad", 404], ["/?tag=nonsense", 404], ["/submissions/unknown", 404]]) {
     test(`${path} is ${status}`, async () => {
       const res = await get(path);
       assert.equal(res.status, status);

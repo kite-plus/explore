@@ -1,15 +1,18 @@
 ---
 import { dict, localePath, type Lang } from "@/i18n";
+import { withQuery } from "@/lib/utils";
 
 interface Props {
   lang: Lang;
   path: string;
   current?: string;
+  /** The tag filter in use, kept when the language changes. */
+  tag?: string;
 }
 
 // Filtering by the blogs' language uses ?lang= and has nothing to do with
 // the interface language, which lives in the path.
-const { lang, path, current } = Astro.props;
+const { lang, path, current, tag } = Astro.props;
 const t = dict(lang).filter;
 const base = localePath(lang, path);
 const options = [
@@ -23,7 +26,7 @@ const options = [
   {
     options.map((o) => (
       <a
-        href={o.value ? `${base}?lang=${o.value}` : base}
+        href={withQuery(base, { lang: o.value, tag })}
         aria-current={o.value === current ? "page" : undefined}
         class="rounded-md px-2.5 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-secondary-foreground"
       >

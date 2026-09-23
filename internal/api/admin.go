@@ -16,6 +16,7 @@ import (
 type adminBlogJSON struct {
 	Host                string     `json:"host"`
 	Name                string     `json:"name"`
+	Description         string     `json:"description"`
 	SiteURL             string     `json:"site_url"`
 	FeedURL             string     `json:"feed_url"`
 	Language            string     `json:"language"`
@@ -24,6 +25,7 @@ type adminBlogJSON struct {
 	StatusNote          string     `json:"status_note"`
 	ShowExcerpt         bool       `json:"show_excerpt"`
 	ExtraDomains        []string   `json:"extra_domains"`
+	DefaultTags         []string   `json:"default_tags"`
 	Visible             bool       `json:"visible"`
 	FetchIntervalSec    int64      `json:"fetch_interval_seconds"`
 	NextFetchAt         time.Time  `json:"next_fetch_at"`
@@ -39,9 +41,9 @@ func (s *Server) toAdminBlog(b model.Blog) adminBlogJSON {
 	visible := b.Status == model.BlogActive && b.GoneSince == nil &&
 		b.LastSucceededAt != nil && s.Now().Sub(*b.LastSucceededAt) < policy.UnhealthyAfter
 	return adminBlogJSON{
-		Host: b.Host, Name: b.Name, SiteURL: b.SiteURL, FeedURL: b.FeedURL, Language: b.Language,
+		Host: b.Host, Name: b.Name, Description: b.Description, SiteURL: b.SiteURL, FeedURL: b.FeedURL, Language: b.Language,
 		Generator: string(b.Generator), Status: string(b.Status), StatusNote: b.StatusNote,
-		ShowExcerpt: b.ShowExcerpt, ExtraDomains: b.ExtraDomains, Visible: visible,
+		ShowExcerpt: b.ShowExcerpt, ExtraDomains: b.ExtraDomains, DefaultTags: b.DefaultTags, Visible: visible,
 		FetchIntervalSec: int64(b.FetchInterval / time.Second), NextFetchAt: b.NextFetchAt.UTC(),
 		LastFetchedAt: utc(b.LastFetchedAt), LastSucceededAt: utc(b.LastSucceededAt),
 		ConsecutiveFailures: b.ConsecutiveFailures, LastError: b.LastError, GoneSince: utc(b.GoneSince),
@@ -181,6 +183,7 @@ type updateBlogRequest struct {
 	ShowExcerpt  *bool     `json:"show_excerpt"`
 	Status       *string   `json:"status"`
 	StatusNote   *string   `json:"status_note"`
+	DefaultTags  *[]string `json:"default_tags"`
 }
 
 func (s *Server) adminUpdateBlog(c *gin.Context) {
@@ -202,6 +205,20 @@ func (s *Server) adminUpdateBlog(c *gin.Context) {
 	if req.ExtraDomains != nil {
 		d := lowerAll(*req.ExtraDomains)
 		u.ExtraDomains = &d
+	}
+	if req.DefaultTags != nil {
+		tags := *req.DefaultTags
+		if len(tags) > model.MaxTagsPerEntry {
+			s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+			return
+		}
+		for _, t := range tags {
+			if _, ok := model.TagBySlug(t); !ok {
+				s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+				return
+			}
+		}
+		u.DefaultTags = &tags
 	}
 	if req.Status != nil {
 		st := model.BlogStatus(*req.Status)

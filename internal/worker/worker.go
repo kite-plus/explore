@@ -29,11 +29,18 @@ const maintenanceEvery = 24 * time.Hour
 // docs/design/data-model.md section 5.
 const submissionRetention = 90 * 24 * time.Hour
 
-// Worker fetches due blogs. Zero values of the optional fields get sensible
-// defaults.
+// Tagger names the tags of one entry; see internal/tagger. An error means the
+// entry waits for a later round.
+type Tagger interface {
+	Tag(ctx context.Context, job store.TagJob) ([]string, error)
+}
+
+// Worker fetches due blogs and tags new entries. Zero values of the optional
+// fields get sensible defaults; a nil Tagger leaves entries untagged.
 type Worker struct {
 	Store       *store.Store
 	Fetch       *fetch.Client
+	Tagger      Tagger
 	Log         *slog.Logger
 	Concurrency int
 	PollEvery   time.Duration
@@ -41,10 +48,17 @@ type Worker struct {
 	Rand        func() float64
 
 	lastMaintenance time.Time
+	tagFailures     int
+	nextTagAt       time.Time
 }
 
 // Run polls until ctx is canceled.
 func (w *Worker) Run(ctx context.Context) error {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	if w.Tagger != nil {
+		wg.Go(func() { w.tagLoop(ctx) })
+	}
 	poll := w.PollEvery
 	if poll == 0 {
 		poll = 30 * time.Second
@@ -156,6 +170,7 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 		log.Error("storing the snapshot failed", "error", err)
 		return
 	}
+	w.refreshDescription(ctx, b, f.Description)
 	log.Info("fetched", "outcome", "changed", "status", resp.Status, "bytes", len(resp.Body),
 		"entries", len(res.Entries), "off_domain", res.Stats.OffDomain, "no_link", res.Stats.NoLink,
 		"untrusted", res.Stats.Untrusted, "duration", w.now().Sub(start))
@@ -168,6 +183,7 @@ func (w *Worker) unchanged(ctx context.Context, log *slog.Logger, b store.Claime
 		log.Error("recording an unchanged fetch failed", "error", err)
 		return
 	}
+	w.refreshDescription(ctx, b, "")
 	log.Info("fetched", "outcome", "unchanged", "status", resp.Status, "duration", w.now().Sub(start))
 }
 
@@ -179,6 +195,59 @@ func (w *Worker) fail(ctx context.Context, log *slog.Logger, b store.Claimed, re
 		return
 	}
 	log.Warn("fetch failed", "error", reason, "gone", gone, "failures", b.ConsecutiveFailures+1, "retry_in", delay)
+}
+
+// tagLoop tags a round of entries every minute until ctx is canceled.
+func (w *Worker) tagLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		w.TagOnce(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// TagOnce tags up to policy.TagsPerMinute untagged entries, newest first,
+// and returns how many it tagged. After a failure it stops and waits longer
+// each time, up to an hour: one failure usually means the next would fail
+// too, from a wrong key, an outage or a spent budget.
+func (w *Worker) TagOnce(ctx context.Context) int {
+	if w.Tagger == nil || w.now().Before(w.nextTagAt) {
+		return 0
+	}
+	jobs, err := w.Store.Untagged(ctx, policy.TagsPerMinute)
+	if err != nil {
+		w.log().Error("listing untagged entries failed", "error", err)
+		return 0
+	}
+	tagged := 0
+	for _, j := range jobs {
+		tags, err := w.Tagger.Tag(ctx, j)
+		if err != nil {
+			if ctx.Err() != nil {
+				return tagged
+			}
+			w.tagFailures++
+			wait := min(time.Minute<<min(w.tagFailures-1, 6), time.Hour)
+			w.nextTagAt = w.now().Add(wait)
+			w.log().Warn("tagging failed", "entry", j.EntryID, "error", err, "retry_in", wait)
+			return tagged
+		}
+		if err := w.Store.SetTags(ctx, j.EntryID, j.Title, tags); err != nil {
+			w.log().Error("storing tags failed", "entry", j.EntryID, "error", err)
+			return tagged
+		}
+		w.tagFailures = 0
+		tagged++
+	}
+	if tagged > 0 {
+		w.log().Info("tagged", "entries", tagged)
+	}
+	return tagged
 }
 
 // maintain runs the daily pass. Across several workers, the advisory lock

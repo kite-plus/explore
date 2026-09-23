@@ -5,22 +5,28 @@ import http from "node:http";
 const now = Date.now();
 const iso = (hoursAgo) => new Date(now - hoursAgo * 3600_000).toISOString();
 
-const zhBlog = { host: "zh.example.com", name: "中文博客", site_url: "https://zh.example.com/", language: "zh-CN" };
-const enBlog = { host: "en.example.com", name: "English Blog", site_url: "https://en.example.com/", language: "en" };
+const zhBlog = { host: "zh.example.com", name: "中文博客", description: "记录代码与生活中的新发现。", site_url: "https://zh.example.com/", language: "zh-CN" };
+const enBlog = { host: "en.example.com", name: "English Blog", description: "Notes from an independent weblog.", site_url: "https://en.example.com/", language: "en" };
 
 const entries = {
   first: {
     data: [
-      { id: "2", title: "缓存可以随时删掉", url: "https://zh.example.com/posts/cache/", excerpt: "第一段摘要。", published_at: iso(1), blog: zhBlog },
-      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/", excerpt: null, published_at: iso(30), blog: enBlog },
+      { id: "2", title: "缓存可以随时删掉", url: "https://zh.example.com/posts/cache/", excerpt: "第一段摘要。", image_url: "/api/v1/entries/2/image", published_at: iso(1), tags: ["backend", "ops"], blog: zhBlog },
+      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/", excerpt: null, image_url: null, published_at: iso(30), tags: [], blog: enBlog },
     ],
     next_cursor: "page-two",
   },
   second: {
-    data: [{ id: "0", title: "Older post", url: "https://en.example.com/older/", excerpt: "Old.", published_at: iso(200), blog: enBlog }],
+    data: [{ id: "0", title: "Older post", url: "https://en.example.com/older/", excerpt: "Old.", image_url: null, published_at: iso(200), tags: ["life"], blog: enBlog }],
     next_cursor: null,
   },
 };
+
+const tags = [
+  { slug: "backend", name: { zh: "后端", en: "Backend" } },
+  { slug: "ops", name: { zh: "运维与云", en: "Ops & cloud" } },
+  { slug: "life", name: { zh: "生活随笔", en: "Life & essays" } },
+];
 
 const blogs = [
   { ...zhBlog, feed_url: "https://zh.example.com/rss.xml", generator: "halo", last_published_at: iso(1) },
@@ -41,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [] };
+  const state = { down: false, submits: [], tagLists: 0 };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -53,20 +59,36 @@ export function startStub() {
 
     if (state.down) return error(500, "internal");
 
+    if (req.method === "GET" && url.pathname === "/api/v1/entries/2/image") {
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=60" });
+      return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9cqN8AAAAASUVORK5CYII=", "base64"));
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/v1/tags") {
+      state.tagLists++;
+      return send(200, { data: tags });
+    }
     if (req.method === "GET" && url.pathname === "/api/v1/entries") {
       const cursor = url.searchParams.get("cursor");
       if (cursor === "bad") return error(400, "invalid_cursor");
+      const tag = url.searchParams.get("tag");
+      if (tag && !tags.some((t) => t.slug === tag)) return error(400, "invalid_request");
+      if (tag) return send(200, { data: entries.first.data.filter((e) => e.tags.includes(tag)), next_cursor: null });
       if (url.searchParams.get("lang") === "zh") return send(200, { data: [entries.first.data[0]], next_cursor: null });
       return send(200, cursor === "page-two" ? entries.second : entries.first);
     }
     if (req.method === "GET" && url.pathname === "/api/v1/blogs") {
       return send(200, { data: blogs, next_cursor: null });
     }
+    if (req.method === "GET" && url.pathname === "/api/v1/blogs/zh.example.com/favicon") {
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=3600" });
+      return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9cqN8AAAAASUVORK5CYII=", "base64"));
+    }
     if (req.method === "GET" && url.pathname.startsWith("/api/v1/blogs/")) {
       const host = decodeURIComponent(url.pathname.slice("/api/v1/blogs/".length));
       const b = blogs.find((x) => x.host === host);
       if (!b) return error(404, "not_found");
-      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }, { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, published_at: null }] });
+      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }, { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, image_url: null, published_at: null, tags: [] }] });
     }
     if (req.method === "GET" && url.pathname === `/api/v1/submissions/${submission.id}`) {
       const localized = structuredClone(submission);

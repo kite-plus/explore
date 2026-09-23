@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"image"
+	"image/png"
 	"io"
 	"log/slog"
 	"net/http"
@@ -44,6 +46,7 @@ func newEnv(t *testing.T, admins bool) *env {
 	srv := &api.Server{
 		Store:        st,
 		Checker:      &check.Checker{Fetch: fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second})},
+		ImageFetch:   fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second}),
 		PublicURL:    "https://explore.example.org",
 		AllowPrivate: true,
 		Log:          slog.New(slog.NewTextHandler(logs, nil)),
@@ -132,7 +135,9 @@ type entryOut struct {
 	Title       string     `json:"title"`
 	URL         string     `json:"url"`
 	Excerpt     *string    `json:"excerpt"`
+	ImageURL    *string    `json:"image_url"`
 	PublishedAt *time.Time `json:"published_at"`
+	Tags        []string   `json:"tags"`
 	Blog        *struct {
 		Host     string `json:"host"`
 		Name     string `json:"name"`
@@ -216,20 +221,142 @@ func TestEntries(t *testing.T) {
 	}
 }
 
+func TestEntryImageProxy(t *testing.T) {
+	makePNG := func(width, height int) []byte {
+		var body bytes.Buffer
+		if err := png.Encode(&body, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+			t.Fatal(err)
+		}
+		return body.Bytes()
+	}
+	large, tiny := makePNG(120, 100), makePNG(1, 1)
+	fetches := 0
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			_, _ = io.WriteString(w, "User-agent: *\nAllow: /\n")
+		case "/large.png":
+			fetches++
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(large)
+		case "/tiny.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(tiny)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(origin.Close)
+
+	e := newEnv(t, false)
+	photo := post("photo", 1, "")
+	photo.ImageURL = origin.URL + "/large.png"
+	pixel := post("pixel", 2, "")
+	pixel.ImageURL = origin.URL + "/tiny.png"
+	e.seed("photos.example.com", "en", photo, pixel)
+	page := decode[pageOut](t, e.get("/api/v1/entries"))
+	if page.Data[0].ImageURL == nil || page.Data[1].ImageURL == nil {
+		t.Fatalf("image URLs missing: %+v", page.Data)
+	}
+	path := *page.Data[0].ImageURL
+	if strings.Contains(path, origin.URL) {
+		t.Fatalf("source URL leaked: %s", path)
+	}
+	for range 2 {
+		w := e.get(path)
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" || !bytes.Equal(w.Body.Bytes(), large) {
+			t.Errorf("image response: %d %v", w.Code, w.Header())
+		}
+	}
+	if fetches != 1 {
+		t.Errorf("origin fetched %d times, want one", fetches)
+	}
+	if w := e.get(*page.Data[1].ImageURL); w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("tracking pixel status = %d", w.Code)
+	}
+}
+
+func TestBlogFavicon(t *testing.T) {
+	var picture bytes.Buffer
+	if err := png.Encode(&picture, image.NewRGBA(image.Rect(0, 0, 32, 32))); err != nil {
+		t.Fatal(err)
+	}
+	fetches := 0
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			_, _ = io.WriteString(w, "User-agent: *\nAllow: /\n")
+		case "/site/":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = io.WriteString(w, `<html><head><link rel="shortcut icon" href="icon.png"></head></html>`)
+		case "/site/icon.png":
+			fetches++
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(picture.Bytes())
+		case "/missing/":
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = io.WriteString(w, "<html><head></head></html>")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(origin.Close)
+
+	e := newEnv(t, false)
+	for host, path := range map[string]string{"icons.example.com": "/site/", "missing.example.com": "/missing/"} {
+		blog, err := e.s.CreateBlog(context.Background(), store.NewBlog{
+			Host: host, Name: host, SiteURL: origin.URL + path, FeedURL: origin.URL + "/feed.xml",
+			Language: "en", ShowExcerpt: true, Generator: model.GeneratorHugo,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.s.SyncSnapshot(context.Background(), blog.ID, nil, store.FetchState{
+			FetchInterval: time.Hour, NextFetchAt: time.Now().Add(time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		w := e.get("/api/v1/blogs/ICONS.example.com/favicon")
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" || !bytes.Equal(w.Body.Bytes(), picture.Bytes()) {
+			t.Errorf("favicon response: %d %v", w.Code, w.Header())
+		}
+	}
+	if fetches != 1 {
+		t.Errorf("favicon fetched %d times, want one", fetches)
+	}
+	w := e.get("/api/v1/blogs/missing.example.com/favicon")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" || w.Body.Len() == 0 {
+		t.Errorf("missing favicon fallback: %d %v", w.Code, w.Header())
+	}
+	if w := e.get("/api/v1/blogs/unknown.example.com/favicon"); w.Code != http.StatusNotFound {
+		t.Errorf("unknown blog favicon status = %d", w.Code)
+	}
+}
+
 func TestBlogs(t *testing.T) {
 	e := newEnv(t, false)
 	e.seed("recent.example.com", "en", post("a", 1, ""))
 	e.seed("older.example.com", "zh-CN", post("b", 30, ""))
+	recent, err := e.s.Blog(context.Background(), "recent.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.SetDescription(context.Background(), recent.ID, "A blog about code and life"); err != nil {
+		t.Fatal(err)
+	}
 
 	list := decode[struct {
 		Data []struct {
 			Host            string     `json:"host"`
+			Description     string     `json:"description"`
 			FeedURL         string     `json:"feed_url"`
 			Generator       string     `json:"generator"`
 			LastPublishedAt *time.Time `json:"last_published_at"`
 		} `json:"data"`
 	}](t, e.get("/api/v1/blogs"))
-	if len(list.Data) != 2 || list.Data[0].Host != "recent.example.com" || list.Data[0].Generator != "hugo" || list.Data[0].LastPublishedAt == nil {
+	if len(list.Data) != 2 || list.Data[0].Host != "recent.example.com" || list.Data[0].Description != "A blog about code and life" || list.Data[0].Generator != "hugo" || list.Data[0].LastPublishedAt == nil {
 		t.Fatalf("blogs = %+v", list.Data)
 	}
 
@@ -238,10 +365,10 @@ func TestBlogs(t *testing.T) {
 		t.Fatalf("blog page = %d %s", w.Code, w.Body.String())
 	}
 	page := decode[struct {
-		Blog    struct{ Host string } `json:"blog"`
-		Entries []entryOut            `json:"entries"`
+		Blog    struct{ Host, Description string } `json:"blog"`
+		Entries []entryOut                         `json:"entries"`
 	}](t, w)
-	if page.Blog.Host != "recent.example.com" || len(page.Entries) != 1 || page.Entries[0].Blog != nil {
+	if page.Blog.Host != "recent.example.com" || page.Blog.Description != "A blog about code and life" || len(page.Entries) != 1 || page.Entries[0].Blog != nil {
 		t.Errorf("blog page = %+v", page)
 	}
 
@@ -564,6 +691,52 @@ func TestSubmissionsAreRateLimited(t *testing.T) {
 			if code, _ := errorCode(t, w); w.Code != http.StatusTooManyRequests || code != "rate_limited" || w.Header().Get("Retry-After") == "" {
 				t.Errorf("sixth request = %d %s", w.Code, w.Header())
 			}
+		}
+	}
+}
+
+func TestTags(t *testing.T) {
+	e := newEnv(t, true)
+	e.seed("tags.example.com", "zh", post("a", 1, ""), post("b", 2, ""))
+	ctx := context.Background()
+	jobs, err := e.s.Untagged(ctx, 10)
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("untagged = %+v, %v", jobs, err)
+	}
+	if err := e.s.SetTags(ctx, jobs[0].EntryID, jobs[0].Title, []string{"ai", "tools"}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := e.get("/api/v1/tags")
+	list := decode[struct {
+		Data []struct {
+			Slug string            `json:"slug"`
+			Name map[string]string `json:"name"`
+		} `json:"data"`
+	}](t, w)
+	if w.Code != http.StatusOK || len(list.Data) != len(model.Tags) || list.Data[0].Name["zh"] != model.Tags[0].ZH {
+		t.Fatalf("tags = %d %+v", w.Code, list)
+	}
+
+	page := decode[pageOut](t, e.get("/api/v1/entries?tag=ai"))
+	if len(page.Data) != 1 || page.Data[0].Title != "Post a" || strings.Join(page.Data[0].Tags, ",") != "ai,tools" {
+		t.Fatalf("entries tagged ai = %+v", page.Data)
+	}
+	all := decode[pageOut](t, e.get("/api/v1/entries"))
+	if len(all.Data) != 2 || all.Data[1].Tags == nil || len(all.Data[1].Tags) != 0 {
+		t.Errorf("an untagged entry should carry an empty list: %+v", all.Data)
+	}
+	if w := e.get("/api/v1/entries?tag=nonsense"); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown tag = %d, want 400", w.Code)
+	}
+
+	w = e.do(req{method: http.MethodPatch, path: "/api/v1/admin/blogs/tags.example.com", body: `{"default_tags":["ai","ops"]}`, admin: true})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"default_tags":["ai","ops"]`) {
+		t.Fatalf("set default tags = %d %s", w.Code, w.Body.String())
+	}
+	for _, body := range []string{`{"default_tags":["nonsense"]}`, `{"default_tags":["ai","ops","data","life"]}`} {
+		if w := e.do(req{method: http.MethodPatch, path: "/api/v1/admin/blogs/tags.example.com", body: body, admin: true}); w.Code != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", body, w.Code)
 		}
 	}
 }

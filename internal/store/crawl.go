@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -12,16 +13,18 @@ import (
 
 // Claimed is a blog the worker took for one fetch.
 type Claimed struct {
-	ID                  int64
-	Host                string
-	FeedURL             string
-	ETag                string
-	LastModified        string
-	BodyHash            []byte
-	FetchInterval       time.Duration
-	ConsecutiveFailures int
-	ShowExcerpt         bool
-	ExtraDomains        []string
+	ID                   int64
+	Host                 string
+	SiteURL              string
+	FeedURL              string
+	DescriptionCheckedAt *time.Time
+	ETag                 string
+	LastModified         string
+	BodyHash             []byte
+	FetchInterval        time.Duration
+	ConsecutiveFailures  int
+	ShowExcerpt          bool
+	ExtraDomains         []string
 	// HasEntries is false after the cache was emptied, which tells the
 	// worker to skip conditional requests and rebuild the snapshot.
 	HasEntries bool
@@ -40,7 +43,7 @@ func (s *Store) ClaimDue(ctx context.Context, batch int, lease time.Duration) ([
 			LIMIT @batch
 			FOR UPDATE SKIP LOCKED
 		)
-		RETURNING id, host, feed_url, coalesce(etag, ''), coalesce(last_modified, ''), body_hash,
+		RETURNING id, host, site_url, feed_url, description_checked_at, coalesce(etag, ''), coalesce(last_modified, ''), body_hash,
 		          extract(epoch FROM fetch_interval)::bigint, consecutive_failures,
 		          show_excerpt, extra_domains,
 		          EXISTS (SELECT 1 FROM entries e WHERE e.blog_id = blogs.id)`,
@@ -51,7 +54,7 @@ func (s *Store) ClaimDue(ctx context.Context, batch int, lease time.Duration) ([
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Claimed, error) {
 		var c Claimed
 		var interval int64
-		err := row.Scan(&c.ID, &c.Host, &c.FeedURL, &c.ETag, &c.LastModified, &c.BodyHash,
+		err := row.Scan(&c.ID, &c.Host, &c.SiteURL, &c.FeedURL, &c.DescriptionCheckedAt, &c.ETag, &c.LastModified, &c.BodyHash,
 			&interval, &c.ConsecutiveFailures, &c.ShowExcerpt, &c.ExtraDomains, &c.HasEntries)
 		c.FetchInterval = time.Duration(interval) * time.Second
 		return c, err
@@ -76,11 +79,20 @@ type FetchState struct {
 // transaction. See docs/design/data-model.md section 3.
 func (s *Store) SyncSnapshot(ctx context.Context, blogID int64, entries []model.Entry, st FetchState) error {
 	n := len(entries)
-	identities, urls, titles, excerpts := make([]string, n), make([]string, n), make([]string, n), make([]string, n)
+	identities, urls, titles, excerpts, images := make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n)
 	published, trusted := make([]*time.Time, n), make([]bool, n)
+	// unnest cannot take one array per row, so each row's categories travel
+	// as a JSON array.
+	categories := make([]string, n)
 	for i, e := range entries {
 		identities[i], urls[i], titles[i], excerpts[i] = e.Identity, e.URL, e.Title, e.Excerpt
+		images[i] = e.ImageURL
 		published[i], trusted[i] = e.PublishedAt, e.DateTrusted
+		c, err := json.Marshal(append([]string{}, e.Categories...))
+		if err != nil {
+			return err
+		}
+		categories[i] = string(c)
 	}
 
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -92,21 +104,28 @@ func (s *Store) SyncSnapshot(ctx context.Context, blogID int64, entries []model.
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO entries (blog_id, identity, url, title, excerpt, published_at, date_trusted)
-			SELECT @blog_id, s.identity, s.url, s.title, nullif(s.excerpt, ''), s.published_at, s.date_trusted
+			INSERT INTO entries (blog_id, identity, url, title, excerpt, image_url, published_at, date_trusted, categories)
+			SELECT @blog_id, s.identity, s.url, s.title, nullif(s.excerpt, ''), nullif(s.image_url, ''), s.published_at, s.date_trusted,
+			       ARRAY(SELECT jsonb_array_elements_text(s.categories::jsonb))
 			FROM unnest(@identities::text[], @urls::text[], @titles::text[],
-			            @excerpts::text[], @published::timestamptz[], @trusted::boolean[])
-			     AS s (identity, url, title, excerpt, published_at, date_trusted)
+			            @excerpts::text[], @images::text[], @published::timestamptz[], @trusted::boolean[], @categories::text[])
+			     AS s (identity, url, title, excerpt, image_url, published_at, date_trusted, categories)
 			ON CONFLICT (blog_id, identity) DO UPDATE
 			SET url          = excluded.url,
 			    title        = excluded.title,
 			    excerpt      = excluded.excerpt,
+			    image_url    = excluded.image_url,
 			    published_at = excluded.published_at,
 			    date_trusted = excluded.date_trusted,
+			    categories   = excluded.categories,
+			    -- Tags belong to the title they were given for; a new title
+			    -- is tagged again.
+			    tags         = CASE WHEN entries.title = excluded.title THEN entries.tags ELSE '{}' END,
+			    tagged_at    = CASE WHEN entries.title = excluded.title THEN entries.tagged_at END,
 			    synced_at    = now()`,
 			pgx.NamedArgs{
 				"blog_id": blogID, "identities": identities, "urls": urls, "titles": titles,
-				"excerpts": excerpts, "published": published, "trusted": trusted,
+				"excerpts": excerpts, "images": images, "published": published, "trusted": trusted, "categories": categories,
 			}); err != nil {
 			return err
 		}

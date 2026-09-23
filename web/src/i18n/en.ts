@@ -12,7 +12,7 @@ export const en: Dict = {
   nav: { home: "Latest", blogs: "Blogs", submit: "Submit a blog", about: "About" },
   theme: { dark: "Dark mode" },
   newTab: " (opens in a new tab)",
-  filter: { label: "Blog language", all: "All", zh: "Chinese", en: "English" },
+  filter: { label: "Blog language", tags: "Tags", all: "All", zh: "Chinese", en: "English" },
   home: {
     title: "New posts from independent blogs",
     heading: "Latest posts",

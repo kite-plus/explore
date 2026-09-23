@@ -4,27 +4,32 @@ import ExternalLink from "@/components/ExternalLink.astro";
 import { dict, localePath, type Lang } from "@/i18n";
 import { relativeTime } from "@/lib/format";
 import type { Entry } from "@/lib/types";
+import { withQuery } from "@/lib/utils";
 
 interface Props {
   lang: Lang;
   entry: Entry;
   /** The blog's language, when the entry does not carry its blog. */
   blogLanguage?: string;
+  /** Tag names by slug; tags without a name are not shown. */
+  tagNames?: Record<string, string>;
 }
 
-const { lang, entry, blogLanguage } = Astro.props;
+const { lang, entry, blogLanguage, tagNames = {} } = Astro.props;
+const tags = (entry.tags ?? []).filter((slug) => tagNames[slug]);
 const t = dict(lang);
 // Titles and excerpts stay as the author wrote them; lang tells screen
 // readers and search engines which language that is.
 const contentLang = entry.blog?.language ?? blogLanguage;
 ---
 
-<article class="py-5" lang={contentLang}>
-  <h2 class="text-base leading-snug font-medium">
-    <ExternalLink lang={lang} href={entry.url} class="hover:underline">{entry.title}</ExternalLink>
-  </h2>
-  {entry.excerpt && <p class="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{entry.excerpt}</p>}
-  <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" lang={t.htmlLang}>
+<article class="flex gap-4 py-5" lang={contentLang}>
+  <div class="min-w-0 flex-1">
+    <h2 class="text-base leading-snug font-medium">
+      <ExternalLink lang={lang} href={entry.url} class="hover:underline">{entry.title}</ExternalLink>
+    </h2>
+    {entry.excerpt && <p class="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{entry.excerpt}</p>}
+    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" lang={t.htmlLang}>
     {
       entry.blog && (
         <a href={localePath(lang, `/blogs/${entry.blog.host}`)} class="inline-flex items-center gap-1.5 hover:text-foreground">
@@ -41,5 +46,23 @@ const contentLang = entry.blog?.language ?? blogLanguage;
         <span>{t.blog.undated}</span>
       )
     }
+    {
+      tags.map((slug) => (
+        <a
+          href={withQuery(localePath(lang, "/"), { tag: slug })}
+          class="rounded-sm bg-secondary px-1.5 py-0.5 text-secondary-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          {tagNames[slug]}
+        </a>
+      ))
+    }
+    </div>
   </div>
+  {
+    entry.image_url && (
+      <div class="h-20 w-24 shrink-0 overflow-hidden rounded-md border bg-muted sm:h-24 sm:w-32">
+        <img src={entry.image_url} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+      </div>
+    )
+  }
 </article>

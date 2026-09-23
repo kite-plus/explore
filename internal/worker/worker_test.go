@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -208,6 +209,12 @@ func TestFetchCycle(t *testing.T) {
 	e := newEnv(t)
 	s := newSite(t, "127.0.0.1")
 	s.feed("/atom.xml", "hexo/atom.xml", "https://hexo.example.com", `"v1"`)
+	homeRequests := 0
+	s.handle("/", func(w http.ResponseWriter, _ *http.Request) {
+		homeRequests++
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head><meta property="og:description" content="Fallback text"><meta name="description" content="Notes about code &amp; life"></head></html>`)
+	})
 	b := e.list(s, "/atom.xml")
 
 	if n := e.runOnce(); n != 1 {
@@ -218,7 +225,7 @@ func TestFetchCycle(t *testing.T) {
 		t.Fatalf("entries = %v, %v", entries, err)
 	}
 	got := e.blog(b.Host)
-	if got.ETag != `"v1"` || got.Generator != model.GeneratorHexo || got.FetchInterval != time.Hour {
+	if got.ETag != `"v1"` || got.Generator != model.GeneratorHexo || got.FetchInterval != time.Hour || got.Description != "Notes about code & life" {
 		t.Fatalf("after first fetch = %+v", got)
 	}
 	near(t, "next fetch", got.NextFetchAt, time.Now().Add(time.Hour))
@@ -228,6 +235,9 @@ func TestFetchCycle(t *testing.T) {
 	e.runOnce()
 	if s.conditionalRequests() != 1 {
 		t.Fatalf("conditional requests = %d, want 1", s.conditionalRequests())
+	}
+	if homeRequests != 1 {
+		t.Errorf("home page fetched %d times, want one metadata check", homeRequests)
 	}
 	if got := e.blog(b.Host); got.FetchInterval != 90*time.Minute {
 		t.Errorf("interval after 304 = %v, want 1h30m", got.FetchInterval)
@@ -239,6 +249,20 @@ func TestFetchCycle(t *testing.T) {
 	e.runOnce()
 	if got := e.blog(b.Host); got.ETag != `"v2"` || got.FetchInterval != time.Hour {
 		t.Errorf("after change = %+v", got)
+	}
+}
+
+func TestDescriptionFallsBackToFeed(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	s.handle("/feed.xml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = io.WriteString(w, `<rss version="2.0"><channel><title>Blog</title><link>`+s.base()+`/</link><description>Stories &amp; notes from the feed</description></channel></rss>`)
+	})
+	e.list(s, "/feed.xml")
+	e.runOnce()
+	if got := e.blog(s.host).Description; got != "Stories & notes from the feed" {
+		t.Errorf("description = %q, want feed description", got)
 	}
 }
 
@@ -454,5 +478,56 @@ func TestMaintenanceRunsDaily(t *testing.T) {
 	e.w.maintain(context.Background())
 	if e.w.lastMaintenance.Equal(first) {
 		t.Error("maintenance did not run after a day")
+	}
+}
+
+type fakeTagger struct {
+	mu    sync.Mutex
+	calls int
+	err   error
+}
+
+func (f *fakeTagger) Tag(_ context.Context, j store.TagJob) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return []string{"life"}, nil
+}
+
+func TestTaggingNewEntries(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	s.feed("/atom.xml", "hexo/atom.xml", "https://hexo.example.com", "")
+	e.list(s, "/atom.xml")
+	e.runOnce()
+	ctx := context.Background()
+
+	// A failing model stops the round and backs off.
+	tagger := &fakeTagger{err: errors.New("401 invalid key")}
+	e.w.Tagger = tagger
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 1 {
+		t.Fatalf("tagged %d with %d calls, want 0 after one failed call", n, tagger.calls)
+	}
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 1 {
+		t.Fatalf("asked again during the backoff: %d calls", tagger.calls)
+	}
+
+	tagger.err = nil
+	e.w.nextTagAt = time.Time{}
+	if n := e.w.TagOnce(ctx); n != 2 {
+		t.Fatalf("tagged %d entries, want 2", n)
+	}
+	if jobs, err := e.s.Untagged(ctx, 10); err != nil || len(jobs) != 0 {
+		t.Errorf("still untagged: %+v, %v", jobs, err)
+	}
+	page, err := e.s.Stream(ctx, store.StreamQuery{Tag: "life", Limit: 10})
+	if err != nil || len(page) == 0 {
+		t.Errorf("stream tagged life = %+v, %v", page, err)
+	}
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 3 {
+		t.Errorf("tagged entries asked about again: %d calls", tagger.calls)
 	}
 }

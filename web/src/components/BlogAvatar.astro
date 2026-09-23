@@ -9,15 +9,17 @@ interface Props {
 }
 
 const { host, name, size = "sm" } = Astro.props;
+const large = size === "lg";
 ---
 
 <span
   aria-hidden="true"
   class={cn(
-    "inline-flex shrink-0 items-center justify-center rounded-full font-medium text-white",
+    "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white",
     avatarColor(host),
-    size === "sm" ? "size-5 text-[0.65rem]" : "size-12 text-xl",
+    large ? "size-12 text-xl" : "size-5 text-[0.65rem]",
   )}
 >
   {initial(name)}
+  {large && <img src={`/api/v1/blogs/${encodeURIComponent(host)}/favicon`} alt="" loading="lazy" decoding="async" class="absolute inset-0 size-full object-contain" />}
 </span>

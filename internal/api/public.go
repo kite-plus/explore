@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -24,13 +25,21 @@ type entryJSON struct {
 	Title       string       `json:"title"`
 	URL         string       `json:"url"`
 	Excerpt     *string      `json:"excerpt"`
+	ImageURL    *string      `json:"image_url"`
 	PublishedAt *time.Time   `json:"published_at"`
+	Tags        []string     `json:"tags"`
 	Blog        *blogRefJSON `json:"blog,omitempty"`
+}
+
+type tagJSON struct {
+	Slug string            `json:"slug"`
+	Name map[string]string `json:"name"`
 }
 
 type blogJSON struct {
 	Host            string     `json:"host"`
 	Name            string     `json:"name"`
+	Description     string     `json:"description"`
 	SiteURL         string     `json:"site_url"`
 	FeedURL         string     `json:"feed_url"`
 	Language        string     `json:"language"`
@@ -44,17 +53,24 @@ type listJSON[T any] struct {
 }
 
 func toEntry(e model.Entry) entryJSON {
-	out := entryJSON{ID: strconv.FormatInt(e.ID, 10), Title: e.Title, URL: e.URL, PublishedAt: utc(e.PublishedAt)}
+	out := entryJSON{ID: strconv.FormatInt(e.ID, 10), Title: e.Title, URL: e.URL, PublishedAt: utc(e.PublishedAt), Tags: e.Tags}
+	if out.Tags == nil {
+		out.Tags = []string{}
+	}
 	if e.Excerpt != "" {
 		excerpt := e.Excerpt
 		out.Excerpt = &excerpt
+	}
+	if e.ImageURL != "" {
+		imageURL := "/api/v1/entries/" + out.ID + "/image"
+		out.ImageURL = &imageURL
 	}
 	return out
 }
 
 func toBlog(b store.ListedBlog) blogJSON {
 	return blogJSON{
-		Host: b.Host, Name: b.Name, SiteURL: b.SiteURL, FeedURL: b.FeedURL,
+		Host: b.Host, Name: b.Name, Description: b.Description, SiteURL: b.SiteURL, FeedURL: b.FeedURL,
 		Language: b.Language, Generator: string(b.Generator), LastPublishedAt: utc(b.LastPublishedAt),
 	}
 }
@@ -72,8 +88,13 @@ func (s *Server) entries(c *gin.Context) {
 	if !ok {
 		return
 	}
+	tag := c.Query("tag")
+	if _, known := model.TagBySlug(tag); tag != "" && !known {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
 	// One extra row says whether there is a next page.
-	rows, err := s.Store.Stream(c.Request.Context(), store.StreamQuery{Lang: language, Limit: limit + 1, Cursor: cur})
+	rows, err := s.Store.Stream(c.Request.Context(), store.StreamQuery{Lang: language, Tag: tag, Limit: limit + 1, Cursor: cur})
 	if err != nil {
 		s.storeError(c, err)
 		return
@@ -91,6 +112,17 @@ func (s *Server) entries(c *gin.Context) {
 		out.Data = append(out.Data, e)
 	}
 	cached(c, time.Minute, "application/json; charset=utf-8", encode(out))
+}
+
+// tags returns the tag list in display order, with names in both languages.
+func (s *Server) tags(c *gin.Context) {
+	out := struct {
+		Data []tagJSON `json:"data"`
+	}{Data: make([]tagJSON, 0, len(model.Tags))}
+	for _, t := range model.Tags {
+		out.Data = append(out.Data, tagJSON{Slug: t.Slug, Name: map[string]string{"zh": t.ZH, "en": t.EN}})
+	}
+	cached(c, time.Hour, "application/json; charset=utf-8", encode(out))
 }
 
 func (s *Server) blogs(c *gin.Context) {

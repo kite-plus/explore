@@ -2,7 +2,8 @@ import type { AstroGlobal } from "astro";
 
 import { dict, localePath, type Lang } from "@/i18n";
 import { api } from "@/lib/api";
-import type { BlogPage, Blog, CheckReport, Entry, Page, Submission } from "@/lib/types";
+import { tagList } from "@/lib/tags";
+import type { BlogPage, Blog, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
 
 // Loaders run in a page's frontmatter, the only place where the status
 // and headers can still change: Astro streams the body after that.
@@ -31,17 +32,21 @@ const param = (ctx: AstroGlobal, name: string) => ctx.url.searchParams.get(name)
 export interface StreamPage {
   page: Page<Entry>;
   filter?: string;
+  tag?: string;
+  /** Empty when the list could not be had; pages then show no tags. */
+  tags: Tag[];
   paged: boolean;
 }
 
 export async function loadHome(ctx: AstroGlobal, lang: Lang): Promise<Loaded<StreamPage>> {
   const cursor = param(ctx, "cursor");
   const filter = param(ctx, "lang");
-  const r = await api.entries(lang, { cursor, lang: filter, limit: 30 });
+  const tag = param(ctx, "tag");
+  const [r, tags] = await Promise.all([api.entries(lang, { cursor, lang: filter, tag, limit: 30 }), tagList(lang)]);
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   cacheControl(ctx, "public, max-age=60");
-  return { kind: "ok", data: { page: r.data, filter, paged: Boolean(cursor) } };
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
 }
 
 export interface DirectoryPage {
@@ -60,13 +65,15 @@ export async function loadBlogs(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Di
   return { kind: "ok", data: { page: r.data, filter, paged: Boolean(cursor) } };
 }
 
-export async function loadBlog(ctx: AstroGlobal, lang: Lang): Promise<Loaded<BlogPage>> {
+export type BlogView = BlogPage & { tags: Tag[] };
+
+export async function loadBlog(ctx: AstroGlobal, lang: Lang): Promise<Loaded<BlogView>> {
   const host = ctx.params.host ?? "";
-  const r = await api.blog(lang, host);
+  const [r, tags] = await Promise.all([api.blog(lang, host), tagList(lang)]);
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   cacheControl(ctx, "public, max-age=300");
-  return { kind: "ok", data: r.data };
+  return { kind: "ok", data: { ...r.data, tags: tags ?? [] } };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {
