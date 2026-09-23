@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="GBK"?>
+<rss version="2.0"><channel><title>编码测试博客</title><link>https://gbk.example.com/</link><description>老博客程序输出的 GBK 订阅源</description>
+<item><title>用 GBK 编码的中文标题</title><link>https://gbk.example.com/archives/1.html</link><guid>https://gbk.example.com/archives/1.html</guid><pubDate>Wed, 16 Sep 2026 10:00:00 +0800</pubDate><description>这段摘要在传输时是 GBK 编码。</description></item>
+</channel></rss>

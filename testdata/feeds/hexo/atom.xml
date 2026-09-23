@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Hexo Blog</title>
+  <icon>https://hexo.example.com/icon.png</icon>
+  <link href="https://hexo.example.com/atom.xml" rel="self"/>
+  <link href="https://hexo.example.com/"/>
+  <updated>2026-09-19T12:00:00.000Z</updated>
+  <id>https://hexo.example.com/</id>
+  <author>
+    <name>Hexo Author</name>
+  </author>
+  <generator uri="https://hexo.io/">Hexo</generator>
+  <entry>
+    <title>用 Hexo 写博客的第三年</title>
+    <link href="https://hexo.example.com/2026/09/19/third-year/"/>
+    <id>https://hexo.example.com/2026/09/19/third-year/</id>
+    <published>2026-09-19T12:00:00.000Z</published>
+    <updated>2026-09-19T12:30:00.000Z</updated>
+    <content type="html"><![CDATA[<p>三年前我开始用 Hexo 写博客。</p><p>这是正文的第二段，不应该出现在聚合站里。</p>]]></content>
+    <summary type="html">&lt;p&gt;三年前我开始用 Hexo 写博客。&lt;/p&gt;&lt;p&gt;这是正文的第二段，不应该出现在聚合站里。&lt;/p&gt;</summary>
+    <category term="随笔" scheme="https://hexo.example.com/categories/%E9%9A%8F%E7%AC%94/"/>
+  </entry>
+  <entry>
+    <title>Hello World</title>
+    <link href="https://hexo.example.com/2026/08/01/hello-world/"/>
+    <id>https://hexo.example.com/2026/08/01/hello-world/</id>
+    <published>2026-08-01T00:00:00.000Z</published>
+    <updated>2026-08-01T00:00:00.000Z</updated>
+    <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/">Hexo</a>! This is your very first post.</p>]]></content>
+    <summary type="html">&lt;p&gt;Welcome to &lt;a href=&quot;https://hexo.io/&quot;&gt;Hexo&lt;/a&gt;! This is your very first post. Check &lt;a href=&quot;https://hexo.io/docs/&quot;&gt;documentation&lt;/a&gt; for more info. If you get any problems when using Hexo, you can find the answer in &lt;a href=&quot;https://hexo.io/docs/troubleshooting.ht</summary>
+  </entry>
+</feed>

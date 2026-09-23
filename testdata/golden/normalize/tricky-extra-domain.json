@@ -1,0 +1,87 @@
+{
+  "entries": [
+    {
+      "identity": "future",
+      "url": "https://blog.tricky.example.com/future",
+      "title": "From the future",
+      "published_at": "2099-01-01T00:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "long",
+      "url": "https://blog.tricky.example.com/long",
+      "title": "Long excerpt",
+      "excerpt": "独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文章散落在成千上万个域名上。独立博客的文…",
+      "published_at": "2026-09-14T20:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "dup",
+      "url": "https://blog.tricky.example.com/dup-1",
+      "title": "Duplicate one",
+      "published_at": "2026-09-14T18:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "markup",
+      "url": "https://blog.tricky.example.com/markup",
+      "title": "Hidden markup",
+      "excerpt": "First \u0026 foremost. Second line.",
+      "published_at": "2026-09-14T17:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "bold",
+      "url": "https://blog.tricky.example.com/bold",
+      "title": "Bold title",
+      "published_at": "2026-09-14T16:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "generics",
+      "url": "https://blog.tricky.example.com/generics",
+      "title": "Using \u003cT\u003e generics",
+      "published_at": "2026-09-14T15:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "sibling",
+      "url": "https://www.tricky.example.com/p/sibling",
+      "title": "Sibling host",
+      "published_at": "2026-09-14T13:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "spam",
+      "url": "https://spam.example.org/buy-now",
+      "title": "Spam link",
+      "published_at": "2026-09-14T12:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "relative",
+      "url": "https://blog.tricky.example.com/posts/relative/",
+      "title": "Relative link",
+      "published_at": "2026-09-14T11:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "zero",
+      "url": "https://blog.tricky.example.com/zero",
+      "title": "Zero date",
+      "published_at": null,
+      "date_trusted": false
+    }
+  ],
+  "stats": {
+    "Total": 14,
+    "Valid": 10,
+    "NoLink": 2,
+    "OffDomain": 0,
+    "NoTitle": 1,
+    "Duplicate": 1,
+    "Undated": 1,
+    "Untrusted": 0,
+    "Trusted": 9
+  }
+}

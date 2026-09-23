@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>Example WordPress Blog</title>
+	<atom:link href="https://wp.example.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://wp.example.com</link>
+	<description>Just another WordPress site</description>
+	<lastBuildDate>Sun, 20 Sep 2026 02:00:00 +0000</lastBuildDate>
+	<language>zh-CN</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.2</generator>
+	<item>
+		<title>我们为什么需要缓存</title>
+		<link>https://wp.example.com/2026/09/20/why-cache/</link>
+		<comments>https://wp.example.com/2026/09/20/why-cache/#respond</comments>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<pubDate>Sun, 20 Sep 2026 02:00:00 +0000</pubDate>
+		<category><![CDATA[Uncategorized]]></category>
+		<guid isPermaLink="false">https://wp.example.com/?p=12</guid>
+		<description><![CDATA[缓存的第一原则是：它必须可以随时删掉。本文从一次线上事故讲起。 [&#8230;]]]></description>
+		<content:encoded><![CDATA[<p>缓存的第一原则是：它必须可以随时删掉。本文从一次线上事故讲起。</p>
+<p>完整的正文只存在于作者的网站上，聚合站不应该保存它。</p>]]></content:encoded>
+		<wfw:commentRss>https://wp.example.com/2026/09/20/why-cache/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+	</item>
+	<item>
+		<title>Hello world!</title>
+		<link>https://wp.example.com/2026/09/01/hello-world/</link>
+		<comments>https://wp.example.com/2026/09/01/hello-world/#comments</comments>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<pubDate>Tue, 01 Sep 2026 08:15:00 +0000</pubDate>
+		<category><![CDATA[Uncategorized]]></category>
+		<guid isPermaLink="false">http://old.example.net/?p=1</guid>
+		<description><![CDATA[Welcome to WordPress. This is your first post. Edit or delete it, then start writing! [&#8230;]]]></description>
+		<content:encoded><![CDATA[<p>Welcome to WordPress. This is your first post. Edit or delete it, then start writing!</p>]]></content:encoded>
+		<wfw:commentRss>https://wp.example.com/2026/09/01/hello-world/feed/</wfw:commentRss>
+		<slash:comments>1</slash:comments>
+	</item>
+</channel>
+</rss>

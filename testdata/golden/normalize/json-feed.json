@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "identity": "https://json.example.com/2026/09/15/json-feeds/",
+      "url": "https://json.example.com/2026/09/15/json-feeds/",
+      "title": "Why I publish a JSON Feed",
+      "excerpt": "Because parsing XML is not everyone's favorite pastime.",
+      "published_at": "2026-09-15T08:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "2",
+      "url": "https://json.example.com/2026/09/10/no-summary/",
+      "title": "A post without a summary",
+      "excerpt": "The excerpt comes from the content when there is no summary.",
+      "published_at": "2026-09-10T08:00:00Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 2,
+    "Valid": 2,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 2
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "identity": "https://hexo.example.com/2026/09/19/third-year/",
+      "url": "https://hexo.example.com/2026/09/19/third-year/",
+      "title": "用 Hexo 写博客的第三年",
+      "excerpt": "三年前我开始用 Hexo 写博客。",
+      "published_at": "2026-09-19T12:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "https://hexo.example.com/2026/08/01/hello-world/",
+      "url": "https://hexo.example.com/2026/08/01/hello-world/",
+      "title": "Hello World",
+      "excerpt": "Welcome to Hexo!",
+      "published_at": "2026-08-01T00:00:00Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 2,
+    "Valid": 2,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 2
+  }
+}

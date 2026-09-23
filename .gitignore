@@ -1,0 +1,10 @@
+/bin/
+/coverage.out
+/.go.mod.check
+/.go.sum.check
+
+/web/node_modules/
+/web/dist/
+/web/.astro/
+
+.DS_Store

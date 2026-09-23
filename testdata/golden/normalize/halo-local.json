@@ -1,0 +1,23 @@
+{
+  "entries": [
+    {
+      "identity": "/archives/hello-halo",
+      "url": "http://localhost:8090/archives/hello-halo",
+      "title": "Hello Halo",
+      "excerpt": "如果你看到了这一篇文章，那么证明你已经安装成功了，感谢使用 Halo 进行创作，希望能够使用愉快。",
+      "published_at": "2026-09-21T15:49:21Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 1,
+    "Valid": 1,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 1
+  }
+}

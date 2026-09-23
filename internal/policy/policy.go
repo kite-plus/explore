@@ -1,0 +1,60 @@
+// Package policy holds the numbers behind the crawl and display rules in
+// docs/design/architecture.md section 6. They are product rules, not
+// configuration: change a value here together with that section.
+package policy
+
+import "time"
+
+// Snapshot and entry limits.
+const (
+	EntriesPerBlog   = 20
+	ExcerptMaxRunes  = 140 // includes the trailing ellipsis
+	TitleMaxRunes    = 300
+	IdentityMaxBytes = 500
+
+	// More items than this sharing one minute marks their dates untrusted.
+	SameMinuteLimit = 5
+)
+
+// EarliestDate is the first plausible publish date. Anything older,
+// including the zero dates some generators emit, counts as undated.
+var EarliestDate = time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// Stream rules.
+const (
+	StreamWindow        = 30 * 24 * time.Hour
+	StreamPerBlogPerDay = 3
+	FutureTolerance     = time.Hour
+)
+
+// Inclusion and health rules.
+const (
+	ActiveWithin     = 365 * 24 * time.Hour
+	UnhealthyAfter   = 7 * 24 * time.Hour
+	GoneRemovalAfter = 7 * 24 * time.Hour
+
+	// Share of linked items above which off-domain links fail a check.
+	OffDomainFailShare = 0.5
+)
+
+// Fetch rules.
+const (
+	FetchInterval    = 60 * time.Minute
+	MaxFetchInterval = 6 * time.Hour
+	MaxBackoff       = 24 * time.Hour
+	FetchLease       = 10 * time.Minute
+
+	ConnectTimeout = 5 * time.Second
+	TLSTimeout     = 5 * time.Second
+	HeaderTimeout  = 10 * time.Second
+	FetchTimeout   = 15 * time.Second
+
+	MaxFeedBytes   = 5 << 20
+	MaxHTMLBytes   = 1 << 20
+	MaxRobotsBytes = 500 << 10 // the minimum RFC 9309 asks crawlers to parse
+	MaxRedirects   = 5
+	RobotsTTL      = 24 * time.Hour
+)
+
+// UserAgentToken is the product token robots.txt rules address.
+const UserAgentToken = "KiteExplore"

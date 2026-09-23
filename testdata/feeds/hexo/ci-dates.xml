@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>CI Built Hexo Blog</title>
+  <link href="https://ci.example.com/"/>
+  <updated>2026-09-22T03:14:07.000Z</updated>
+  <id>https://ci.example.com/</id>
+  <generator uri="https://hexo.io/">Hexo</generator>
+  <entry>
+    <title>Post 1</title>
+    <link href="https://ci.example.com/posts/1/"/>
+    <id>https://ci.example.com/posts/1/</id>
+    <published>2026-09-22T03:14:01.000Z</published>
+    <updated>2026-09-22T03:14:01.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 1&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 2</title>
+    <link href="https://ci.example.com/posts/2/"/>
+    <id>https://ci.example.com/posts/2/</id>
+    <published>2026-09-22T03:14:02.000Z</published>
+    <updated>2026-09-22T03:14:02.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 2&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 3</title>
+    <link href="https://ci.example.com/posts/3/"/>
+    <id>https://ci.example.com/posts/3/</id>
+    <published>2026-09-22T03:14:03.000Z</published>
+    <updated>2026-09-22T03:14:03.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 3&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 4</title>
+    <link href="https://ci.example.com/posts/4/"/>
+    <id>https://ci.example.com/posts/4/</id>
+    <published>2026-09-22T03:14:04.000Z</published>
+    <updated>2026-09-22T03:14:04.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 4&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 5</title>
+    <link href="https://ci.example.com/posts/5/"/>
+    <id>https://ci.example.com/posts/5/</id>
+    <published>2026-09-22T03:14:05.000Z</published>
+    <updated>2026-09-22T03:14:05.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 5&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 6</title>
+    <link href="https://ci.example.com/posts/6/"/>
+    <id>https://ci.example.com/posts/6/</id>
+    <published>2026-09-22T03:14:06.000Z</published>
+    <updated>2026-09-22T03:14:06.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 6&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Post 7</title>
+    <link href="https://ci.example.com/posts/7/"/>
+    <id>https://ci.example.com/posts/7/</id>
+    <published>2026-09-22T03:14:07.000Z</published>
+    <updated>2026-09-22T03:14:07.000Z</updated>
+    <summary type="html">&lt;p&gt;Body 7&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>A post with a real date</title>
+    <link href="https://ci.example.com/posts/dated/"/>
+    <id>https://ci.example.com/posts/dated/</id>
+    <published>2026-09-01T10:00:00.000Z</published>
+    <updated>2026-09-01T10:00:00.000Z</updated>
+    <summary type="html">&lt;p&gt;This one was written with a date in its front matter.&lt;/p&gt;</summary>
+  </entry>
+</feed>

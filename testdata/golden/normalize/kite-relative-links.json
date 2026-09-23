@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "identity": "01M35AHGVJKJXGY5WJ2S57PTS9",
+      "url": "https://kite.example.com/posts/hello-feed/",
+      "title": "Hello feed",
+      "published_at": "2026-09-22T19:47:32Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 1,
+    "Valid": 1,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 1
+  }
+}

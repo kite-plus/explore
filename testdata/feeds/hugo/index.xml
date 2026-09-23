@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example Hugo Blog</title>
+    <link>https://hugo.example.com/</link>
+    <description>Recent content on Example Hugo Blog</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Fri, 18 Sep 2026 09:30:00 +0800</lastBuildDate>
+    <atom:link href="https://hugo.example.com/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Notes on caching</title>
+      <link>https://hugo.example.com/posts/caching/</link>
+      <pubDate>Fri, 18 Sep 2026 09:30:00 +0800</pubDate>
+      <guid>https://hugo.example.com/posts/caching/</guid>
+      <description>&lt;p&gt;The first paragraph explains why the cache exists.&lt;/p&gt;&#xA;&lt;p&gt;The second paragraph goes into detail that a summary should not include.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>About</title>
+      <link>https://hugo.example.com/about/</link>
+      <pubDate>Sat, 10 Jan 2026 10:00:00 +0800</pubDate>
+      <guid>https://hugo.example.com/about/</guid>
+      <description>&lt;p&gt;Who writes here.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>A draft without a date</title>
+      <link>https://hugo.example.com/posts/undated/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>https://hugo.example.com/posts/undated/</guid>
+      <description>&lt;p&gt;This post forgot its date.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

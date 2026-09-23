@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "identity": "https://hugo.example.com/posts/caching/",
+      "url": "https://hugo.example.com/posts/caching/",
+      "title": "Notes on caching",
+      "excerpt": "The first paragraph explains why the cache exists. The second paragraph goes into detail that a summary should not include.",
+      "published_at": "2026-09-18T01:30:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "https://hugo.example.com/posts/undated/",
+      "url": "https://hugo.example.com/posts/undated/",
+      "title": "A draft without a date",
+      "excerpt": "This post forgot its date.",
+      "published_at": null,
+      "date_trusted": false
+    }
+  ],
+  "stats": {
+    "Total": 2,
+    "Valid": 2,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 1,
+    "Untrusted": 0,
+    "Trusted": 1
+  }
+}

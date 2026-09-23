@@ -1,0 +1,79 @@
+{
+  "entries": [
+    {
+      "identity": "https://ci.example.com/posts/7/",
+      "url": "https://ci.example.com/posts/7/",
+      "title": "Post 7",
+      "excerpt": "Body 7",
+      "published_at": "2026-09-22T03:14:07Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/6/",
+      "url": "https://ci.example.com/posts/6/",
+      "title": "Post 6",
+      "excerpt": "Body 6",
+      "published_at": "2026-09-22T03:14:06Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/5/",
+      "url": "https://ci.example.com/posts/5/",
+      "title": "Post 5",
+      "excerpt": "Body 5",
+      "published_at": "2026-09-22T03:14:05Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/4/",
+      "url": "https://ci.example.com/posts/4/",
+      "title": "Post 4",
+      "excerpt": "Body 4",
+      "published_at": "2026-09-22T03:14:04Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/3/",
+      "url": "https://ci.example.com/posts/3/",
+      "title": "Post 3",
+      "excerpt": "Body 3",
+      "published_at": "2026-09-22T03:14:03Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/2/",
+      "url": "https://ci.example.com/posts/2/",
+      "title": "Post 2",
+      "excerpt": "Body 2",
+      "published_at": "2026-09-22T03:14:02Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/1/",
+      "url": "https://ci.example.com/posts/1/",
+      "title": "Post 1",
+      "excerpt": "Body 1",
+      "published_at": "2026-09-22T03:14:01Z",
+      "date_trusted": false
+    },
+    {
+      "identity": "https://ci.example.com/posts/dated/",
+      "url": "https://ci.example.com/posts/dated/",
+      "title": "A post with a real date",
+      "excerpt": "This one was written with a date in its front matter.",
+      "published_at": "2026-09-01T10:00:00Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 8,
+    "Valid": 8,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 7,
+    "Trusted": 1
+  }
+}

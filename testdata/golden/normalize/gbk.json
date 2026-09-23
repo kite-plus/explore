@@ -1,0 +1,23 @@
+{
+  "entries": [
+    {
+      "identity": "https://gbk.example.com/archives/1.html",
+      "url": "https://gbk.example.com/archives/1.html",
+      "title": "用 GBK 编码的中文标题",
+      "excerpt": "这段摘要在传输时是 GBK 编码。",
+      "published_at": "2026-09-16T02:00:00Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 1,
+    "Valid": 1,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 1
+  }
+}

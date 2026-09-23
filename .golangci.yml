@@ -1,0 +1,42 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unused
+
+  settings:
+    misspell:
+      locale: US
+    revive:
+      rules:
+        # Same as Kite: packages are documented, but a comment on every
+        # exported name would only restate the code.
+        - name: exported
+          disabled: true
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: context-as-argument
+        - name: unreachable-code
+
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters: [errcheck, bodyclose]
+
+formatters:
+  enable:
+    - gofmt

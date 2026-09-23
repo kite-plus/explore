@@ -1,0 +1,24 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Example JSON Feed Blog",
+  "home_page_url": "https://json.example.com/",
+  "feed_url": "https://json.example.com/feed.json",
+  "language": "en",
+  "items": [
+    {
+      "id": "https://json.example.com/2026/09/15/json-feeds/",
+      "url": "https://json.example.com/2026/09/15/json-feeds/",
+      "title": "Why I publish a JSON Feed",
+      "summary": "Because parsing XML is not everyone's favorite pastime.",
+      "content_html": "<p>Because parsing XML is not everyone's favorite pastime.</p><p>More body text.</p>",
+      "date_published": "2026-09-15T08:00:00+00:00"
+    },
+    {
+      "id": "2",
+      "url": "https://json.example.com/2026/09/10/no-summary/",
+      "title": "A post without a summary",
+      "content_html": "<p>The excerpt comes from the content when there is no summary.</p>",
+      "date_published": "2026-09-10T08:00:00+00:00"
+    }
+  ]
+}

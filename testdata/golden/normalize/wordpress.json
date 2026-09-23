@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "identity": "https://wp.example.com/?p=12",
+      "url": "https://wp.example.com/2026/09/20/why-cache/",
+      "title": "我们为什么需要缓存",
+      "excerpt": "缓存的第一原则是：它必须可以随时删掉。本文从一次线上事故讲起。 […]",
+      "published_at": "2026-09-20T02:00:00Z",
+      "date_trusted": true
+    },
+    {
+      "identity": "http://old.example.net/?p=1",
+      "url": "https://wp.example.com/2026/09/01/hello-world/",
+      "title": "Hello world!",
+      "excerpt": "Welcome to WordPress. This is your first post. Edit or delete it, then start writing! […]",
+      "published_at": "2026-09-01T08:15:00Z",
+      "date_trusted": true
+    }
+  ],
+  "stats": {
+    "Total": 2,
+    "Valid": 2,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 2
+  }
+}

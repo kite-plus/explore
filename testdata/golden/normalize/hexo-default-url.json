@@ -1,0 +1,17 @@
+{
+  "entries": [],
+  "stats": {
+    "Total": 1,
+    "Valid": 0,
+    "NoLink": 0,
+    "OffDomain": 1,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 0,
+    "OffDomainHosts": {
+      "example.com": 1
+    }
+  }
+}
