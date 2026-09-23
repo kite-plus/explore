@@ -2,6 +2,7 @@
 
 > 状态：设计中 · 最近更新：2026-09-23
 > 服务：`explore serve`（Gin）。读者看到的页面由独立的前端在服务端渲染（[architecture.md §8](architecture.md#8-前端与-seo)），前端只调用本文的公开接口。
+> 读者的登录、会话、订阅和按标签筛选的接口还没实现，设计见 [accounts.md §7](accounts.md#7-接口)，实现时并入本文。
 
 ---
 
@@ -13,7 +14,7 @@
 - **错误**：HTTP 状态码加 `{"error": {"code": "...", "message": "..."}}`。`code` 是稳定的机器可读值（§5），`message` 给人看。
 - **缓存**：公开的 GET 接口返回 `Cache-Control: public, max-age=60` 和弱 `ETag`，支持 `If-None-Match`，前端和 CDN 可以直接缓存。
 - **限流**：按客户端地址在内存里计数，超出返回 `429` 和 `Retry-After`。地址不写日志、不入库。
-- **读者侧不设 Cookie**。CORS 不开放：浏览器从不直接调用 `/api/v1`，前端在服务端调用（[frontend.md §5](frontend.md#5-数据获取)）。
+- **匿名读者不设 Cookie**；登录后的会话 Cookie 由前端设置，前端调用 API 时原样转发（[accounts.md §2.3](accounts.md#23-会话)）。CORS 不开放：浏览器从不直接调用 `/api/v1`，前端在服务端调用（[frontend.md §5](frontend.md#5-数据获取)）。
 - **语言**：给人看的文字只有错误的 `message` 和检查报告的 `hint`，按 `Accept-Language` 返回简体中文或英文，默认英文；含这类文字的响应带 `Vary: Accept-Language`。`code` 与语言无关，客户端只按 `code` 做判断。时间流、目录、博客页的响应不含这类文字，与语言无关（[frontend.md §3.5](frontend.md#35-接口返回的文字)）。
 
 ---

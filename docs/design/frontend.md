@@ -2,6 +2,7 @@
 
 > 状态：E2 已按本文实现，标 `[待定]` 的部分除外 · 最近更新：2026-09-23
 > 不能动摇的约束见 [architecture.md §8](architecture.md#8-前端与-seo)；接口见 [api.md](api.md)。本文写前端怎么满足它们。
+> 登录、订阅流、设置页和标签筛选还没实现，设计见 [accounts.md §8](accounts.md#8-前端)，实现时并入本文。
 
 ---
 
@@ -62,7 +63,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 - **带查询参数的列表页**（翻页的 `?cursor=`、博客语言筛选的 `?lang=`）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
 - `/feed.xml`、`/blogs.opml`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
 - **没有文章页**。文章只以指向原文的链接出现（[architecture.md §8](architecture.md#8-前端与-seo)）。
-- 读者侧不设 Cookie，也就没有个性化内容；两种语言又是不同的地址，所有公开页面都可以被反向代理和 CDN 直接缓存。
+- 匿名读者没有 Cookie，公开页面对所有人相同；两种语言又是不同的地址，所以公开页面都可以被反向代理和 CDN 直接缓存。登录后的请求带会话 Cookie，返回个人化的页面，不缓存（[accounts.md §8](accounts.md#8-前端)）。
 
 ---
 
@@ -222,7 +223,7 @@ import SubmitForm from "@/components/submit-form";
 - 策略以 `default-src 'self'` 为底，脚本和样式只认哈希，图片只允许本站和 `data:`。其他指令通过 `security.csp` 的 `directives` 追加。主题脚本是内联的，Astro 不替它算哈希，由 `astro.config.mjs` 读取源文件算好，放进 `scriptDirective.hashes`。
 - **页面不输出内联 `style` 属性**：哈希管不到它，而 Astro 的 `directives` 也不接受 `style-src-attr`。所以博客头像的颜色用一组固定的 Tailwind 类按主机名挑选，而不是计算出颜色值；Markdown 的代码高亮也关掉了，因为 Shiki 用内联 `style` 上色。测试会检查每个公开页面都没有 `style` 属性（§10）。
 - `Referrer-Policy: strict-origin-when-cross-origin` 是浏览器的默认值，反向代理可以再显式下发一次。
-- 不设 Cookie，不接任何统计脚本，不加载外部字体和图片。深浅色的选择只存在读者自己的浏览器里（§4）。
+- 匿名访问不设 Cookie，登录后只有一个会话 Cookie（[accounts.md §2.3](accounts.md#23-会话)）；不接任何统计脚本，不加载外部字体和图片。深浅色的选择只存在读者自己的浏览器里（§4）。
 
 ---
 

@@ -12,7 +12,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | [api.md](api.md) | HTTP 接口：约定、公开接口、提交、管理、`/feed.xml` 与 OPML、错误码 | 后端、前端 |
 | [frontend.md](frontend.md) | 前端（Astro）：选型、页面与路由、中英双语、组件规则、数据获取、提交流程、SEO、CSP | 前端 |
 | [project-layout.md](project-layout.md) | 工程结构：目录、包的职责与依赖规则、命令、配置、测试、本地开发、部署 | 所有写代码的人 |
-| [accounts.md](accounts.md) | 提案：读者账号、订阅、推荐流与订阅流、类型筛选，以及它们要改的核心原则 | 所有贡献者 |
+| [accounts.md](accounts.md) | 读者账号、订阅、推荐流与订阅流、文章标签，以及它们对核心原则的修订 | 所有贡献者 |
 
 ## 阅读顺序
 
@@ -35,12 +35,12 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 
 | 文档 | 状态 | 最近更新 |
 |---|---|---|
-| architecture.md | E0 至 E2 已实现；§13 的问题待确认 | 2026-09-23 |
+| architecture.md | E0、E1 已实现，E2 的读者页面已实现；§13 的问题待确认 | 2026-09-23 |
 | data-model.md | E1 已实现 | 2026-09-23 |
 | worker.md | E1 已实现；阈值已按 E0 实测回填（§10） | 2026-09-23 |
 | api.md | E1 已实现；OpenAPI 与发布即出现待定 | 2026-09-23 |
-| frontend.md | E2 已实现 | 2026-09-23 |
+| frontend.md | E2 的读者页面已实现；账号相关页面见 accounts.md | 2026-09-23 |
 | project-layout.md | 已按本文搭建 | 2026-09-23 |
-| accounts.md | 提案，待确认；确认前不改其他文档 | 2026-09-23 |
+| accounts.md | 方向已确认，E2 待实现；细节标 `[待定]` | 2026-09-23 |
 
 里程碑定义见 [architecture.md §9](architecture.md#9-里程碑)。
