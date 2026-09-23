@@ -2,6 +2,8 @@
 // the rules of docs/design/frontend.md at the HTML level, without a browser.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import net from "node:net";
 import { after, before, describe, test } from "node:test";
 
@@ -52,19 +54,26 @@ async function page(path) {
   return { res, html: await res.text() };
 }
 
+const themeScript = readFileSync(new URL("../src/scripts/theme.js", import.meta.url), "utf8");
+const themeHash = `'sha256-${createHash("sha256").update(themeScript).digest("base64")}'`;
+
 const publicPages = ["/", "/en/", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
 
-describe("zero JavaScript, zero third parties", () => {
+describe("no JavaScript but the theme script, zero third parties", () => {
   for (const path of publicPages) {
     test(path, async () => {
       const { res, html } = await page(path);
       assert.equal(res.status, 200);
       assert.equal(res.headers.get("set-cookie"), null, "no cookies");
-      assert.doesNotMatch(html, /<script\b/i, "no scripts");
+      const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+      assert.equal(scripts.length, 1, "one script");
+      assert.equal(scripts[0][1], "", "inline, without src or type");
+      assert.equal(scripts[0][2], themeScript, "the theme script as written");
       assert.doesNotMatch(html, /\sstyle="/i, "no inline style attributes");
       const csp = res.headers.get("content-security-policy") ?? "";
       assert.match(csp, /default-src 'self'/);
       assert.match(csp, /frame-ancestors 'none'/);
+      assert.ok(csp.includes(themeHash), "the CSP allows the theme script by its hash");
       // Resources may only come from the site itself; links to posts are fine.
       for (const [, url] of html.matchAll(/<(?:script|img|iframe|source|link)\b[^>]*\s(?:src|href)="([^"]+)"/gi)) {
         if (/^https?:\/\//.test(url)) {
@@ -132,6 +141,13 @@ describe("content", () => {
   test("the older posts link carries the cursor", async () => {
     const { html } = await page("/?lang=");
     assert.match(html, /href="\/\?cursor=page-two"/);
+  });
+
+  test("the theme toggle speaks the page's language", async () => {
+    const zh = (await page("/")).html;
+    const en = (await page("/en/")).html;
+    assert.match(zh, /<button type="button" data-theme-toggle aria-pressed="false" aria-label="深色模式"/);
+    assert.match(en, /<button type="button" data-theme-toggle aria-pressed="false" aria-label="Dark mode"/);
   });
 
   test("an undated post says so", async () => {

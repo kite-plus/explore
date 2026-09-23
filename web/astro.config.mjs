@@ -1,11 +1,21 @@
 // @ts-check
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
 import node from "@astrojs/node";
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
+// The theme script runs inline before the first paint. Astro hashes only the
+// scripts it bundles, so the CSP gets this one's hash from here.
+const themeScript = readFileSync(new URL("./src/scripts/theme.js", import.meta.url), "utf8");
+/** @type {`sha256-${string}`} */
+const themeHash = `sha256-${createHash("sha256").update(themeScript).digest("base64")}`;
+
 // See docs/design/frontend.md: pages render on the server, ship no
-// JavaScript by default, and speak Chinese at the root and English under /en.
+// JavaScript but the theme script, and speak Chinese at the root and English
+// under /en.
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
@@ -27,6 +37,7 @@ export default defineConfig({
   security: {
     checkOrigin: true,
     csp: {
+      scriptDirective: { hashes: [themeHash] },
       directives: [
         "default-src 'self'",
         "img-src 'self' data:",

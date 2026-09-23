@@ -10,6 +10,7 @@ export const en: Dict = {
     description: "New posts from the public feeds of independent blogs. Every link takes you to the author's own site.",
   },
   nav: { home: "Latest", blogs: "Blogs", submit: "Submit a blog", about: "About" },
+  theme: { dark: "Dark mode" },
   filter: { label: "Blog language", all: "All", zh: "Chinese", en: "English" },
   home: {
     title: "New posts from independent blogs",

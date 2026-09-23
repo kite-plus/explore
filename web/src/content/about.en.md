@@ -22,7 +22,7 @@ Leaving is always easier than joining. [Open an issue](https://github.com/kite-p
 
 ## Privacy
 
-Reading Explore needs no account. We set no cookies, run no analytics scripts, and pages make no requests to third parties. Access logs record the path and the outcome of a request, never your IP address.
+Reading Explore needs no account. We set no cookies, run no analytics scripts, and pages make no requests to third parties. Access logs record the path and the outcome of a request, never your IP address. Your choice of dark or light theme stays in your own browser and is never sent to us.
 
 ## Take everything with you
 

@@ -5,6 +5,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import { dict, localePath, other, type Lang } from "@/i18n";
 import { publicURL } from "@/lib/config";
+import themeScript from "@/scripts/theme.js?raw";
 
 interface Props {
   lang: Lang;
@@ -34,6 +35,7 @@ const verification = {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline set:html={themeScript} />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
