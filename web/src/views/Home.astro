@@ -62,17 +62,25 @@ const names = data ? tagNames(data.tags, lang) : {};
         {data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
         ) : (
-          <div class="divide-y">
+          <div class="divide-y" data-entry-stream>
             {data.page.data.map((entry) => (
               <EntryItem lang={lang} entry={entry} tagNames={names} />
             ))}
           </div>
         )}
         {older && (
-          <div class="mt-6">
-            <ButtonLink href={older} variant="outline">
-              {t.home.older}
+          <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
+            <ButtonLink
+              href={older}
+              variant="outline"
+              data-load-more-btn
+              data-label-older={t.home.older}
+              data-label-loading={t.home.loading}
+              data-label-retry={t.home.retry}
+            >
+              <span data-load-more-text>{t.home.older}</span>
             </ButtonLink>
+            <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
           </div>
         )}
       </>

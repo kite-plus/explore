@@ -58,6 +58,8 @@ const themeScript = readFileSync(new URL("../src/scripts/theme.js", import.meta.
 const themeHash = `'sha256-${createHash("sha256").update(themeScript).digest("base64")}'`;
 const entryCheckScript = readFileSync(new URL("../src/scripts/entry-check.js", import.meta.url), "utf8");
 const entryCheckHash = `'sha256-${createHash("sha256").update(entryCheckScript).digest("base64")}'`;
+const entryStreamScript = readFileSync(new URL("../src/scripts/entry-stream.js", import.meta.url), "utf8");
+const entryStreamHash = `'sha256-${createHash("sha256").update(entryStreamScript).digest("base64")}'`;
 const entryPages = new Set(["/", "/en/", "/blogs/zh.example.com", "/en/blogs/zh.example.com"]);
 
 const publicPages = ["/", "/en/", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
@@ -69,19 +71,24 @@ describe("only local scripts, zero third parties", () => {
       assert.equal(res.status, 200);
       assert.equal(res.headers.get("set-cookie"), null, "no cookies");
       const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
-      assert.equal(scripts.length, entryPages.has(path) ? 2 : 1);
+      assert.equal(scripts.length, entryPages.has(path) ? 3 : 1);
       assert.equal(scripts[0][1], "", "inline, without src or type");
       assert.equal(scripts[0][2], themeScript, "the theme script as written");
       if (entryPages.has(path)) {
         assert.equal(scripts[1][1], "", "inline, without src or type");
         assert.equal(scripts[1][2], entryCheckScript, "the link check script as written");
+        assert.equal(scripts[2][1], "", "inline, without src or type");
+        assert.equal(scripts[2][2], entryStreamScript, "the stream script as written");
       }
       assert.doesNotMatch(html, /\sstyle="/i, "no inline style attributes");
       const csp = res.headers.get("content-security-policy") ?? "";
       assert.match(csp, /default-src 'self'/);
       assert.match(csp, /frame-ancestors 'none'/);
       assert.ok(csp.includes(themeHash), "the CSP allows the theme script by its hash");
-      if (entryPages.has(path)) assert.ok(csp.includes(entryCheckHash), "the CSP allows the link check script by its hash");
+      if (entryPages.has(path)) {
+        assert.ok(csp.includes(entryCheckHash), "the CSP allows the link check script by its hash");
+        assert.ok(csp.includes(entryStreamHash), "the CSP allows the stream script by its hash");
+      }
       // Resources may only come from the site itself; links to posts are fine.
       for (const [, url] of html.matchAll(/<(?:script|img|iframe|source|link)\b[^>]*\s(?:src|href)="([^"]+)"/gi)) {
         if (/^https?:\/\//.test(url)) {
@@ -158,6 +165,9 @@ describe("content", () => {
   test("the older posts link carries the cursor", async () => {
     const { html } = await page("/?lang=");
     assert.match(html, /href="\/\?cursor=page-two"/);
+    assert.match(html, /data-entry-stream/);
+    assert.match(html, /data-entry-pagination/);
+    assert.match(html, /data-load-more-btn/);
   });
 
   test("links that open a new tab say so, in the page's language", async () => {

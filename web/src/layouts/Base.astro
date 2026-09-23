@@ -6,6 +6,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import { dict, localePath, other, type Lang } from "@/i18n";
 import { publicURL } from "@/lib/config";
 import entryCheckScript from "@/scripts/entry-check.js?raw";
+import entryStreamScript from "@/scripts/entry-stream.js?raw";
 import themeScript from "@/scripts/theme.js?raw";
 
 interface Props {
@@ -70,5 +71,6 @@ const verification = {
     </main>
     <SiteFooter lang={lang} />
     {entryChecks && <script is:inline set:html={entryCheckScript} />}
+    {entryChecks && <script is:inline set:html={entryStreamScript} />}
   </body>
 </html>

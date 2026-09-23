@@ -36,6 +36,9 @@ export const en: Dict = {
     intro: "From the public feeds of listed blogs, newest first. Click a title to read the post on the author's site, in a new tab.",
     empty: "No posts yet.",
     older: "Older posts",
+    loading: "Loading…",
+    retry: "Failed to load. Click to retry",
+    end: "You’re all caught up",
   },
   blogs: {
     title: "Blog directory",
