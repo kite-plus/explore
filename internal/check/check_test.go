@@ -200,6 +200,49 @@ func TestHexoWithoutFeedPlugin(t *testing.T) {
 	}
 }
 
+func TestLinkedFeedWithServerTrouble(t *testing.T) {
+	// The page links a feed, but the server fails to deliver it: that is
+	// worth saying, rather than "no feed" and a hint to install a plugin.
+	for _, tc := range []struct {
+		name  string
+		route route
+		code  model.ProblemCode
+	}{
+		{"server error", route{status: http.StatusServiceUnavailable, body: "busy"}, model.ProblemHTTPError},
+		{"broken feed", route{body: `<?xml version="1.0"?><rss version="2.0"><channel><item><title>x</ti`}, model.ProblemParseError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSite(t)
+			s.serve("/", s.page("Hexo 8.1.2", "/atom.xml"))
+			s.routes["/atom.xml"] = tc.route
+
+			r := s.check(Input{SiteURL: s.srv.URL})
+			p, ok := codes(r)[tc.code]
+			if r.Passed || !ok || !strings.HasPrefix(p.Detail, s.srv.URL+"/atom.xml: ") {
+				t.Fatalf("want %s about /atom.xml, got %+v", tc.code, r.Problems)
+			}
+			if _, ok := codes(r)[model.ProblemFeedNotFound]; ok {
+				t.Errorf("the feed exists: %+v", r.Problems)
+			}
+		})
+	}
+}
+
+func TestRedirectIntoARobotsRule(t *testing.T) {
+	// A Typecho site whose robots.txt keeps crawlers off /feed/, reached
+	// through a default address that redirects there.
+	s := newSite(t)
+	s.serve("/robots.txt", "User-agent: *\nDisallow: /feed/\n")
+	s.serve("/", s.page("Typecho 1.2"))
+	s.routes["/index.php/feed/"] = route{status: http.StatusMovedPermanently, location: "/feed/"}
+	s.fixture("/feed/", "wordpress/feed.xml", "https://wp.example.com")
+
+	r := s.check(Input{SiteURL: s.srv.URL})
+	if _, ok := codes(r)[model.ProblemRobotsDisallowed]; r.Passed || !ok {
+		t.Fatalf("want robots_disallowed, got %+v", r.Problems)
+	}
+}
+
 func TestHexoDefaultURL(t *testing.T) {
 	s := newSite(t)
 	s.serve("/", s.page("Hexo 8.1.2", "/atom.xml"))

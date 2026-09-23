@@ -90,7 +90,7 @@ func (c *Checker) run(ctx context.Context, in Input) (*model.CheckReport, *locat
 		if err != nil {
 			return nil, nil, err
 		}
-		loc, prob = c.tryFeed(ctx, fu.String(), "given", true)
+		loc, prob = c.tryFeed(ctx, fu.String(), "given")
 	} else {
 		loc, generator, prob = c.discover(ctx, site)
 	}
@@ -149,15 +149,24 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 	}
 	home := resp.URL
 	tried := make(map[string]bool)
+	// What explains a missing feed best: a robots.txt refusal, then a feed
+	// too large to read, then the failure of a feed the page itself links
+	// to. A default address that fails says nothing; most sites lack most.
 	var first *model.Problem
-	// A robots.txt refusal, or a feed too large to read, explains a missing
-	// feed better than a 404 does.
-	remember := func(p *model.Problem) {
-		if p == nil || (p.Code != model.ProblemRobotsDisallowed && p.Code != model.ProblemTooLarge) {
-			return
+	firstRank := 0
+	remember := func(p *model.Problem, linked bool) {
+		rank := 0
+		switch {
+		case p == nil:
+		case p.Code == model.ProblemRobotsDisallowed:
+			rank = 3
+		case p.Code == model.ProblemTooLarge:
+			rank = 2
+		case linked:
+			rank = 1
 		}
-		if first == nil || p.Code == model.ProblemRobotsDisallowed {
-			first = p
+		if rank > firstRank {
+			first, firstRank = p, rank
 		}
 	}
 
@@ -166,12 +175,12 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 			continue
 		}
 		tried[link] = true
-		loc, p := c.tryFeed(ctx, link, "autodiscovery", false)
+		loc, p := c.tryFeed(ctx, link, "autodiscovery")
 		if loc != nil {
 			loc.home = home
 			return loc, pg.generator, nil
 		}
-		remember(p)
+		remember(p, true)
 	}
 	for _, path := range candidatePaths {
 		ref, _ := url.Parse(path)
@@ -180,37 +189,42 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 			continue
 		}
 		tried[link] = true
-		loc, p := c.tryFeed(ctx, link, "candidate", false)
+		loc, p := c.tryFeed(ctx, link, "candidate")
 		if loc != nil {
 			loc.home = home
 			return loc, pg.generator, nil
 		}
-		remember(p)
+		remember(p, false)
 	}
 	return nil, pg.generator, first
 }
 
-// tryFeed fetches and parses one address. When the address was given by
-// the author, anything that is not a feed is a problem to report; during
-// discovery it only means the search goes on.
-func (c *Checker) tryFeed(ctx context.Context, link, by string, given bool) (*located, *model.Problem) {
+// tryFeed fetches and parses one address. Who named it decides what a
+// failure means: the author's own address must work; a page may link a feed
+// that does not exist (a Hexo theme without the feed plugin), so only server
+// trouble there is a problem; a default address that fails only means the
+// feed is elsewhere. A problem's detail starts with the address.
+func (c *Checker) tryFeed(ctx context.Context, link, by string) (*located, *model.Problem) {
+	at := func(p model.Problem) *model.Problem {
+		p.Detail = strings.TrimSuffix(link+": "+p.Detail, ": ")
+		return &p
+	}
 	resp, err := c.Fetch.Get(ctx, fetch.Request{URL: link, Accept: fetch.AcceptFeed})
 	if err != nil {
-		p := problemFrom(err)
-		return nil, &p
+		return nil, at(problemFrom(err))
 	}
 	if resp.Status < 200 || resp.Status > 299 {
-		if !given {
-			return nil, nil
+		if by == "given" || (by == "autodiscovery" && resp.Status >= 500) {
+			return nil, at(model.Problem{Code: model.ProblemHTTPError, Severity: model.SeverityError, Detail: fmt.Sprintf("HTTP %d", resp.Status)})
 		}
-		return nil, &model.Problem{Code: model.ProblemHTTPError, Severity: model.SeverityError, Detail: fmt.Sprintf("HTTP %d", resp.Status)}
+		return nil, nil
 	}
 	f, err := feed.Parse(resp.Body)
 	if err != nil {
-		if !given {
-			return nil, nil
+		if by == "given" || (by == "autodiscovery" && !errors.Is(err, feed.ErrNotFeed)) {
+			return nil, at(model.Problem{Code: model.ProblemParseError, Severity: model.SeverityError, Detail: err.Error()})
 		}
-		return nil, &model.Problem{Code: model.ProblemParseError, Severity: model.SeverityError, Detail: err.Error()}
+		return nil, nil
 	}
 	return &located{requested: link, resp: resp, feed: f, by: by}, nil
 }
@@ -315,7 +329,7 @@ func (c *Checker) postsFeed(ctx context.Context, r *model.CheckReport, entries [
 		return ""
 	}
 	alt := fu.ResolveReference(&url.URL{Path: "/posts/index.xml"}).String()
-	if loc, _ := c.tryFeed(ctx, alt, "candidate", false); loc != nil {
+	if loc, _ := c.tryFeed(ctx, alt, "candidate"); loc != nil {
 		return alt
 	}
 	return ""

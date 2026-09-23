@@ -47,7 +47,7 @@ const (
 	ConnectTimeout = 5 * time.Second
 	TLSTimeout     = 5 * time.Second
 	HeaderTimeout  = 10 * time.Second
-	FetchTimeout   = 15 * time.Second
+	FetchTimeout   = 30 * time.Second
 
 	MaxFeedBytes   = 5 << 20
 	MaxHTMLBytes   = 1 << 20
