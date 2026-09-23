@@ -67,9 +67,15 @@ type located struct {
 // Run checks one blog. The error is only for input that is not a URL;
 // everything the check finds is in the report.
 func (c *Checker) Run(ctx context.Context, in Input) (*model.CheckReport, error) {
+	r, _, err := c.run(ctx, in)
+	return r, err
+}
+
+// run is Run that also returns the feed it found, if any.
+func (c *Checker) run(ctx context.Context, in Input) (*model.CheckReport, *located, error) {
 	site, err := ParseURL(in.SiteURL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	r := &model.CheckReport{InputURL: site.String(), Generator: model.GeneratorUnknown, Problems: []model.Problem{}}
 
@@ -79,7 +85,7 @@ func (c *Checker) Run(ctx context.Context, in Input) (*model.CheckReport, error)
 	if in.FeedURL != "" {
 		fu, err := ParseURL(in.FeedURL)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		loc, prob = c.tryFeed(ctx, fu.String(), "given", true)
 	} else {
@@ -93,11 +99,11 @@ func (c *Checker) Run(ctx context.Context, in Input) (*model.CheckReport, error)
 			prob = &model.Problem{Code: model.ProblemFeedNotFound, Severity: model.SeverityError}
 		}
 		add(r, *prob)
-		return finish(r), nil
+		return finish(r), nil, nil
 	}
 
 	c.describe(ctx, r, site, loc)
-	return finish(r), nil
+	return finish(r), loc, nil
 }
 
 // discover finds the feed of a site: the input itself, a feed the page

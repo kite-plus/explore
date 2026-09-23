@@ -34,6 +34,9 @@ type Item struct {
 	Content   string
 	Published *time.Time
 	Updated   *time.Time
+	// DateUnreadable means the item carries a date in a form that could
+	// not be parsed, as opposed to no date at all.
+	DateUnreadable bool
 }
 
 // Parse reads a feed document. Character sets other than UTF-8 are converted
@@ -71,6 +74,8 @@ func Parse(body []byte) (*Feed, error) {
 			Content:   it.Content,
 			Published: it.PublishedParsed,
 			Updated:   it.UpdatedParsed,
+			DateUnreadable: it.PublishedParsed == nil && it.UpdatedParsed == nil &&
+				strings.TrimSpace(it.Published+it.Updated) != "",
 		})
 	}
 	return f, nil

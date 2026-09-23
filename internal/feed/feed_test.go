@@ -100,3 +100,22 @@ func TestParseBrokenFeed(t *testing.T) {
 		t.Fatalf("err = %v, want a parse error", err)
 	}
 }
+
+func TestParseUnreadableDate(t *testing.T) {
+	f, err := Parse([]byte(`<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>
+<item><title>a</title><link>https://a.example/1</link><pubDate>yesterday afternoon</pubDate></item>
+<item><title>b</title><link>https://a.example/2</link></item>
+<item><title>c</title><link>https://a.example/3</link><pubDate>Mon, 21 Sep 2026 08:00:00 +0800</pubDate></item>
+</channel></rss>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []bool{true, false, false} {
+		if got := f.Items[i].DateUnreadable; got != want {
+			t.Errorf("item %d: DateUnreadable = %v, want %v", i, got, want)
+		}
+	}
+	if f.Items[0].Published != nil {
+		t.Errorf("unreadable date parsed as %v", f.Items[0].Published)
+	}
+}
