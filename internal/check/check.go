@@ -194,6 +194,8 @@ func (c *Checker) describe(ctx context.Context, r *model.CheckReport, site *url.
 	}
 	r.DiscoveredBy = loc.by
 	r.Format = loc.feed.Format
+	r.Title = normalize.Truncate(normalize.PlainText(loc.feed.Title), 100)
+	r.Language = loc.feed.Language
 	if g := normalize.DetectGenerator(loc.feed.Generator); g != model.GeneratorUnknown {
 		r.Generator = g
 	}

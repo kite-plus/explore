@@ -39,8 +39,9 @@ direct=$(go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...)
 for rule in "github.com/gin-gonic/gin $MODULE/internal/api" "github.com/jackc/pgx $MODULE/internal/store"; do
     lib=${rule% *}
     owner=${rule#* }
+    # The owner's own subpackages, such as internal/store/storetest, count as the owner.
     users=$(printf '%s\n' "$direct" | awk -v lib="$lib" -v owner="$owner" '
-        $1 != owner { for (i = 2; i <= NF; i++) if (index($i, lib) == 1) { print $1; break } }')
+        $1 != owner && index($1, owner "/") != 1 { for (i = 2; i <= NF; i++) if (index($i, lib) == 1) { print $1; break } }')
     if [ -n "$users" ]; then fail "only $owner may import $lib, not: $users"; fi
 done
 

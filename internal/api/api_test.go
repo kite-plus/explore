@@ -1,0 +1,568 @@
+package api_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/kite-plus/explore/internal/api"
+	"github.com/kite-plus/explore/internal/check"
+	"github.com/kite-plus/explore/internal/feed"
+	"github.com/kite-plus/explore/internal/fetch"
+	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/store"
+	"github.com/kite-plus/explore/internal/store/storetest"
+)
+
+const adminToken = "maintainer-secret"
+
+func init() { gin.SetMode(gin.TestMode) }
+
+type env struct {
+	t    *testing.T
+	s    *store.Store
+	h    http.Handler
+	logs *bytes.Buffer
+}
+
+func newEnv(t *testing.T, admins bool) *env {
+	st := storetest.New(t)
+	logs := &bytes.Buffer{}
+	srv := &api.Server{
+		Store:        st,
+		Checker:      &check.Checker{Fetch: fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second})},
+		PublicURL:    "https://explore.example.org",
+		AllowPrivate: true,
+		Log:          slog.New(slog.NewTextHandler(logs, nil)),
+	}
+	if admins {
+		srv.Admins = []api.AdminToken{{Name: "alice", Hash: sha256.Sum256([]byte(adminToken))}}
+	}
+	h, err := srv.Handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &env{t: t, s: st, h: h, logs: logs}
+}
+
+type req struct {
+	method, path, body string
+	header             map[string]string
+	admin              bool
+}
+
+func (e *env) do(r req) *httptest.ResponseRecorder {
+	e.t.Helper()
+	var body io.Reader
+	if r.body != "" {
+		body = strings.NewReader(r.body)
+	}
+	hr := httptest.NewRequest(r.method, r.path, body)
+	if r.body != "" {
+		hr.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range r.header {
+		hr.Header.Set(k, v)
+	}
+	if r.admin {
+		hr.Header.Set("Authorization", "Bearer "+adminToken)
+	}
+	w := httptest.NewRecorder()
+	e.h.ServeHTTP(w, hr)
+	return w
+}
+
+func (e *env) get(path string) *httptest.ResponseRecorder {
+	return e.do(req{method: http.MethodGet, path: path})
+}
+
+func decode[T any](t *testing.T, w *httptest.ResponseRecorder) T {
+	t.Helper()
+	var v T
+	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+		t.Fatalf("body is not JSON: %v\n%s", err, w.Body.String())
+	}
+	return v
+}
+
+func errorCode(t *testing.T, w *httptest.ResponseRecorder) (string, string) {
+	t.Helper()
+	v := decode[struct {
+		Error struct{ Code, Message string } `json:"error"`
+	}](t, w)
+	return v.Error.Code, v.Error.Message
+}
+
+// seed lists a blog and gives it entries, as the worker would.
+func (e *env) seed(host, lang string, entries ...model.Entry) {
+	e.t.Helper()
+	ctx := context.Background()
+	b, err := e.s.CreateBlog(ctx, store.NewBlog{
+		Host: host, Name: "Blog " + host, SiteURL: "https://" + host + "/", FeedURL: "https://" + host + "/feed.xml",
+		Language: lang, ShowExcerpt: true, Generator: model.GeneratorHugo,
+	})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if err := e.s.SyncSnapshot(ctx, b.ID, entries, store.FetchState{FetchInterval: time.Hour, NextFetchAt: time.Now().Add(time.Hour)}); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+func post(id string, hoursAgo int, excerpt string) model.Entry {
+	p := time.Now().Add(-time.Duration(hoursAgo) * time.Hour).Truncate(time.Second)
+	return model.Entry{Identity: id, URL: "https://posts.example/" + id, Title: "Post " + id, Excerpt: excerpt, PublishedAt: &p, DateTrusted: true}
+}
+
+type entryOut struct {
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	URL         string     `json:"url"`
+	Excerpt     *string    `json:"excerpt"`
+	PublishedAt *time.Time `json:"published_at"`
+	Blog        *struct {
+		Host    string `json:"host"`
+		Name    string `json:"name"`
+		SiteURL string `json:"site_url"`
+	} `json:"blog"`
+}
+
+type pageOut struct {
+	Data       []entryOut `json:"data"`
+	NextCursor *string    `json:"next_cursor"`
+}
+
+func TestEntries(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("zh.example.com", "zh-CN", post("a", 1, "摘要"), post("b", 3, ""))
+	e.seed("en.example.com", "en", post("c", 2, "Excerpt"))
+
+	w := e.get("/api/v1/entries")
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "public, max-age=60" || w.Header().Get("ETag") == "" {
+		t.Fatalf("status %d, headers %v", w.Code, w.Header())
+	}
+	page := decode[pageOut](t, w)
+	if len(page.Data) != 3 || page.NextCursor != nil {
+		t.Fatalf("page = %+v", page)
+	}
+	first := page.Data[0]
+	if first.Title != "Post a" || first.Excerpt == nil || *first.Excerpt != "摘要" || first.Blog == nil || first.Blog.Host != "zh.example.com" {
+		t.Errorf("first entry = %+v", first)
+	}
+	if page.Data[2].Excerpt != nil {
+		t.Errorf("an empty excerpt must be null: %+v", page.Data[2])
+	}
+	if first.PublishedAt.Location() != time.UTC {
+		t.Errorf("times must be UTC: %v", first.PublishedAt)
+	}
+	if !strings.Contains(w.Body.String(), `"site_url"`) || strings.Contains(w.Body.String(), `"SiteURL"`) {
+		t.Errorf("fields must be snake_case: %s", w.Body.String())
+	}
+
+	// A matching ETag gets 304.
+	w2 := e.do(req{method: http.MethodGet, path: "/api/v1/entries", header: map[string]string{"If-None-Match": w.Header().Get("ETag")}})
+	if w2.Code != http.StatusNotModified || w2.Body.Len() != 0 {
+		t.Errorf("revalidation = %d", w2.Code)
+	}
+
+	// Paging with the cursor visits every entry once.
+	var titles []string
+	path := "/api/v1/entries?limit=1"
+	for range 10 {
+		p := decode[pageOut](t, e.get(path))
+		for _, en := range p.Data {
+			titles = append(titles, en.Title)
+		}
+		if p.NextCursor == nil {
+			break
+		}
+		path = "/api/v1/entries?limit=1&cursor=" + url.QueryEscape(*p.NextCursor)
+	}
+	if strings.Join(titles, ",") != "Post a,Post c,Post b" {
+		t.Errorf("paged titles = %v", titles)
+	}
+
+	zh := decode[pageOut](t, e.get("/api/v1/entries?lang=zh"))
+	if len(zh.Data) != 2 {
+		t.Errorf("zh entries = %+v", zh.Data)
+	}
+
+	for path, code := range map[string]string{
+		"/api/v1/entries?cursor=%21%21%21": "invalid_cursor",
+		"/api/v1/entries?cursor=bm9wZQ":    "invalid_cursor",
+		"/api/v1/entries?limit=0":          "invalid_request",
+		"/api/v1/entries?limit=101":        "invalid_request",
+		"/api/v1/entries?lang=zh_CN%25":    "invalid_request",
+		"/api/v1/entries?lang=toolongxx":   "invalid_request",
+	} {
+		w := e.get(path)
+		if got, _ := errorCode(t, w); w.Code != http.StatusBadRequest || got != code {
+			t.Errorf("%s: %d %s, want 400 %s", path, w.Code, got, code)
+		}
+	}
+}
+
+func TestBlogs(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("recent.example.com", "en", post("a", 1, ""))
+	e.seed("older.example.com", "zh-CN", post("b", 30, ""))
+
+	list := decode[struct {
+		Data []struct {
+			Host            string     `json:"host"`
+			FeedURL         string     `json:"feed_url"`
+			Generator       string     `json:"generator"`
+			LastPublishedAt *time.Time `json:"last_published_at"`
+		} `json:"data"`
+	}](t, e.get("/api/v1/blogs"))
+	if len(list.Data) != 2 || list.Data[0].Host != "recent.example.com" || list.Data[0].Generator != "hugo" || list.Data[0].LastPublishedAt == nil {
+		t.Fatalf("blogs = %+v", list.Data)
+	}
+
+	w := e.get("/api/v1/blogs/RECENT.example.com")
+	if w.Code != http.StatusOK {
+		t.Fatalf("blog page = %d %s", w.Code, w.Body.String())
+	}
+	page := decode[struct {
+		Blog    struct{ Host string } `json:"blog"`
+		Entries []entryOut            `json:"entries"`
+	}](t, w)
+	if page.Blog.Host != "recent.example.com" || len(page.Entries) != 1 || page.Entries[0].Blog != nil {
+		t.Errorf("blog page = %+v", page)
+	}
+
+	w = e.do(req{method: http.MethodGet, path: "/api/v1/blogs/missing.example.com", header: map[string]string{"Accept-Language": "zh-CN,zh;q=0.9"}})
+	code, msg := errorCode(t, w)
+	if w.Code != http.StatusNotFound || code != "not_found" || msg != "没有找到。" || w.Header().Get("Vary") != "Accept-Language" {
+		t.Errorf("missing blog = %d %s %q", w.Code, code, msg)
+	}
+	if w := e.get("/no/such/route"); w.Code != http.StatusNotFound {
+		t.Errorf("unknown route = %d", w.Code)
+	}
+}
+
+func TestFeedAndOPML(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("blog.example.com", "en", post("a", 1, "Short & sweet"))
+
+	w := e.get("/feed.xml")
+	if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/rss+xml") ||
+		w.Header().Get("Cache-Control") != "public, max-age=300" {
+		t.Fatalf("feed = %d %v", w.Code, w.Header())
+	}
+	f, err := feed.Parse(w.Body.Bytes())
+	if err != nil || len(f.Items) != 1 || f.Items[0].Link != "https://posts.example/a" || f.Items[0].Summary != "Short & sweet" {
+		t.Fatalf("feed = %+v, %v", f, err)
+	}
+	if !strings.Contains(w.Body.String(), `<source url="https://blog.example.com/feed.xml">Blog blog.example.com</source>`) {
+		t.Errorf("feed lacks the source element:\n%s", w.Body.String())
+	}
+
+	w = e.get("/blogs.opml")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `xmlUrl="https://blog.example.com/feed.xml"`) {
+		t.Errorf("opml = %d\n%s", w.Code, w.Body.String())
+	}
+	if w := e.get("/healthz"); w.Code != http.StatusOK {
+		t.Errorf("healthz = %d", w.Code)
+	}
+	if w := e.get("/readyz"); w.Code != http.StatusOK {
+		t.Errorf("readyz = %d", w.Code)
+	}
+}
+
+// blogSite is a fake Hexo blog on localhost for submissions to check.
+func blogSite(t *testing.T, withFeed bool) string {
+	t.Helper()
+	var base string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, `<html><head><meta name="generator" content="Hexo 8.1.2">`+
+			`<link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body></body></html>`)
+	})
+	if withFeed {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "testdata", "feeds", "hexo", "atom.xml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		mux.HandleFunc("/atom.xml", func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, strings.ReplaceAll(string(raw), "https://hexo.example.com", base))
+		})
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	base = "http://localhost:" + u.Port()
+	return base
+}
+
+type submissionOut struct {
+	ID          string             `json:"id"`
+	Status      string             `json:"status"`
+	Host        string             `json:"host"`
+	FeedURL     string             `json:"feed_url"`
+	ReviewNote  string             `json:"review_note"`
+	CheckReport *model.CheckReport `json:"check_report"`
+}
+
+func TestSubmissionFlow(t *testing.T) {
+	e := newEnv(t, true)
+	site := blogSite(t, true)
+
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `","note":"my blog"}`,
+		header: map[string]string{"Accept-Language": "zh-CN"}})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("submit = %d %s", w.Code, w.Body.String())
+	}
+	sub := decode[submissionOut](t, w)
+	if sub.Status != "pending" || sub.Host != "localhost" || sub.FeedURL != site+"/atom.xml" || !sub.CheckReport.Passed {
+		t.Fatalf("submission = %+v", sub)
+	}
+	if hint := sub.CheckReport.Problems[0].Hint; !strings.Contains(hint, "条件请求") {
+		t.Errorf("hints must follow Accept-Language: %q", hint)
+	}
+
+	got := decode[submissionOut](t, e.get("/api/v1/submissions/"+sub.ID))
+	if hint := got.CheckReport.Problems[0].Hint; !strings.Contains(hint, "conditional requests") {
+		t.Errorf("the stored report must localize again, in English here: %q", hint)
+	}
+	if strings.Contains(e.get("/api/v1/submissions/"+sub.ID).Body.String(), "reviewed_by") {
+		t.Error("the reviewer name must not be public")
+	}
+
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `"}`})
+	if code, _ := errorCode(t, w); w.Code != http.StatusConflict || code != "already_pending" || !strings.Contains(w.Body.String(), sub.ID) {
+		t.Errorf("second submission = %d %s", w.Code, w.Body.String())
+	}
+
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/approve", admin: true})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("approve = %d %s", w.Code, w.Body.String())
+	}
+	blog := decode[struct {
+		Host, Name, Generator, Language string
+		Visible                         bool
+	}](t, w)
+	if blog.Host != "localhost" || blog.Name != "Example Hexo Blog" || blog.Generator != "hexo" || blog.Visible {
+		t.Errorf("approved blog = %+v (not visible until the worker fetches it)", blog)
+	}
+
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `"}`})
+	if code, _ := errorCode(t, w); w.Code != http.StatusConflict || code != "already_listed" {
+		t.Errorf("after approval = %d %s", w.Code, w.Body.String())
+	}
+	if w := e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/approve", admin: true}); w.Code != http.StatusConflict {
+		t.Errorf("approving twice = %d", w.Code)
+	}
+}
+
+func TestFailedCheckStoresNothing(t *testing.T) {
+	e := newEnv(t, false)
+	site := blogSite(t, false)
+
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `"}`})
+	if code, _ := errorCode(t, w); w.Code != http.StatusUnprocessableEntity || code != "check_failed" {
+		t.Fatalf("submit = %d %s", w.Code, w.Body.String())
+	}
+	report := decode[struct {
+		CheckReport model.CheckReport `json:"check_report"`
+	}](t, w).CheckReport
+	if report.Passed || report.Problems[0].Code != model.ProblemFeedNotFound || !strings.Contains(report.Problems[0].Hint, "hexo-generator-feed") {
+		t.Errorf("report = %+v", report)
+	}
+	state, err := e.s.HostState(context.Background(), "localhost")
+	if err != nil || state.PendingID != "" {
+		t.Errorf("a failed check must not be stored: %+v %v", state, err)
+	}
+}
+
+func TestSubmissionValidation(t *testing.T) {
+	e := newEnv(t, true)
+	cases := map[string]string{
+		`{"site_url":"ftp://example.com"}`: "invalid_url",
+		`{"site_url":""}`:                  "invalid_url",
+		`{"site_url":"https://example.com","feed_url":"javascript:x"}`:                 "invalid_url",
+		`{"site_url":"https://example.com","note":"` + strings.Repeat("长", 501) + `"}`: "invalid_request",
+		`not json`: "invalid_request",
+	}
+	for body, want := range cases {
+		w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: body})
+		if code, _ := errorCode(t, w); w.Code != http.StatusBadRequest || code != want {
+			t.Errorf("%.40s: %d %s, want 400 %s", body, w.Code, code, want)
+		}
+	}
+}
+
+func TestProductionRefusesAddressesThatAreNotDomains(t *testing.T) {
+	st := storetest.New(t)
+	srv := &api.Server{Store: st, Checker: &check.Checker{Fetch: fetch.New(fetch.Options{UserAgent: "test"})}, PublicURL: "https://x.example"}
+	h, err := srv.Handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, site := range []string{"http://127.0.0.1/", "http://localhost/", "http://[::1]/"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/submissions", strings.NewReader(`{"site_url":"`+site+`"}`))
+		r.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d %s, want 400", site, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestExcludedHostIsRefused(t *testing.T) {
+	e := newEnv(t, true)
+	e.seed("leaving.example.com", "en", post("a", 1, ""))
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/admin/blogs/leaving.example.com?exclude=opt_out&note=asked", admin: true}); w.Code != http.StatusNoContent {
+		t.Fatalf("delete = %d %s", w.Code, w.Body.String())
+	}
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"https://leaving.example.com/"}`})
+	if code, _ := errorCode(t, w); w.Code != http.StatusForbidden || code != "excluded" {
+		t.Errorf("resubmitting an opted-out blog = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAdminAuth(t *testing.T) {
+	e := newEnv(t, true)
+	if w := e.get("/api/v1/admin/blogs"); w.Code != http.StatusUnauthorized {
+		t.Errorf("no token = %d", w.Code)
+	}
+	w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", header: map[string]string{"Authorization": "Bearer wrong"}})
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("wrong token = %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusOK {
+		t.Errorf("right token = %d", w.Code)
+	}
+
+	closed := newEnv(t, false)
+	if w := closed.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusNotFound {
+		t.Errorf("without configured tokens the admin API must not exist: %d", w.Code)
+	}
+}
+
+func TestAdminManagesBlogs(t *testing.T) {
+	e := newEnv(t, true)
+	site := blogSite(t, true)
+
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/admin/check", body: `{"url":"` + site + `"}`, admin: true})
+	if w.Code != http.StatusOK || !decode[model.CheckReport](t, w).Passed {
+		t.Fatalf("admin check = %d %s", w.Code, w.Body.String())
+	}
+
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/blogs", body: `{"site_url":"` + site + `","language":"zh-CN","extra_domains":["CDN.Example.com"]}`, admin: true})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", w.Code, w.Body.String())
+	}
+	created := decode[struct {
+		Host         string   `json:"host"`
+		Language     string   `json:"language"`
+		ExtraDomains []string `json:"extra_domains"`
+	}](t, w)
+	if created.Language != "zh-CN" || len(created.ExtraDomains) != 1 || created.ExtraDomains[0] != "cdn.example.com" {
+		t.Errorf("created = %+v", created)
+	}
+
+	w = e.do(req{method: http.MethodPatch, path: "/api/v1/admin/blogs/localhost", body: `{"status":"paused","status_note":"reports"}`, admin: true})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"status":"paused"`) {
+		t.Errorf("pause = %d %s", w.Code, w.Body.String())
+	}
+	if w := e.do(req{method: http.MethodPatch, path: "/api/v1/admin/blogs/localhost", body: `{"status":"deleted"}`, admin: true}); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown status = %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodPost, path: "/api/v1/admin/blogs/localhost/fetch", admin: true}); w.Code != http.StatusAccepted {
+		t.Errorf("fetch now = %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/admin/blogs/localhost?exclude=gone-forever", admin: true}); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown exclusion = %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/admin/blogs/localhost?exclude=blocked", admin: true}); w.Code != http.StatusNoContent {
+		t.Errorf("delete = %d", w.Code)
+	}
+
+	list := e.do(req{method: http.MethodGet, path: "/api/v1/admin/excluded-hosts", admin: true})
+	if !strings.Contains(list.Body.String(), `"reason":"blocked"`) {
+		t.Errorf("exclusions = %s", list.Body.String())
+	}
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/admin/excluded-hosts/localhost", admin: true}); w.Code != http.StatusNoContent {
+		t.Errorf("lift exclusion = %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/admin/excluded-hosts/localhost", admin: true}); w.Code != http.StatusNotFound {
+		t.Errorf("lifting twice = %d", w.Code)
+	}
+}
+
+func TestRejection(t *testing.T) {
+	e := newEnv(t, true)
+	site := blogSite(t, true)
+	sub := decode[submissionOut](t, e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `"}`}))
+
+	if w := e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/reject", body: `{"review_note":" "}`, admin: true}); w.Code != http.StatusBadRequest {
+		t.Errorf("a rejection needs a note: %d", w.Code)
+	}
+	if w := e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/reject", body: `{"review_note":"Not a personal blog."}`, admin: true}); w.Code != http.StatusNoContent {
+		t.Fatalf("reject = %d %s", w.Code, w.Body.String())
+	}
+	got := decode[submissionOut](t, e.get("/api/v1/submissions/"+sub.ID))
+	if got.Status != "rejected" || got.ReviewNote != "Not a personal blog." {
+		t.Errorf("rejected submission = %+v", got)
+	}
+	queue := e.do(req{method: http.MethodGet, path: "/api/v1/admin/submissions?status=rejected", admin: true})
+	if !strings.Contains(queue.Body.String(), `"reviewed_by":"alice"`) {
+		t.Errorf("maintainers see who reviewed: %s", queue.Body.String())
+	}
+	if w := e.get("/api/v1/submissions/not-a-uuid"); w.Code != http.StatusNotFound {
+		t.Errorf("bad id = %d", w.Code)
+	}
+}
+
+func TestLogsCarryNoClientAddress(t *testing.T) {
+	e := newEnv(t, false)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/entries?lang=zh", nil)
+	r.RemoteAddr = "198.51.100.23:5555"
+	r.Header.Set("X-Forwarded-For", "203.0.113.9")
+	r.Header.Set("User-Agent", "SecretBrowser/1.0")
+	e.h.ServeHTTP(httptest.NewRecorder(), r)
+
+	logs := e.logs.String()
+	if !strings.Contains(logs, "route=/api/v1/entries") {
+		t.Fatalf("the request was not logged: %s", logs)
+	}
+	for _, leak := range []string{"198.51.100.23", "203.0.113.9", "SecretBrowser", "lang=zh"} {
+		if strings.Contains(logs, leak) {
+			t.Errorf("logs contain %q: %s", leak, logs)
+		}
+	}
+}
+
+func TestSubmissionsAreRateLimited(t *testing.T) {
+	e := newEnv(t, false)
+	for i := range 6 {
+		w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `not json`})
+		if i < 5 && w.Code != http.StatusBadRequest {
+			t.Fatalf("request %d = %d", i+1, w.Code)
+		}
+		if i == 5 {
+			if code, _ := errorCode(t, w); w.Code != http.StatusTooManyRequests || code != "rate_limited" || w.Header().Get("Retry-After") == "" {
+				t.Errorf("sixth request = %d %s", w.Code, w.Header())
+			}
+		}
+	}
+}

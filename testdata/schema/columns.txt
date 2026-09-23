@@ -1,0 +1,48 @@
+blogs.body_hash bytea
+blogs.consecutive_failures integer
+blogs.created_at timestamp with time zone
+blogs.etag text
+blogs.extra_domains ARRAY
+blogs.feed_url text
+blogs.fetch_interval interval
+blogs.generator text
+blogs.gone_since timestamp with time zone
+blogs.host text
+blogs.id bigint
+blogs.language text
+blogs.last_error text
+blogs.last_fetched_at timestamp with time zone
+blogs.last_modified text
+blogs.last_succeeded_at timestamp with time zone
+blogs.name text
+blogs.next_fetch_at timestamp with time zone
+blogs.show_excerpt boolean
+blogs.site_url text
+blogs.status text
+blogs.status_note text
+blogs.updated_at timestamp with time zone
+entries.blog_id bigint
+entries.date_trusted boolean
+entries.excerpt text
+entries.id bigint
+entries.identity text
+entries.published_at timestamp with time zone
+entries.synced_at timestamp with time zone
+entries.title text
+entries.url text
+excluded_hosts.created_at timestamp with time zone
+excluded_hosts.host text
+excluded_hosts.note text
+excluded_hosts.reason text
+submissions.blog_id bigint
+submissions.check_report jsonb
+submissions.created_at timestamp with time zone
+submissions.feed_url text
+submissions.host text
+submissions.id uuid
+submissions.note text
+submissions.review_note text
+submissions.reviewed_at timestamp with time zone
+submissions.reviewed_by text
+submissions.site_url text
+submissions.status text
