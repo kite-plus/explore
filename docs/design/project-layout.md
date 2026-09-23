@@ -11,7 +11,7 @@
 explore/
 ├── cmd/explore/        main package; only calls internal/cli
 ├── internal/
-│   ├── cli/            cobra commands: serve, worker, check, migrate, version
+│   ├── cli/            cobra commands: serve, worker, check, survey, migrate, version
 │   ├── config/         environment configuration
 │   ├── policy/         the numbers from architecture.md section 6
 │   ├── model/          domain types shared across packages
@@ -80,6 +80,7 @@ explore/
 | `explore serve` | 启动 API | 是 |
 | `explore worker` | 启动抓取和每日维护 | 是 |
 | `explore check <url> [--json] [--lang zh-CN]` | 检查一个博客首页或订阅地址，输出报告；提示默认用英文 | 否 |
+| `explore survey <file> [--concurrency N]` | 对清单里的每个博客运行检查，再测量订阅源（体积、条件请求、日期、摘要长度等），每个博客输出一行 JSON；加 `--report` 则把这些记录按博客系统汇总成 Markdown 表，不联网。用于 E0 实测（[worker.md §10](worker.md#10-e0-实测)） | 否 |
 | `explore migrate up` | 执行数据库迁移 | 是 |
 | `explore version` | 输出版本和构建信息 | 否 |
 
