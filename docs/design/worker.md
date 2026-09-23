@@ -86,7 +86,7 @@ If-Modified-Since: ...
 
 | 项 | 值 |
 |---|---|
-| 连接 / TLS 握手 / 等待响应头 / 总时长 | 5 秒 / 5 秒 / 10 秒 / 15 秒 |
+| 连接 / TLS 握手 / 等待响应头 / 总时长 | 5 秒 / 5 秒 / 10 秒 / 30 秒。总时长原是 15 秒：从海外下载一个 1.6 MB 的订阅源实测要 13 秒，时过时不过 `[EV]` |
 | 响应体 | ≤ 5 MiB，读到第 5 MiB + 1 字节即判定 `too_large` |
 | 重定向 | ≤ 5 次，只允许 `http`、`https` |
 | 端口 | 只允许 80、443 `[设计中]` |
@@ -111,7 +111,8 @@ If-Modified-Since: ...
 | `410 Gone` | 记录 `gone_since`，博客立即不再展示；之后任何一次成功都会清空它。持续 7 天后，每日维护任务移除博客并写入 `excluded_hosts`（`opt_out`） |
 | `429`、`503` 带 `Retry-After` | 按 §2.2 推迟 |
 | 其他 `4xx`、`5xx`，超时，TLS 错误，`too_large`，解析失败 | 失败：`consecutive_failures + 1`，写 `last_error`，按 §2.2 退避 |
-| robots.txt 明确禁止 | 不发请求，与 `410 Gone` 相同处理：作者表达了不想被抓取，这是退出信号。`last_error` 为 `robots_disallowed` |
+| robots.txt 里针对 `KiteExplore` 的规则组禁止了订阅地址 | 不发请求，与 `410 Gone` 相同处理：作者明确拒绝了 Explore，这是退出信号 |
+| 只有 `*` 组禁止了订阅地址 | 不发请求，按普通失败处理：7 天后自动不再展示，但不移除，也不写排除名单。这常是写给搜索引擎的 SEO 模板，不是作者要退出；E0 在 Typecho 博客上遇到过 `[EV]` |
 | robots.txt 返回 `5xx` 或网络不通 | 不发请求，按普通失败处理：这是服务器故障，不是作者退出 |
 
 连续 7 天没有成功的博客会自动从页面上消失，恢复后自动回来（[data-model.md §2.1](data-model.md#21-blogs)）。
@@ -119,6 +120,7 @@ If-Modified-Since: ...
 ### 3.5 robots.txt
 
 - 每个主机缓存 24 小时，只放在内存里。
+- 重定向的每一跳都要过 robots.txt：先请求的地址允许、跳到的地址禁止，照样不抓。robots.txt 自己的重定向除外。E0 遇到过 `/index.php/feed/` 跳到被禁止的 `/feed/`，检查通过了，抓取时却被拒绝 `[EV]`。
 - 按 RFC 9309 解析：有针对 `KiteExplore` 的规则组就用它，没有就用 `*` 组。
 - robots.txt 返回 `4xx` 时视为允许全部；返回 `5xx` 或网络不通时视为全部禁止（RFC 9309 的要求），但按普通失败处理，不当作退出（§3.4）。
 - 检查（§6）会把 `robots_disallowed` 报给作者：作者主动提交了博客，却被自己的 robots.txt 挡住，是常见的困惑。
@@ -207,6 +209,8 @@ If-Modified-Since: ...
 | 8 | `/index.php/feed/` | 没开伪静态的 Typecho |
 
 逐个串行请求，遵守同样的礼貌规则（User-Agent、robots.txt、限制）。找到了订阅源却被 robots.txt 禁止或超过 5 MiB 时，报 `robots_disallowed` 或 `too_large`，而不是笼统的 `feed_not_found`。
+
+页面声明的订阅地址打不开时，按原因分开：返回 `4xx`，或者返回的不是订阅源，就当作没有，继续往下找，最后报 `feed_not_found`。Hexo 主题没装订阅插件时，页面照样声明 `/atom.xml`，这正是要提示去装插件的情况。超时、`5xx`、订阅源格式损坏，则是服务器的问题，报 `http_error` 或 `parse_error`，细节里写明是哪个地址。默认地址打不开什么也不说明，大多数网站本来就没有。
 
 记下首页经过重定向后的最终地址：它落在另一个网站、文章链接也都指向那里时，报 `site_moved`（§6.2）。
 
