@@ -62,6 +62,9 @@ type located struct {
 	resp      *fetch.Response
 	feed      *feed.Feed
 	by        string
+	// home is where the home page ended up after redirects; empty when the
+	// feed was given and the home page was not read.
+	home string
 }
 
 // Run checks one blog. The error is only for input that is not a URL;
@@ -119,7 +122,7 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 	}
 	f, err := feed.Parse(resp.Body)
 	if err == nil {
-		return &located{requested: site.String(), resp: resp, feed: f, by: "direct"}, "", nil
+		return &located{requested: site.String(), resp: resp, feed: f, by: "direct", home: resp.URL}, "", nil
 	}
 	if !errors.Is(err, feed.ErrNotFeed) {
 		return nil, "", &model.Problem{Code: model.ProblemParseError, Severity: model.SeverityError, Detail: err.Error()}
@@ -130,11 +133,16 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 		base = site
 	}
 	pg := readPage(resp.Body, base)
+	home := resp.URL
 	tried := make(map[string]bool)
 	var first *model.Problem
+	// A robots.txt refusal, or a feed too large to read, explains a missing
+	// feed better than a 404 does.
 	remember := func(p *model.Problem) {
-		// A robots.txt refusal explains a missing feed better than a 404.
-		if p != nil && (first == nil || p.Code == model.ProblemRobotsDisallowed) {
+		if p == nil || (p.Code != model.ProblemRobotsDisallowed && p.Code != model.ProblemTooLarge) {
+			return
+		}
+		if first == nil || p.Code == model.ProblemRobotsDisallowed {
 			first = p
 		}
 	}
@@ -144,11 +152,12 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 			continue
 		}
 		tried[link] = true
-		if loc, p := c.tryFeed(ctx, link, "autodiscovery", false); loc != nil {
+		loc, p := c.tryFeed(ctx, link, "autodiscovery", false)
+		if loc != nil {
+			loc.home = home
 			return loc, pg.generator, nil
-		} else if p != nil && p.Code == model.ProblemRobotsDisallowed {
-			remember(p)
 		}
+		remember(p)
 	}
 	for _, path := range candidatePaths {
 		ref, _ := url.Parse(path)
@@ -157,11 +166,12 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 			continue
 		}
 		tried[link] = true
-		if loc, p := c.tryFeed(ctx, link, "candidate", false); loc != nil {
+		loc, p := c.tryFeed(ctx, link, "candidate", false)
+		if loc != nil {
+			loc.home = home
 			return loc, pg.generator, nil
-		} else if p != nil && p.Code == model.ProblemRobotsDisallowed {
-			remember(p)
 		}
+		remember(p)
 	}
 	return nil, pg.generator, first
 }
@@ -216,13 +226,20 @@ func (c *Checker) describe(ctx context.Context, r *model.CheckReport, site *url.
 	r.Items = &model.CheckItems{Total: st.Total, Valid: st.Valid, TrustedDates: st.Trusted, LatestPublishedAt: latest}
 
 	if linked := st.Total - st.NoLink; st.OffDomain > 0 && linked > 0 {
-		p := model.Problem{Code: model.ProblemSomeLinksOffDomain, Severity: model.SeverityWarning, Count: st.OffDomain, Detail: topHost(st.OffDomainHosts)}
+		top := topHost(st.OffDomainHosts)
+		p := model.Problem{Code: model.ProblemSomeLinksOffDomain, Severity: model.SeverityWarning, Count: st.OffDomain, Detail: top}
 		if float64(st.OffDomain)/float64(linked) > policy.OffDomainFailShare {
 			p.Severity = model.SeverityError
 			p.Code = model.ProblemLinksElsewhere
+			moved := movedTo(site, loc)
+			switch home := siteHost(loc.feed.SiteURL, loc.resp.URL); {
+			// The address given is an old one: it redirects to the site the
+			// posts are on.
+			case moved != nil && normalize.SameSite(top, moved.Hostname(), nil):
+				p.Code, p.Detail = model.ProblemSiteMoved, moved.String()
 			// A feed that names another site as its own home was built with the
 			// wrong site address; one that names this site links out on purpose.
-			if home := siteHost(loc.feed.SiteURL, loc.resp.URL); home != "" && !normalize.SameSite(home, site.Hostname(), nil) {
+			case home != "" && !normalize.SameSite(home, site.Hostname(), nil):
 				p.Code = model.ProblemLinksOffDomain
 			}
 		}
@@ -288,6 +305,20 @@ func (c *Checker) postsFeed(ctx context.Context, r *model.CheckReport, entries [
 		return alt
 	}
 	return ""
+}
+
+// movedTo is the site the given address now leads to, when that is another
+// site: the home page, or a given feed, was redirected there.
+func movedTo(site *url.URL, loc *located) *url.URL {
+	final := loc.home
+	if final == "" && loc.resp.Redirected {
+		final = loc.resp.URL
+	}
+	u, err := url.Parse(final)
+	if err != nil || u.Hostname() == "" || normalize.SameSite(u.Hostname(), site.Hostname(), nil) {
+		return nil
+	}
+	return &url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/"}
 }
 
 // siteHost is the host of the home page a feed declares, resolved against

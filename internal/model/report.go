@@ -23,6 +23,7 @@ const (
 	ProblemParseError         ProblemCode = "parse_error"
 	ProblemLinksOffDomain     ProblemCode = "links_off_domain"
 	ProblemLinksElsewhere     ProblemCode = "links_elsewhere"
+	ProblemSiteMoved          ProblemCode = "site_moved"
 	ProblemNoValidItems       ProblemCode = "no_valid_items"
 	ProblemStale              ProblemCode = "stale"
 	ProblemSomeLinksOffDomain ProblemCode = "some_links_off_domain"

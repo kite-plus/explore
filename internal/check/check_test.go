@@ -239,6 +239,48 @@ func TestFeedThatLinksOut(t *testing.T) {
 	}
 }
 
+func TestDiscoveredFeedTooLarge(t *testing.T) {
+	s := newSite(t)
+	s.serve("/", s.page("Hugo 0.157.0", "/index.xml"))
+	s.serve("/index.xml", `<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>`+
+		strings.Repeat("<item><title>x</title></item>", 200_000)+`</channel></rss>`)
+
+	r := s.check(Input{SiteURL: s.srv.URL})
+	m := codes(r)
+	if _, ok := m[model.ProblemTooLarge]; !ok || r.Passed {
+		t.Fatalf("want too_large, got %+v", r.Problems)
+	}
+	if _, ok := m[model.ProblemFeedNotFound]; ok {
+		t.Errorf("the feed was found, only too large: %+v", r.Problems)
+	}
+}
+
+func TestSiteMoved(t *testing.T) {
+	// The address someone remembers redirects to the blog's new domain, and
+	// the feed there links to the new domain: nothing needs fixing but the
+	// address.
+	moved := newSite(t)
+	origin := "http://" + strings.Replace(moved.srv.Listener.Addr().String(), "127.0.0.1", "localhost", 1)
+	moved.serve("/", moved.page("Hexo 8.1.2", "/atom.xml"))
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "feeds", "hexo", "atom.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved.serve("/atom.xml", strings.ReplaceAll(string(b), "https://hexo.example.com", origin))
+	old := newSite(t)
+	old.routes["/"] = route{status: http.StatusMovedPermanently, location: origin + "/"}
+
+	r := old.check(Input{SiteURL: old.srv.URL})
+	m := codes(r)
+	p, ok := m[model.ProblemSiteMoved]
+	if r.Passed || !ok || p.Detail != origin+"/" {
+		t.Fatalf("want site_moved to %s, got %+v", origin, r.Problems)
+	}
+	if _, ok := m[model.ProblemLinksOffDomain]; ok {
+		t.Errorf("the configuration is right; only the address is old: %+v", r.Problems)
+	}
+}
+
 func TestHexoCIDates(t *testing.T) {
 	s := newSite(t)
 	s.fixture("/atom.xml", "hexo/ci-dates.xml", "https://ci.example.com")

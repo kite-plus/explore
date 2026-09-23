@@ -64,34 +64,40 @@ var hints = map[model.ProblemCode]map[model.Generator]hint{
 	},
 	model.ProblemLinksOffDomain: {
 		"": {
-			"Most post links point to another domain. Check the site address your blog system is configured with.",
-			"大部分文章链接指向了其他域名。请检查博客系统里配置的站点地址。",
+			"Most post links point to another domain. If the blog has moved there, submit its new address; otherwise check the site address your blog system is configured with.",
+			"大部分文章链接指向了其他域名。如果博客已经搬到那里，请提交新地址；否则请检查博客系统里配置的站点地址。",
 		},
 		model.GeneratorHexo: {
-			"Set url in _config.yml to your blog's address; the default http://example.com sends every link elsewhere.",
-			"请把 _config.yml 里的 url 改成博客的地址；默认的 http://example.com 会让所有链接指向别处。",
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set url in _config.yml to the blog's address; the default http://example.com sends every link elsewhere.",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 _config.yml 里的 url 改成博客的地址，默认的 http://example.com 会让所有链接指向别处。",
 		},
 		model.GeneratorHugo: {
-			"Set baseURL in the Hugo configuration to your blog's address.",
-			"请把 Hugo 配置里的 baseURL 改成博客的地址。",
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set baseURL in the Hugo configuration to the blog's address.",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 Hugo 配置里的 baseURL 改成博客的地址。",
 		},
 		model.GeneratorHalo: {
-			"Set halo.external-url to your blog's public address.",
-			"请把 halo.external-url 改成博客的公网地址。",
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set halo.external-url to the blog's public address.",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 halo.external-url 改成博客的公网地址。",
 		},
 		model.GeneratorWordPress: {
-			"Check Settings → General → Site Address (URL).",
-			"请检查 设置 → 常规 → 站点地址（URL）。",
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise check Settings → General → Site Address (URL).",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请检查 设置 → 常规 → 站点地址（URL）。",
 		},
 		model.GeneratorJekyll: {
-			"Set url in _config.yml to your blog's address.",
-			"请把 _config.yml 里的 url 改成博客的地址。",
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set url in _config.yml to the blog's address.",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 _config.yml 里的 url 改成博客的地址。",
 		},
 	},
 	model.ProblemLinksElsewhere: {
 		"": {
 			"The posts in this feed link to other sites. Explore only lists posts published on the blog itself, so readers always land on the author's site.",
 			"这个订阅源里的文章都链接到其他网站。Explore 只收录发布在博客本身的文章，保证读者点开后到达的是作者的网站。",
+		},
+	},
+	model.ProblemSiteMoved: {
+		"": {
+			"This address now leads to another site, where the posts are. If the blog has moved, submit its new address.",
+			"这个地址现在会跳转到另一个网站，文章也都在那里。如果博客已经搬家，请提交新地址。",
 		},
 	},
 	model.ProblemSomeLinksOffDomain: {
