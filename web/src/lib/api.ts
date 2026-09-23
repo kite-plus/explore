@@ -72,7 +72,11 @@ export const api = {
 
   // The reader's address is passed on so the API's rate limit counts
   // readers rather than this server.
-  submit: (lang: Lang, body: { site_url: string; feed_url: string; note: string }, clientAddress?: string) =>
+  submit: (
+    lang: Lang,
+    body: { site_url: string; feed_url: string; note: string; title?: string; description?: string },
+    clientAddress?: string,
+  ) =>
     call<Submission>("/api/v1/submissions", {
       lang,
       method: "POST",

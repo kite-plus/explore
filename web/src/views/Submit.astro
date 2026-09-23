@@ -7,14 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import type { SubmitState } from "@/lib/loaders";
+import submitProbeScript from "@/scripts/submit-probe.js?raw";
 
 interface Props {
   lang: Lang;
   state: SubmitState;
 }
 
-// A plain HTML form: it works without JavaScript, and the browser's own
-// loading indicator covers the check's wait. See docs/design/frontend.md 6.
 const { lang, state } = Astro.props;
 const t = dict(lang);
 const outcome = state.outcome;
@@ -51,11 +50,71 @@ const outcome = state.outcome;
           </section>
         )}
 
-        <form method="post" class="mt-8 flex max-w-xl flex-col gap-5">
+        <form method="post" data-submit-form class="mt-8 flex max-w-xl flex-col gap-5">
+          <div
+            data-probe-error
+            class="hidden"
+            data-text-listed={t.submit.listed}
+            data-text-view-blog={t.submit.viewBlog}
+            data-text-pending={t.submission.status.pending}
+            data-text-view-status={t.submission.title}
+            data-text-failed={t.submit.failed}
+            data-text-error={t.submit.invalid}
+            data-text-unavailable={t.errors.unavailableBody}
+          />
+
           <label class="flex flex-col gap-2 text-sm font-medium">
             {t.submit.site}
-            <Input type="url" name="site_url" required placeholder="https://blog.example.com/" defaultValue={state.values.site_url} />
+            <Input
+              type="url"
+              name="site_url"
+              required
+              placeholder="https://blog.example.com/"
+              defaultValue={state.values.site_url}
+            />
           </label>
+
+          <div data-preview-section class="hidden rounded-lg border bg-card p-5 text-card-foreground shadow-sm flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b pb-3">
+              <div class="flex items-center gap-3">
+                <span data-preview-avatar class="size-10 rounded-full flex items-center justify-center font-bold text-white text-lg shrink-0 bg-primary">
+                  <span data-preview-initial>?</span>
+                </span>
+                <div>
+                  <h2 class="text-base font-semibold leading-tight">{t.submit.previewTitle}</h2>
+                  <p data-preview-host class="text-xs text-muted-foreground mt-0.5"></p>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>{t.submit.articlesCount}:</span>
+                <span data-preview-articles class="font-medium text-foreground"></span>
+              </div>
+            </div>
+
+            <p class="text-xs text-muted-foreground leading-relaxed">{t.submit.previewDesc}</p>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label class="flex flex-col gap-1.5 text-xs font-medium">
+                {t.submit.name}
+                <Input type="text" name="title" maxLength={100} defaultValue={state.values.title} />
+              </label>
+              <label class="flex flex-col gap-1.5 text-xs font-medium">
+                {t.submit.discoveredFeed}
+                <p data-preview-feed class="truncate rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono text-muted-foreground"></p>
+              </label>
+            </div>
+
+            <label class="flex flex-col gap-1.5 text-xs font-medium">
+              {t.submit.desc}
+              <Textarea name="description" maxLength={240} rows={2} defaultValue={state.values.description} />
+            </label>
+
+            <div class="hidden items-center gap-2 rounded bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              <span class="font-medium text-foreground shrink-0">{t.submit.latestPost}:</span>
+              <span data-preview-latest class="truncate font-normal"></span>
+            </div>
+          </div>
+
           <label class="flex flex-col gap-2 text-sm font-medium">
             {t.submit.feed}
             <Input type="url" name="feed_url" placeholder="https://blog.example.com/atom.xml" defaultValue={state.values.feed_url} />
@@ -66,11 +125,22 @@ const outcome = state.outcome;
             <Textarea name="note" maxLength={500} rows={3} defaultValue={state.values.note} />
             <span class="text-xs font-normal text-muted-foreground">{t.submit.noteHint}</span>
           </label>
+
           <div class="flex flex-wrap items-center gap-3">
-            <Button type="submit">{t.submit.button}</Button>
-            <span class="text-xs text-muted-foreground">{t.submit.wait}</span>
+            <Button
+              type="submit"
+              data-main-btn
+              data-label-probe={t.submit.probe}
+              data-label-probing={t.submit.probing}
+              data-label-confirm={t.submit.confirmButton}
+              data-label-fallback={t.submit.button}
+            >
+              {t.submit.probe}
+            </Button>
+            <span data-wait-hint class="text-xs text-muted-foreground">{t.submit.wait}</span>
           </div>
         </form>
+        <script set:html={submitProbeScript} />
       </>
     )
   }

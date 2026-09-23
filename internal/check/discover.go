@@ -30,9 +30,10 @@ var feedTypes = map[string]bool{
 
 // page is what discovery reads from an HTML page.
 type page struct {
-	feeds     []string // alternate feed links, absolute, in page order
-	generator string   // content of <meta name="generator">
-	refresh   string   // absolute target of <meta http-equiv="refresh">
+	feeds       []string // alternate feed links, absolute, in page order
+	generator   string   // content of <meta name="generator">
+	description string   // content of <meta name="description">
+	refresh     string   // absolute target of <meta http-equiv="refresh">
 }
 
 // readPage extracts feed links and the generator from HTML. Only the head
@@ -66,6 +67,13 @@ func readPage(body []byte, base *url.URL) page {
 			if strings.EqualFold(attrs["name"], "generator") && p.generator == "" {
 				p.generator = strings.TrimSpace(attrs["content"])
 			}
+			if p.description == "" {
+				name := strings.ToLower(strings.TrimSpace(attrs["name"]))
+				prop := strings.ToLower(strings.TrimSpace(attrs["property"]))
+				if name == "description" || prop == "og:description" || name == "twitter:description" {
+					p.description = strings.TrimSpace(attrs["content"])
+				}
+			}
 			if strings.EqualFold(strings.TrimSpace(attrs["http-equiv"]), "refresh") && p.refresh == "" {
 				if target := refreshTarget(attrs["content"]); target != "" {
 					if u, err := base.Parse(target); err == nil {
@@ -74,7 +82,7 @@ func readPage(body []byte, base *url.URL) page {
 				}
 			}
 		case atom.Body:
-			if len(p.feeds) > 0 && p.generator != "" {
+			if len(p.feeds) > 0 && p.generator != "" && p.description != "" {
 				return p
 			}
 		}

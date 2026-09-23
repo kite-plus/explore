@@ -52,7 +52,7 @@ const variant = { pending: "secondary", approved: "default", rejected: "destruct
           )}
         </div>
         <h2 class="mt-8 mb-3 text-sm font-medium text-muted-foreground">{t.submission.checks}</h2>
-        {sub.check_report && sub.check_report.problems.length > 0 ? (
+        {sub.check_report && sub.check_report.problems && sub.check_report.problems.length > 0 ? (
           <Problems lang={lang} problems={sub.check_report.problems} />
         ) : (
           <p class="text-sm text-muted-foreground">{t.submission.noProblems}</p>

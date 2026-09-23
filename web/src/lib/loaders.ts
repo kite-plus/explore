@@ -85,7 +85,7 @@ export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Load
 }
 
 export interface SubmitState {
-  values: { site_url: string; feed_url: string; note: string };
+  values: { site_url: string; feed_url: string; note: string; title?: string; description?: string };
   outcome?:
     | { kind: "failed"; report: CheckReport }
     | { kind: "listed"; host: string }
@@ -104,7 +104,13 @@ export async function loadSubmit(ctx: AstroGlobal, lang: Lang): Promise<SubmitSt
 
   const form = await ctx.request.formData();
   const field = (name: string) => String(form.get(name) ?? "").trim();
-  state.values = { site_url: field("site_url"), feed_url: field("feed_url"), note: field("note") };
+  state.values = {
+    site_url: field("site_url"),
+    feed_url: field("feed_url"),
+    note: field("note"),
+    title: field("title"),
+    description: field("description"),
+  };
   const t = dict(lang).submit;
 
   const r = await api.submit(lang, state.values, ctx.clientAddress);

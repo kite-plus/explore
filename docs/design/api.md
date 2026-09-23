@@ -160,6 +160,37 @@
 
 `check_report` 的结构见 [worker.md §6.3](worker.md#63-报告格式)。每个客户端地址每小时最多提交 5 次 `[待定]`。
 
+### 2.4.1 `POST /api/v1/submissions/preview`
+
+在提交前探测并拉取博客元数据（名称、描述、订阅地址、最新文章及检查报告），不落库写入任何数据。限流策略与 `POST /api/v1/submissions` 一致。
+
+```json
+{
+  "site_url": "https://blog.example.com/",
+  "feed_url": null
+}
+```
+
+响应（200 OK）：
+
+```json
+{
+  "host": "blog.example.com",
+  "site_url": "https://blog.example.com/",
+  "feed_url": "https://blog.example.com/atom.xml",
+  "title": "博客名称",
+  "description": "博客简介",
+  "latest_entry_title": "最新文章标题",
+  "generator": "hugo",
+  "language": "zh-CN",
+  "items_total": 20,
+  "items_valid": 20,
+  "latest_published_at": "2026-09-14T04:30:00Z",
+  "check_report": { "passed": true, "...": "..." },
+  "passed": true
+}
+```
+
 ### 2.5 `GET /api/v1/submissions/{id}`
 
 查询提交进度。返回 `id`、`status`、`host`、`site_url`、`feed_url`、`check_report`、`review_note`、`created_at`、`reviewed_at`。维护者的名字（`reviewed_by`）不对外。

@@ -62,6 +62,8 @@ type located struct {
 	resp      *fetch.Response
 	feed      *feed.Feed
 	by        string
+	// description is the page's meta description, if discovered from HTML.
+	description string
 	// home is where the home page ended up after redirects; empty when the
 	// feed was given and the home page was not read.
 	home string
@@ -178,6 +180,7 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 		loc, p := c.tryFeed(ctx, link, "autodiscovery")
 		if loc != nil {
 			loc.home = home
+			loc.description = pg.description
 			return loc, pg.generator, nil
 		}
 		remember(p, true)
@@ -192,6 +195,7 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 		loc, p := c.tryFeed(ctx, link, "candidate")
 		if loc != nil {
 			loc.home = home
+			loc.description = pg.description
 			return loc, pg.generator, nil
 		}
 		remember(p, false)
@@ -239,6 +243,13 @@ func (c *Checker) describe(ctx context.Context, r *model.CheckReport, site *url.
 	r.DiscoveredBy = loc.by
 	r.Format = loc.feed.Format
 	r.Title = normalize.Truncate(normalize.PlainText(loc.feed.Title), 100)
+	desc := loc.feed.Description
+	if desc == "" {
+		desc = loc.description
+	}
+	if desc != "" {
+		r.Description = normalize.Truncate(normalize.PlainText(desc), 240)
+	}
 	r.Language = loc.feed.Language
 	if g := normalize.DetectGenerator(loc.feed.Generator); g != model.GeneratorUnknown {
 		r.Generator = g
@@ -252,6 +263,12 @@ func (c *Checker) describe(ctx context.Context, r *model.CheckReport, site *url.
 	st := res.Stats
 	latest := c.latest(res.Entries)
 	r.Items = &model.CheckItems{Total: st.Total, Valid: st.Valid, TrustedDates: st.Trusted, LatestPublishedAt: latest}
+	for _, e := range res.Entries {
+		if e.Title != "" {
+			r.LatestEntryTitle = normalize.Truncate(normalize.PlainText(e.Title), 100)
+			break
+		}
+	}
 
 	if linked := st.Total - st.NoLink; st.OffDomain > 0 && linked > 0 {
 		top := topHost(st.OffDomainHosts)

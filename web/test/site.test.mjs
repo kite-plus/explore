@@ -342,6 +342,21 @@ describe("submissions", () => {
     assert.equal(res.status, 403);
   });
 
+  test("previewing a blog returns title, description and feed info", async () => {
+    const res = await get("/api/v1/submissions/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ site_url: "https://ok.example.com/" }),
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.host, "ok.example.com");
+    assert.equal(data.title, "OK Blog");
+    assert.equal(data.description, "A blog description");
+    assert.equal(data.latest_entry_title, "First Post");
+    assert.equal(data.feed_url, "https://ok.example.com/feed.xml");
+  });
+
   test("the status page localizes the stored report", async () => {
     const zh = await (await get("/submissions/11111111-2222-3333-4444-555555555555")).text();
     const en = await (await get("/en/submissions/11111111-2222-3333-4444-555555555555")).text();

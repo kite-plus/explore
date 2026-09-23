@@ -41,14 +41,15 @@ type Server struct {
 	Log          *slog.Logger
 	Now          func() time.Time
 
-	readLimit   *limiter
-	submitLimit *limiter
-	linkLimit   *limiter
-	linkSlots   chan struct{}
-	imageMu     sync.Mutex
-	images      map[string]cachedImage
-	faviconMu   sync.Mutex
-	favicons    map[string]cachedImage
+	readLimit    *limiter
+	submitLimit  *limiter
+	previewLimit *limiter
+	linkLimit    *limiter
+	linkSlots    chan struct{}
+	imageMu      sync.Mutex
+	images       map[string]cachedImage
+	faviconMu    sync.Mutex
+	favicons     map[string]cachedImage
 }
 
 // Handler builds the router.
@@ -60,7 +61,13 @@ func (s *Server) Handler() (http.Handler, error) {
 		s.Now = time.Now
 	}
 	s.readLimit = newLimiter(300, time.Minute, s.Now)
-	s.submitLimit = newLimiter(5, time.Hour, s.Now)
+	if s.AllowPrivate {
+		s.submitLimit = newLimiter(10000, time.Hour, s.Now)
+		s.previewLimit = newLimiter(10000, time.Hour, s.Now)
+	} else {
+		s.submitLimit = newLimiter(5, time.Hour, s.Now)
+		s.previewLimit = newLimiter(60, time.Hour, s.Now)
+	}
 	s.linkLimit = newLimiter(10, time.Hour, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
@@ -89,6 +96,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.GET("/blogs/:host/favicon", s.limit(s.readLimit), s.blogFavicon)
 	v1.GET("/blogs/:host", s.limit(s.readLimit), s.blog)
 	v1.POST("/submissions", s.limit(s.submitLimit), s.submit)
+	v1.POST("/submissions/preview", s.limit(s.previewLimit), s.previewSubmission)
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)
 
 	// Without tokens the admin routes do not exist at all.

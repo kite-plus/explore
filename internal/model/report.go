@@ -42,8 +42,10 @@ type CheckReport struct {
 	DiscoveredBy string      `json:"discovered_by,omitempty"`
 	Format       string      `json:"format,omitempty"`
 	Generator    Generator   `json:"generator,omitempty"`
-	Title        string      `json:"title,omitempty"`
-	Language     string      `json:"language,omitempty"`
+	Title            string      `json:"title,omitempty"`
+	Description      string      `json:"description,omitempty"`
+	LatestEntryTitle string      `json:"latest_entry_title,omitempty"`
+	Language         string      `json:"language,omitempty"`
 	HTTP         *CheckHTTP  `json:"http,omitempty"`
 	Items        *CheckItems `json:"items,omitempty"`
 	Problems     []Problem   `json:"problems"`

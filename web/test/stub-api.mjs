@@ -106,6 +106,46 @@ export function startStub() {
     if (req.method === "GET" && url.pathname.startsWith("/api/v1/submissions/")) {
       return error(404, "not_found");
     }
+    if (req.method === "POST" && url.pathname === "/api/v1/submissions/preview") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw);
+      switch (body.site_url) {
+        case "https://ok.example.com/":
+          return send(200, {
+            host: "ok.example.com",
+            site_url: "https://ok.example.com/",
+            feed_url: "https://ok.example.com/feed.xml",
+            title: "OK Blog",
+            description: "A blog description",
+            latest_entry_title: "First Post",
+            generator: "hugo",
+            language: "zh-CN",
+            items_total: 10,
+            items_valid: 10,
+            check_report: report(true, []),
+            passed: true,
+          });
+        case "https://fail.example.com/":
+          return error(422, "check_failed", {
+            check_report: report(false, [
+              {
+                code: "links_off_domain",
+                severity: "error",
+                count: 3,
+                detail: "example.com",
+                hint: lang === "zh" ? "改 _config.yml 的 url" : "Set url in _config.yml",
+              },
+            ]),
+          });
+        case "https://listed.example.com/":
+          return error(409, "already_listed");
+        case "https://pending.example.com/":
+          return error(409, "already_pending", { submission_id: submission.id });
+        default:
+          return error(400, "invalid_url");
+      }
+    }
     if (req.method === "POST" && url.pathname === "/api/v1/submissions") {
       let raw = "";
       for await (const chunk of req) raw += chunk;

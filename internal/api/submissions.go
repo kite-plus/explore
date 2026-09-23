@@ -14,6 +14,7 @@ import (
 
 	"github.com/kite-plus/explore/internal/check"
 	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/normalize"
 )
 
 // checkTimeout bounds a submission's check; see docs/design/api.md 2.4.
@@ -23,9 +24,32 @@ const checkTimeout = 30 * time.Second
 const maxBody = 16 << 10
 
 type submitRequest struct {
+	SiteURL     string `json:"site_url"`
+	FeedURL     string `json:"feed_url"`
+	Note        string `json:"note"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type previewRequest struct {
 	SiteURL string `json:"site_url"`
 	FeedURL string `json:"feed_url"`
-	Note    string `json:"note"`
+}
+
+type previewResponse struct {
+	Host             string             `json:"host"`
+	SiteURL          string             `json:"site_url"`
+	FeedURL          string             `json:"feed_url"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	LatestEntryTitle string             `json:"latest_entry_title,omitempty"`
+	Generator        string             `json:"generator"`
+	Language         string             `json:"language"`
+	ItemsTotal       int                `json:"items_total"`
+	ItemsValid       int                `json:"items_valid"`
+	LatestPublished  *time.Time         `json:"latest_published_at,omitempty"`
+	CheckReport      *model.CheckReport `json:"check_report"`
+	Passed           bool               `json:"passed"`
 }
 
 type submissionJSON struct {
@@ -43,6 +67,9 @@ type submissionJSON struct {
 func toSubmission(sub model.Submission, c *gin.Context) submissionJSON {
 	report := sub.Report
 	check.Localize(&report, lang(c))
+	if report.Problems == nil {
+		report.Problems = []model.Problem{}
+	}
 	return submissionJSON{
 		ID: sub.ID, Status: string(sub.Status), Host: sub.Host, SiteURL: sub.SiteURL, FeedURL: sub.FeedURL,
 		CheckReport: &report, ReviewNote: sub.ReviewNote, CreatedAt: sub.CreatedAt.UTC(), ReviewedAt: utc(sub.ReviewedAt),
@@ -139,6 +166,13 @@ func (s *Server) submit(c *gin.Context) {
 		return
 	}
 
+	if req.Title != "" {
+		report.Title = normalize.Truncate(normalize.PlainText(req.Title), 100)
+	}
+	if req.Description != "" {
+		report.Description = normalize.Truncate(normalize.PlainText(req.Description), 240)
+	}
+
 	sub, err := s.Store.CreateSubmission(c.Request.Context(), model.Submission{
 		Host: t.host, SiteURL: t.site, FeedURL: report.FeedURL, Note: strings.TrimSpace(req.Note), Report: *report,
 	})
@@ -149,6 +183,68 @@ func (s *Server) submit(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Vary", "Accept-Language")
 	writeJSON(c, http.StatusCreated, toSubmission(sub, c))
+}
+
+func (s *Server) previewSubmission(c *gin.Context) {
+	var req previewRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
+	t, ok := s.parseTarget(req.SiteURL, req.FeedURL)
+	if !ok {
+		s.fail(c, http.StatusBadRequest, codeInvalidURL)
+		return
+	}
+
+	state, err := s.Store.HostState(c.Request.Context(), t.host)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	switch {
+	case state.Excluded != nil:
+		s.fail(c, http.StatusForbidden, codeExcluded)
+		return
+	case state.Listed:
+		s.fail(c, http.StatusConflict, codeAlreadyListed)
+		return
+	case state.PendingID != "":
+		s.fail(c, http.StatusConflict, codeAlreadyPending, gin.H{"submission_id": state.PendingID})
+		return
+	}
+
+	report, ok := s.runCheck(c, t)
+	if !ok {
+		return
+	}
+	check.Localize(report, lang(c))
+	if !report.Passed {
+		s.fail(c, http.StatusUnprocessableEntity, codeCheckFailed, gin.H{"check_report": report})
+		return
+	}
+
+	res := previewResponse{
+		Host:             t.host,
+		SiteURL:          t.site,
+		FeedURL:          report.FeedURL,
+		Title:            report.Title,
+		Description:      report.Description,
+		LatestEntryTitle: report.LatestEntryTitle,
+		Generator:        string(report.Generator),
+		Language:         report.Language,
+		CheckReport:      report,
+		Passed:           report.Passed,
+	}
+	if report.Items != nil {
+		res.ItemsTotal = report.Items.Total
+		res.ItemsValid = report.Items.Valid
+		res.LatestPublished = report.Items.LatestPublishedAt
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Header("Vary", "Accept-Language")
+	writeJSON(c, http.StatusOK, res)
 }
 
 func (s *Server) submission(c *gin.Context) {
