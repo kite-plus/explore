@@ -380,6 +380,24 @@ func TestExitSignals(t *testing.T) {
 	}
 }
 
+func TestRobotsRuleForEveryCrawlerIsNoExit(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	s.handle("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "User-agent: *\nDisallow: /feed/\n")
+	})
+	b := e.list(s, "/feed/")
+
+	e.runOnce()
+	got := e.blog(b.Host)
+	if got.GoneSince != nil {
+		t.Errorf("a rule for every crawler was taken as the author leaving: %+v", got)
+	}
+	if got.ConsecutiveFailures != 1 || !strings.Contains(got.LastError, "robots.txt") {
+		t.Errorf("want one failure naming robots.txt, got %d %q", got.ConsecutiveFailures, got.LastError)
+	}
+}
+
 func TestPermanentRedirectMovesTheFeed(t *testing.T) {
 	e := newEnv(t)
 	s := newSite(t, "127.0.0.1")

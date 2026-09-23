@@ -309,6 +309,56 @@ func TestRobotsWildcardGroupApplies(t *testing.T) {
 	}
 }
 
+func TestRobotsNamesWhoIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		robots   string
+		explicit bool
+	}{
+		{"User-agent: KiteExplore\nDisallow: /\n", true},
+		{"User-agent: *\nDisallow: /feed\n", false},
+	} {
+		srv, c := newServer(t, tc.robots, func(w http.ResponseWriter, r *http.Request) {})
+		_, err := c.Get(context.Background(), Request{URL: srv.URL + "/feed"})
+		var refused *RobotsError
+		if !errors.As(err, &refused) || refused.Explicit != tc.explicit {
+			t.Errorf("%q: err = %v, want a refusal with Explicit = %v", tc.robots, err, tc.explicit)
+		}
+	}
+}
+
+func TestRobotsApplyToWhereARedirectLeads(t *testing.T) {
+	srv, c := newServer(t, "User-agent: *\nDisallow: /private/\n", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/feed" {
+			http.Redirect(w, r, "/private/feed", http.StatusMovedPermanently)
+			return
+		}
+		t.Errorf("fetched %s, which robots.txt disallows", r.URL.Path)
+	})
+	if _, err := c.Get(context.Background(), Request{URL: srv.URL + "/feed"}); !errors.Is(err, ErrRobotsDisallowed) {
+		t.Fatalf("err = %v, want ErrRobotsDisallowed", err)
+	}
+}
+
+func TestRobotsFileMayRedirect(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/robots-live.txt", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/robots-live.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("User-agent: *\nDisallow: /private\n"))
+	})
+	mux.HandleFunc("/feed", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("<rss/>")) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := New(Options{UserAgent: "test", AllowPrivate: true})
+	if _, err := c.Get(context.Background(), Request{URL: srv.URL + "/feed"}); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := c.Get(context.Background(), Request{URL: srv.URL + "/private"}); !errors.Is(err, ErrRobotsDisallowed) {
+		t.Fatalf("err = %v, want the redirected robots.txt to apply", err)
+	}
+}
+
 func TestRobotsStatusCodes(t *testing.T) {
 	cases := []struct {
 		status int

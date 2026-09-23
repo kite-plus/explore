@@ -38,10 +38,14 @@ func (c *Client) robotsAllow(ctx context.Context, u *url.URL) error {
 		c.mu.Unlock()
 	}
 
-	if entry.allowAll || grobotstxt.AgentAllowed(entry.body, policy.UserAgentToken, u.String()) {
+	if entry.allowAll {
 		return nil
 	}
-	return ErrRobotsDisallowed
+	m := grobotstxt.NewRobotsMatcher()
+	if m.AgentAllowed(entry.body, policy.UserAgentToken, u.String()) {
+		return nil
+	}
+	return &RobotsError{Explicit: m.EverSeenSpecificAgent()}
 }
 
 func (c *Client) fetchRobots(ctx context.Context, origin string) (robotsEntry, error) {

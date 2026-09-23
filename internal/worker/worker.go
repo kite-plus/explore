@@ -102,7 +102,10 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 	}
 	resp, err := w.Fetch.Get(ctx, req)
 	if err != nil {
-		gone := errors.Is(err, fetch.ErrRobotsDisallowed)
+		// Only a group naming KiteExplore is the author opting out; the group
+		// for every crawler is often an SEO template aimed at search engines.
+		var refused *fetch.RobotsError
+		gone := errors.As(err, &refused) && refused.Explicit
 		w.fail(ctx, log, b, err.Error(), 0, gone)
 		return
 	}

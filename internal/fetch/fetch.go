@@ -45,6 +45,20 @@ func (e *BlockedError) Error() string { return "address is not public: " + e.Add
 
 func (e *BlockedError) Unwrap() error { return ErrBlockedAddress }
 
+// RobotsError is a refusal by robots.txt. Explicit is set when the rule
+// comes from a group naming KiteExplore rather than the group for every
+// crawler: only then has the author turned Explore away in particular.
+type RobotsError struct{ Explicit bool }
+
+func (e *RobotsError) Error() string {
+	if e.Explicit {
+		return ErrRobotsDisallowed.Error() + " for " + policy.UserAgentToken
+	}
+	return ErrRobotsDisallowed.Error()
+}
+
+func (e *RobotsError) Unwrap() error { return ErrRobotsDisallowed }
+
 // UserAgent is what Explore sends; the URL explains the crawler to whoever
 // finds it in their logs.
 func UserAgent(version, publicURL string) string {
@@ -129,6 +143,11 @@ func New(o Options) *Client {
 				if code := req.Response.StatusCode; code != http.StatusMovedPermanently && code != http.StatusPermanentRedirect {
 					t.permanent = false
 				}
+				// Where a redirect leads must be allowed too; robots.txt
+				// itself is exempt, or fetching it would need itself.
+				if !t.robotsFile {
+					return c.robotsAllow(req.Context(), req.URL)
+				}
 			}
 			return nil
 		},
@@ -139,8 +158,9 @@ func New(o Options) *Client {
 type trackerKey struct{}
 
 type tracker struct {
-	count     int
-	permanent bool
+	count      int
+	permanent  bool
+	robotsFile bool
 }
 
 // Get fetches a URL after checking robots.txt for it.
@@ -158,8 +178,10 @@ func (c *Client) Get(ctx context.Context, r Request) (*Response, error) {
 	return c.do(ctx, u, r, false)
 }
 
-func (c *Client) do(ctx context.Context, u *url.URL, r Request, truncate bool) (*Response, error) {
-	t := &tracker{permanent: true}
+// do performs one GET. A robots.txt request is cut off at the size limit
+// instead of failing, and its redirects skip the robots check.
+func (c *Client) do(ctx context.Context, u *url.URL, r Request, robotsFile bool) (*Response, error) {
+	t := &tracker{permanent: true, robotsFile: robotsFile}
 	ctx = context.WithValue(ctx, trackerKey{}, t)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -197,7 +219,7 @@ func (c *Client) do(ctx context.Context, u *url.URL, r Request, truncate bool) (
 		return nil, err
 	}
 	if int64(len(body)) > limit {
-		if !truncate {
+		if !robotsFile {
 			return nil, ErrTooLarge
 		}
 		body = body[:limit]
