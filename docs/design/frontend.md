@@ -148,6 +148,7 @@ import SubmitForm from "@/components/submit-form";
 5. 不引入 CSS-in-JS 组件库（§1.2）。
 6. 不加载外部字体：用系统字体栈。中文网络字体动辄几 MB，还会产生第三方请求。
 7. 博客头像用博客名的首字加上由主机名算出的颜色，在服务端渲染，不请求任何图片。
+8. **离开 Explore 的链接在新标签页打开**（原文、博客首页、订阅源、GitHub），读者看完还能回到信息流。提示要轻：文字后面一个淡色的 ↗，给读屏软件一段隐藏的"在新标签页打开"，首页说明里写一句；不用悬停提示，也不弹窗。组件里用 `ExternalLink.astro`，Markdown 页面的外链由 `ExternalLinks.astro` 统一改写。不加 `noreferrer`，作者的统计里仍能看到来自 Explore 的访问（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）。站内链接照常在本页打开。
 
 | 场景 | 做法 | 浏览器里的 JS |
 |---|---|---|
@@ -270,7 +271,7 @@ web/
 - `404` 与 `503` 的状态码正确；
 - 公开页面只有主题切换这一段内联脚本，内容与源文件一致，哈希在 CSP 里；没有内联 `style` 属性、不发 Cookie，并带着 CSP 响应头；
 - 主题脚本本身在 `test/theme.test.mjs` 里用一个模拟的页面测试：跟随系统、保存选择、切回系统、存储不可用、其他标签页的选择；
-- 页面不引用任何外部域名的资源；
+- 页面不引用任何外部域名的资源；指向站外的链接都在新标签页打开并带提示，站内链接不带 `target`；
 - 提交流程的各种结果，以及跨站提交被拒绝。
 
 **部署**：`web` 服务和 `serve`、`worker`、`postgres` 在同一个 Compose 里（[project-layout.md §10](project-layout.md#10-部署)）。反向代理把 `/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。
