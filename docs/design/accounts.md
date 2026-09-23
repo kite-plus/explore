@@ -1,222 +1,89 @@
-# 账号、订阅与标签
+# 统一身份、订阅与标签
 
-> 状态：方向已确认（2026-09-23），细节标 `[待定]` · 最近更新：2026-09-23
-> 原则层面的结论已经并入 [architecture.md](architecture.md) §0.1、§2、§9、§11、§12、§13 和 [data-model.md §1](data-model.md#1-数据分类)。接口、页面和实现细节暂以本文为准，实现时再并入 api.md、frontend.md 和 worker.md。
+> 状态：文章标签已实现；统一身份和订阅待实现 · 最近更新：2026-09-23
+> 跨站身份和评论的架构见 [identity-and-comments.md](identity-and-comments.md)。
 
----
+## 0. 边界
 
-## 0. 已确认的决定
+统一身份服务负责注册、登录、登录方式、账号合并和身份生命周期，并向 Explore 与评论服务提供 OIDC。Explore 只保存博客清单、可丢弃的文章缓存、订阅和本站会话。评论服务独立保存评论及审核状态。博客作者自愿接入评论组件；被 Explore 收录不要求接入评论。
 
-| 决定 | 内容 |
-|---|---|
-| 数据边界 | 只存账号和订阅。浏览、点击、阅读行为一律不记；推荐流不用个人数据；不登录照样能看全部公开内容，匿名访问零 Cookie |
-| 登录方式 | 邮箱验证码和 GitHub |
-| 筛选的"类型" | Explore 给每篇文章打的标签：标签表由我们定，worker 用大模型自动打 |
-| 上线顺序 | 账号、订阅和标签做完后，和现有功能一起上线；E2 不单独上线（[architecture.md §9](architecture.md#9-里程碑)） |
+读者不登录也能看全部公开内容，匿名访问零 Cookie。Explore 不记录浏览、点击和阅读行为，不根据个人行为推荐。
 
-要做的事：
+## 1. 登录与会话
 
-1. 读者可以注册、登录；
-2. 读者可以订阅指定的博客；
-3. 两条信息流：**推荐流**（全部收录的博客）和**订阅流**（只看自己订阅的）；
-4. 两条流都能按**标签**筛选。
+- Explore 是 OIDC 客户端，用 Authorization Code + PKCE 登录。回调校验 `state`、`nonce`、ID Token 签名、`iss`、`aud` 和有效期。
+- 统一身份键是 `(issuer, subject)`；邮箱、昵称、头像只用于展示。不同客户端的 `sub` 若因 pairwise 配置而不同，须在身份服务中配置一致的关联标识，不能按邮箱推断同一用户。
+- Explore 不收密码、邮箱验证码或 GitHub 令牌，也不直接实现 GitHub OAuth。邮箱、GitHub、Passkey 等登录方式由身份服务提供。
+- OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。数据库只存会话令牌哈希。退出 Explore 删除本站会话；全局退出需单独的 OIDC logout 机制。
+- 登录回调只建立会话，不直接做订阅等数据变更。登录后跳回本站相对路径，再由读者确认订阅。
+- 维护者 API 目前继续使用 `EXPLORE_ADMIN_TOKENS`。读者身份不自动获得管理权限，未来迁移到统一身份时须定义角色及审计。
+- 删除 Explore 资料会删除本站订阅和会话。删除统一身份账号后的跨服务数据清理须有独立流程。
 
----
+## 2. 订阅
 
-## 1. 原则怎么改
+- 订阅对象是博客，不是单篇文章或标签。博客页和目录页提供订阅入口。
+- 列表可取消、导出 OPML、导入 OPML；导入只匹配已收录博客。博客退出时删除其订阅。
+- 每人最多 1,000 个订阅 `[待定]`。订阅人数是否公开展示 `[待定]`。
 
-修订后的 §0.1 见 [architecture.md](architecture.md#01-只存有哪些博客和谁订阅了什么不存博客写了什么)。要点：
-
-- 文章仍然只是缓存，正文不入库；标签也是缓存，跟着文章走；
-- 读者数据只有登录身份（邮箱，或 GitHub 账号编号）、可选的昵称、订阅列表和会话；
-- 不登录照样能看全部公开内容，匿名访问零 Cookie；
-- 账号随时可以删除，删除立即生效，订阅和会话一起删掉；
-- schema 守护照旧：新增的表和列随实现一起写进列清单（[data-model.md §6](data-model.md#6-schema-守护)）。
-
----
-
-## 2. 账号
-
-### 2.1 登录方式
-
-| 方式 | 做不做 | 理由 |
-|---|---|---|
-| 邮箱验证码 | 做 | 不存密码，就没有密码泄露，也不用做找回。第一次登录即注册 |
-| GitHub | 做 | 写博客、读技术博客的人多有 GitHub。只存 GitHub 账号编号，不保存它的访问令牌 |
-| 邮箱加密码 | 不做 | 要存密码哈希、做找回和防撞库，收益不如验证码 |
-| Google | 不做 | 大陆读者用不了 |
-| 微信 | 不做 | 需要大陆主体，和海外部署冲突 |
-| Passkey | 以后 | 现在只留接口：用户表不假设身份只有邮箱和 GitHub 两种 |
-
-### 2.2 邮箱验证码
-
-- 6 位数字，10 分钟有效，同一个验证码最多试 5 次；数据库只存它的哈希。
-- 发送限流：同一邮箱每分钟 1 次、每小时 5 次；按地址的限流沿用现有的内存限流器。
-- 邮箱注册过没有，接口都返回同样的结果，不泄露谁是用户。
-- 需要一个事务邮件服务（SMTP，例如 Amazon SES、Resend、Postmark）`[待定]`。
-- 日志不记邮箱，和不记 IP 一样。
-
-### 2.3 会话
-
-- 登录成功后生成 32 字节随机令牌，写进 Cookie `explore_session`：`HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/`，30 天有效，使用中滚动续期。
-- 数据库只存令牌的 SHA-256。退出即删除；设置页可以"退出所有设备"。
-- API 既认 Cookie 也认 `Authorization: Bearer`；前端在服务端调用 API 时原样转发。
-- 维护者以后也用账号登录，账号多一个角色，替换掉配置里的访问令牌（architecture.md §12 的"维护者账号"）。
-
-### 2.4 删除与导出
-
-- 设置页一键删除账号：账号、会话、订阅立即删除。
-- 导出：订阅列表导出成 OPML，符合"带走一切"；账号信息导出成 JSON。
-
----
-
-## 3. 订阅
-
-- 订阅的对象是博客，不是单篇文章，也不是标签。
-- 博客页和博客目录上的"订阅"按钮是普通表单，不需要 JavaScript。没登录时先去登录，登录后回来完成订阅。
-- 订阅管理：列表、取消、导出 OPML、导入 OPML。导入时只匹配已收录的博客，没收录的提示去提交。
-- 每人最多 1,000 个订阅 `[待定]`。
-- 博客被移除（退出或屏蔽）时，对它的订阅一起删除。
-- 要不要公开"多少人订阅了这个博客" `[待定]`：只是一个聚合数字，先不展示。
-
----
-
-## 4. 两条信息流
+## 3. 两条信息流
 
 | | 推荐流 | 订阅流 |
 |---|---|---|
-| 地址 | `/`（现在的首页） | `/following` |
-| 内容 | 全部收录的博客 | 只有订阅的博客 |
+| 地址 | `/` | `/following` |
+| 内容 | 全部收录博客 | 当前用户订阅的博客 |
 | 要登录 | 否 | 是 |
-| 时间范围 | 近 30 天 | 缓存里的全部（每个博客最多 20 篇） |
-| 防刷屏 | 同一个博客每天最多 3 篇 | 不限，博客是读者自己选的 |
-| 缓存与收录 | 可以缓存，可以被搜索引擎收录 | `private, no-store`，`noindex` |
+| 时间范围 | 近 30 天 | 缓存里的全部（每博客最多 20 篇） |
+| 防刷屏 | 同一博客每天最多 3 篇 | 不限 |
+| 缓存与收录 | 可缓存、可收录 | `private, no-store`、`noindex` |
 | 筛选 | 标签、语言 | 标签、语言 |
 
-推荐流不做个性化：排序仍然按发布时间，不看读者的任何行为。以后可以加维护者的"精选"标记，同样不用个人数据 `[待定]`。
+推荐流按发布时间排序，不使用个人行为数据。
 
----
+## 4. 文章标签
 
-## 5. 文章标签
+标签表由 Explore 维护，定义在 `internal/model/tags.go`，每个标签有 URL 短名、中英文名和给模型看的说明。每篇文章打 0 到 3 个标签，没有合适的就不打。
 
-### 5.1 标签表
+Worker 独立循环分类，不阻塞抓取。输入只有标题、短摘要、订阅源分类、博客语言和维护者设置的默认标签；不发送正文或读者数据。模型输出限定在标签表内。同一篇文章且标题未变时保留已有标签；清空文章缓存后重打。模型结果可能有细小差异，这是缓存重建一致性的例外。
 
-标签表由我们维护，写在 `internal/model/tags.go`，改动走 code review。每个标签有一个英文短名（用在网址里）、中文名、英文名，以及一句给模型看的说明。第一版有 15 个：
+使用 Claude API，部署时同时设置 `EXPLORE_TAGGER_MODEL` 和 `EXPLORE_ANTHROPIC_API_KEY`。上线前用样本实测质量、token 和费用。维护者可设置博客默认标签；逐篇人工修改暂不做。
 
-| 技术 | 非技术 |
-|---|---|
-| 前端、后端、移动端、AI 与机器学习、数据、运维与云、安全、编程语言、开源与工具 | 设计、产品与创业、职场、生活随笔、读书、旅行与摄影 |
+推荐流已支持 `?tag=frontend`，并可与语言筛选组合；订阅流沿用同一参数。带筛选页面 `noindex, follow`。可收录的标签落地页 `[待定]`。博客目录不按文章标签筛选。
 
-每篇文章打 0 到 3 个。哪个都不合适就不打，不硬凑一个"其他"。
+## 5. 数据模型
 
-### 5.2 怎么打
-
-- **单独一个循环**：worker 每分钟最多取 20 篇未打标签的文章，新的在前，逐篇分类后写回。抓取不等它，打标签失败也不影响抓取。
-- **输入**：标题、已保存的短摘要、订阅源自带的分类、博客语言，以及维护者给博客设的默认标签（只作提示）。不向模型发送正文，也不为打标签额外抓取文章页面。
-- **输出**：用结构化输出（`output_config.format`，JSON Schema 里标签是枚举）把候选结果限定在标签表内；代码去重并截断到最多 3 个标签。
-- **提示词缓存**：固定的指令和标签表放在请求最前面，打上缓存标记。
-- **批量**：清空缓存后，会一下子出现上万篇没打标签的文章（1,000 个博客 × 20 篇）。未打标签的超过一定数量 `[待定]` 时改用 Message Batches：异步，半价，24 小时内返回。这期间文章照常展示，只是按标签筛选时暂时筛不到。
-- **失败**：没配模型和密钥时打标签循环不启动。接口出错或超时后，本轮停止，后续逐次退避，最长一小时；文章保持未打标签。模型拒答或输出被截断时记为空标签，不反复请求同一篇。
-- **不重复调用**：标签跟着文章走。重新同步时，同一篇文章（身份键相同、标题没变）保留已有的标签。
-- **手工修正**：维护者可以给博客设默认标签；逐篇手工改先不做 `[待定]`，因为文章随时可能被清空重建。
-
-标签是模型从文章内容算出来的，不依赖 Explore 记下的任何历史。但模型的结果不是逐字确定的，清空重打后个别文章的标签可能不同。这是 §0.1"清空前后完全一致"唯一的例外，只影响按标签筛选（[architecture.md §0.1](architecture.md#01-只存有哪些博客和谁订阅了什么不存博客写了什么)）。清空恢复的自动化测试改用一个结果固定的假分类器。
-
-### 5.3 模型与费用 `[待定]`
-
-- 用 Claude API，调用集中在 `internal/tagger`，依赖官方 Go SDK `github.com/anthropics/anthropic-sdk-go`。部署时同时设置 `EXPLORE_TAGGER_MODEL` 和 `EXPLORE_ANTHROPIC_API_KEY` 才会启动打标签；两者默认都为空。`EXPLORE_TAGGER_EFFORT` 可选，仅给支持该参数的模型设置。
-- 固定的指令和标签表标记为可缓存的提示词。每篇请求的输入取决于标题、摘要和分类的实际长度；上线前取一两百篇文章实测分类质量、token 用量和费用，再选模型。清空缓存后的批量重打费用也要按实测数据评估。
-- 隐私：发给模型服务的只有公开订阅源里的标题、短摘要、分类和博客语言，以及维护者设的默认标签；不含正文或读者数据。`/bot` 页向作者说明这些字段的用途。
-
-### 5.4 筛选
-
-- 推荐流已能按标签筛选（`?tag=frontend`），可以和语言筛选组合；订阅流实现时沿用这套参数。带筛选的页面照旧 `noindex, follow`。
-- 每个标签要不要一个可被收录的落地页（例如 `/tags/frontend`）`[待定]`。
-- 博客目录暂不按标签筛选：标签打在文章上，不在博客上。
-
----
-
-## 6. 数据模型
-
-新增一类"读者账号数据"：和博客清单一样要备份。`entries` 照旧不备份，标签跟着它。
+计划新增的读者数据：
 
 ```sql
-users (id, email unique null, github_id unique null, display_name, created_at)
-sessions (token_hash primary key, user_id -> users on delete cascade, created_at, expires_at)
-login_codes (email primary key, code_hash, expires_at, attempts)
-subscriptions (user_id -> users on delete cascade, blog_id -> blogs on delete cascade, created_at,
+users (id, oidc_issuer, oidc_subject, display_name, created_at,
+       unique (oidc_issuer, oidc_subject))
+sessions (token_hash primary key, user_id -> users on delete cascade,
+          created_at, expires_at)
+subscriptions (user_id -> users on delete cascade,
+               blog_id -> blogs on delete cascade, created_at,
                primary key (user_id, blog_id))
-entries.tags text[]            -- 标签表里的英文短名，GIN 索引
-entries.tagged_at timestamptz  -- 为空表示还没打
-blogs.default_tags text[]      -- 维护者设的默认标签，给模型当提示
 ```
 
-- "清空 `entries` 不丢任何数据"照旧成立：订阅指向博客，不指向文章；标签清空后重打。
-- 过期的会话和验证码由每日维护任务清掉。
-- 订阅流的查询：用 `subscriptions` 过滤 `entries`，按 `(published_at, id)` 游标分页，复用现有索引，另加 `subscriptions (user_id)` 索引。
+不建 `login_codes`、密码表或 GitHub 凭据表。`users` 是 Explore 的本地资料记录，身份真相源在身份服务。`entries.tags` 和 `blogs.default_tags` 已实现。清空 `entries` 不丢订阅；订阅流用 `subscriptions` 过滤文章并复用游标分页。
 
----
-
-## 7. 接口
+## 6. 接口与前端
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/v1/auth/email/start` | 发送验证码；邮箱存在与否都返回 `202` |
-| POST | `/api/v1/auth/email/verify` | 校验验证码，返回会话 |
-| GET | `/api/v1/auth/github/start`、`/api/v1/auth/github/callback` | GitHub 登录 |
-| POST | `/api/v1/auth/logout` | 退出 |
-| GET、PATCH、DELETE | `/api/v1/me` | 账号信息、改昵称、删除账号 |
+| GET | `/api/v1/auth/login` | 发起 OIDC 登录，回跳路径只允许本站相对路径 |
+| GET | `/api/v1/auth/callback` | OIDC 回调，建立 Explore 会话 |
+| POST | `/api/v1/auth/logout` | 删除 Explore 会话 |
+| GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除本站数据 |
 | GET | `/api/v1/me/entries` | 订阅流 |
-| GET | `/api/v1/me/subscriptions` | 订阅列表；`.opml` 后缀导出 |
-| PUT、DELETE | `/api/v1/me/subscriptions/{host}` | 订阅、取消 |
-| POST | `/api/v1/me/subscriptions/import` | 导入 OPML |
-| GET | `/api/v1/tags` | 标签表 |
+| GET | `/api/v1/me/subscriptions` | 订阅列表与 OPML 导出 |
+| PUT、DELETE | `/api/v1/me/subscriptions/{host}` | 订阅和取消 |
+| POST | `/api/v1/me/subscriptions/import` | OPML 导入 |
 
-另外，`/api/v1/entries` 增加 `tag` 参数，每篇文章的返回里带上 `tags`。
+`/login` 只是跳转入口，不展示站内验证码表单；另有 `/following`、`/settings` 与英文页面。页头按本站会话显示登录或账号菜单。匿名页面可公开缓存，个人页面一律 `private, no-store`。
 
----
+## 7. 部署与待定
 
-## 8. 前端
+统一身份服务单独部署，提供稳定的 HTTPS issuer。Explore 配置 `EXPLORE_OIDC_ISSUER`、`EXPLORE_OIDC_CLIENT_ID`、`EXPLORE_OIDC_CLIENT_SECRET`；密钥只放服务端。每个环境使用独立客户端和准确的回调白名单。生产身份服务需要数据库备份、邮件渠道、TLS 和管理员初始化。
 
-- 新页面：`/login`（邮箱、验证码两步表单，加一个 GitHub 按钮）、`/following`、`/settings`，英文界面在 `/en/` 下一一对应。
-- 页头：推荐、订阅、博客、提交、关于；右边是"登录"或账号菜单（用 `<details>`，不用 JavaScript）。
-- 文章条目下已显示标签，点标签会打开首页的筛选结果；首页的标签筛选与博客语言筛选可组合，标签表在前端进程里缓存一小时。
-- 所有交互都是普通表单，"除主题切换外没有 JavaScript"的规则不变。
-- **缓存**：没有会话 Cookie 的请求，页面对所有人相同、可以缓存、零 Cookie，和现在完全一样；带会话的请求返回个人化页面（页头、订阅按钮的状态），加 `Cache-Control: private, no-store`。反向代理遇到这个 Cookie 就不走缓存。搜索引擎不登录，看到的永远是公开版本。
-- CSP 不变。表单照旧由 Astro 的 `checkOrigin` 挡住跨站提交，会话 Cookie 再加 `SameSite=Lax`。
+第一条端到端链路是身份服务 → Explore 登录与订阅；第二条是身份服务 → 统一评论服务 → 通用博客嵌入组件。二者使用同一身份服务，数据与 Cookie 分开。外部博客只有主动嵌入组件或接入兼容适配器，才有统一评论登录体验。
 
----
-
-## 9. 隐私说明
-
-- 关于页的"隐私"一节改写：存了什么（邮箱或 GitHub 编号、昵称、订阅）、为什么存、怎么删；
-- `/bot` 页已说明打标签会把标题、短摘要、分类和博客语言发给模型服务（§5.3）；
-- 另加一页简短的隐私政策 `[待定]`。
-
----
-
-## 10. 部署与配置
-
-- 已有打标签配置：`EXPLORE_TAGGER_MODEL`、`EXPLORE_ANTHROPIC_API_KEY`、可选的 `EXPLORE_TAGGER_EFFORT`，见 [project-layout.md §4](project-layout.md#4-配置)。账号与订阅还需 `EXPLORE_SMTP_URL`、`EXPLORE_MAIL_FROM`、`EXPLORE_GITHUB_CLIENT_ID`、`EXPLORE_GITHUB_CLIENT_SECRET`；
-- 反向代理：带 `explore_session` Cookie 的请求不走缓存；
-- 备份：账号、会话、订阅纳入备份，`entries` 照旧排除。
-
----
-
-## 11. 分期
-
-都在 E2 里做完，然后一起上线：
-
-1. **标签**：标签表、打标签循环、`tag` 筛选已实现；上线前仍需实测模型准确率和费用；
-2. **账号**：邮箱验证码、GitHub、会话、设置页、删除与导出；
-3. **订阅**：订阅按钮、订阅管理、OPML 导入导出、`/following`。
-
----
-
-## 12. 待定
-
-1. 打标签用哪个模型（§5.3），实测后定；
-2. 用哪家邮件服务（§2.2）；
-3. 每人的订阅上限、是否展示订阅人数（§3）；
-4. 标签要不要可收录的落地页（§5.4）；
-5. 隐私政策页的写法（§9）。
+待定：身份和评论服务的最终域名与部署地；全局账号删除后历史评论的处理；订阅上限与是否展示人数；标签落地页与隐私政策文字。
