@@ -39,24 +39,37 @@ if (data?.page.next_cursor) {
         {data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.blogs.empty}</p>
         ) : (
-          <ul class="mt-4 divide-y">
+          <ul class="mt-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3">
             {data.page.data.map((b) => (
-              <li class="flex items-start gap-3 py-4" lang={b.language}>
-                <BlogAvatar host={b.host} name={b.name} size="lg" />
-                <div class="min-w-0 flex-1">
-                  <a href={localePath(lang, `/blogs/${b.host}`)} class="font-medium hover:underline">
-                    {b.name}
-                  </a>
-                  <p class="truncate text-sm text-muted-foreground">{b.host}</p>
-                  {b.description && <p class="mt-1 line-clamp-2 text-sm text-muted-foreground">{b.description}</p>}
+              <li
+                class="group relative flex flex-col justify-between rounded-lg border bg-card p-3.5 text-card-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30"
+                lang={b.language}
+              >
+                <div>
+                  <div class="flex items-start gap-3">
+                    <BlogAvatar host={b.host} name={b.name} size="lg" />
+                    <div class="min-w-0 flex-1">
+                      <a href={localePath(lang, `/blogs/${b.host}`)} class="font-medium hover:underline focus:outline-none">
+                        <span class="absolute inset-0" aria-hidden="true" />
+                        <span class="line-clamp-1">{b.name}</span>
+                      </a>
+                      <p class="truncate text-xs text-muted-foreground">{b.host}</p>
+                    </div>
+                  </div>
+                  {b.description && (
+                    <p class="mt-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {b.description}
+                    </p>
+                  )}
                 </div>
-                <span class="shrink-0 text-xs text-muted-foreground" lang={t.htmlLang}>
+                <div class="mt-3 flex items-center justify-between border-t pt-2 text-[0.7rem] text-muted-foreground" lang={t.htmlLang}>
+                  <span>{t.blogs.latest}</span>
                   {b.last_published_at ? (
                     <time datetime={b.last_published_at}>{relativeTime(b.last_published_at, lang)}</time>
                   ) : (
-                    t.blogs.noDated
+                    <span>{t.blogs.noDated}</span>
                   )}
-                </span>
+                </div>
               </li>
             ))}
           </ul>
