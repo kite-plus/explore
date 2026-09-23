@@ -19,7 +19,7 @@ explore/
 │   ├── normalize/      links, identity, dates, excerpts, snapshot
 │   ├── fetch/          polite HTTP client, SSRF guard, robots.txt
 │   ├── check/          feed discovery and source checks
-│   ├── store/          PostgreSQL access; queries/ in, sqlc code out
+│   ├── store/          PostgreSQL queries and transactions (pgx)
 │   ├── worker/         scheduling, snapshot sync, daily maintenance
 │   ├── publicfeed/     /feed.xml and /blogs.opml
 │   └── api/            Gin router, handlers, middleware
@@ -31,14 +31,13 @@ explore/
 ├── deploy/             Dockerfile, docker-compose.yaml
 ├── docs/design/
 ├── .golangci.yml       same linters as Kite
-├── sqlc.yaml
 ├── Makefile
 └── go.mod              module github.com/kite-plus/explore
 ```
 
 - 前端在 E2 开工时放进 `web/`，结构见 [frontend.md §9](frontend.md#9-目录)，现在不建目录。
 - `api/openapi.yaml` 在 E1 接口定稿后加入（[api.md §7](api.md#7-与前端的约定)）。
-- `store` 的 SQL 写在 `internal/store/queries/`，`sqlc` 生成的代码放在 `internal/store/sqlc/` 并提交进仓库。
+- `store` 的 SQL 直接写在 Go 代码里，用 pgx 执行，没有代码生成步骤（§5）。
 
 ---
 
@@ -117,7 +116,7 @@ printf %s "$TOKEN" | shasum -a 256
 | Go | 与 Kite 相同：`go 1.26.4`，`toolchain go1.26.8`。工具链固定到补丁版本，理由见 Kite 的 `go.mod` 注释 |
 | Web 框架 | `github.com/gin-gonic/gin` |
 | 数据库驱动 | `github.com/jackc/pgx/v5` |
-| 查询代码 | `sqlc`：查询里有窗口函数、`SKIP LOCKED` 和批量 upsert，手写 SQL 加生成类型比 ORM 直接 |
+| SQL | 手写，用 pgx 执行。查询里有窗口函数、`SKIP LOCKED` 和批量 upsert，直接写 SQL 比 ORM 清楚。不用 sqlc：它的 PostgreSQL 解析器要 cgo 构建，每台开发机和 CI 都得另装；而查询只有二十来条，每条都有集成测试 |
 | 迁移 | `github.com/pressly/goose/v3`，SQL 文件嵌入二进制 |
 | 命令行 | `github.com/spf13/cobra`，与 Kite 一致 |
 | 订阅源解析 | `github.com/mmcdole/gofeed` |
@@ -167,9 +166,7 @@ printf %s "$TOKEN" | shasum -a 256
 | `fmt`、`vet`、`lint` | 格式、静态检查、golangci-lint |
 | `check-imports` | 运行 `scripts/check-imports.sh`（§2.2） |
 | `check-tidy` | `go.mod` 是否整洁 |
-| `generate` | 运行 `sqlc generate` |
-| `check-generate` | 生成的代码是否与 SQL 一致 |
-| `check` | `fmt vet check-imports check-tidy check-generate lint test`，提交前必跑 |
+| `check` | `fmt vet check-imports check-tidy lint test`，提交前必跑 |
 | `db-up`、`db-down` | 启动或停止本地开发用的 PostgreSQL |
 | `migrate` | 对本地数据库执行 `explore migrate up` |
 | `docker` | 构建镜像 |
@@ -229,7 +226,7 @@ CI 用 GitHub Actions 运行 `make check`，附带一个 PostgreSQL 服务容器
 
 **E1 后端**
 
-6. `migrations/00001_init.sql`（[data-model.md §2](data-model.md#2-表结构-设计中)）、`sqlc.yaml`、`store`，以及 schema 列清单测试。
+6. `migrations/00001_init.sql`（[data-model.md §2](data-model.md#2-表结构-设计中)）、`store`，以及 schema 列清单测试。
 7. `worker`：领取、同步事务、退避、每日维护，以及清空恢复测试。
 8. `publicfeed`、`api`：公开接口、提交、管理、`/feed.xml`、OPML。
 9. `deploy/`：Dockerfile、docker-compose.yaml；CI。

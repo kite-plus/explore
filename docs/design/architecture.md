@@ -345,7 +345,7 @@ Gin 提供 `/api/v1` 下的公开接口（首页时间流、博客目录、博�
 | 后端 | Go + Gin | 已定 |
 | 数据库 | PostgreSQL 16+ | 已定 |
 | 前端 | 前后端分离；Astro 服务端渲染，Tailwind CSS v4 + shadcn/ui，交互组件用 React（[frontend.md](frontend.md)） | 已定 |
-| 数据访问 | `pgx` + `sqlc`：查询里有窗口函数、`SKIP LOCKED` 和批量 upsert，手写 SQL 比 ORM 直接 | `[设计中]` |
+| 数据访问 | `pgx`，SQL 手写在 `internal/store` 里：查询里有窗口函数、`SKIP LOCKED` 和批量 upsert，直接写 SQL 比 ORM 清楚，每条查询都有集成测试 | `[设计中]` |
 | 数据库迁移 | `goose`，SQL 文件嵌入二进制 | `[设计中]` |
 | 订阅源解析 | `gofeed`，覆盖 RSS、Atom、JSON Feed | `[设计中]`，E0 用真实订阅源验证 |
 | 摘要清理 | `bluemonday` 去掉全部 HTML | `[设计中]` |

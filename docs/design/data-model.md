@@ -269,5 +269,5 @@ pg_dump --exclude-table-data=entries "$EXPLORE_DATABASE_URL" > explore.sql
 
 - 工具用 `goose` `[设计中]`：SQL 文件放在 `migrations/`，命名为 `00001_init.sql` 这样的递增序号，通过 `embed` 打进二进制，由 `explore migrate up` 执行。
 - 生产环境只向前迁移。`-- +goose Down` 段可以留空，回滚靠新的迁移。
-- `sqlc` 直接读取 `migrations/` 作为 schema 来源，生成类型安全的查询代码（[project-layout.md §5](project-layout.md#5-技术选型与版本)）。
+- 查询手写在 `internal/store` 里，用 pgx 执行，没有代码生成步骤。每条查询都由集成测试在真实的 PostgreSQL 上验证（[project-layout.md §7](project-layout.md#7-测试)）。
 - 改表结构的迁移与本文同一个 PR 提交；与本文冲突时，先改文档。
