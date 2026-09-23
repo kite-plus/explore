@@ -35,7 +35,10 @@ type route struct {
 func newSite(t *testing.T) *site {
 	s := &site{t: t, routes: map[string]route{}}
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rt, ok := s.routes[r.URL.Path]
+		rt, ok := s.routes[r.URL.RequestURI()]
+		if !ok {
+			rt, ok = s.routes[r.URL.Path]
+		}
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -278,6 +281,48 @@ func TestSiteMoved(t *testing.T) {
 	}
 	if _, ok := m[model.ProblemLinksOffDomain]; ok {
 		t.Errorf("the configuration is right; only the address is old: %+v", r.Problems)
+	}
+}
+
+func TestMetaRefreshToALanguage(t *testing.T) {
+	// A multilingual Hugo site: the root only refreshes to /zh/, whose page
+	// links the feed.
+	s := newSite(t)
+	s.serve("/", `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/zh/"></head></html>`)
+	s.serve("/zh/", s.page("Hugo 0.157.0", "/zh/index.xml"))
+	s.fixture("/zh/index.xml", "hugo/posts-index.xml", "https://hugo.example.com")
+
+	r := s.check(Input{SiteURL: s.srv.URL})
+	if !r.Passed || r.FeedURL != s.srv.URL+"/zh/index.xml" || r.DiscoveredBy != "autodiscovery" || r.Generator != model.GeneratorHugo {
+		t.Fatalf("report = %+v", r)
+	}
+}
+
+func TestWordPressPlainPermalinks(t *testing.T) {
+	// Without pretty permalinks /feed/ is missing, and a theme may not link
+	// the feed from the page.
+	s := newSite(t)
+	s.serve("/", s.page("WordPress 7.1.2"))
+	s.fixture("/?feed=rss2", "wordpress/feed.xml", "https://wp.example.com")
+
+	r := s.check(Input{SiteURL: s.srv.URL})
+	if r.FeedURL != s.srv.URL+"/?feed=rss2" || r.DiscoveredBy != "candidate" || r.Generator != model.GeneratorWordPress {
+		t.Fatalf("report = %+v", r)
+	}
+}
+
+func TestRefreshTarget(t *testing.T) {
+	for content, want := range map[string]string{
+		"0; url=/zh/":                "/zh/",
+		"0;URL='https://a.example/'": "https://a.example/",
+		`5; url="/en/"`:              "/en/",
+		"0; https://b.example/":      "https://b.example/",
+		"300":                        "",
+		"0; url=":                    "",
+	} {
+		if got := refreshTarget(content); got != want {
+			t.Errorf("refreshTarget(%q) = %q, want %q", content, got, want)
+		}
 	}
 }
 

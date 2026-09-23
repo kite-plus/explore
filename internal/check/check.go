@@ -133,6 +133,20 @@ func (c *Checker) discover(ctx context.Context, site *url.URL) (*located, string
 		base = site
 	}
 	pg := readPage(resp.Body, base)
+	// A multilingual Hugo site sends its home page on to one language with a
+	// meta refresh; the feed links are on that page.
+	if len(pg.feeds) == 0 && pg.refresh != "" && pg.refresh != resp.URL {
+		next, err := c.Fetch.Get(ctx, fetch.Request{URL: pg.refresh, Accept: fetch.AcceptHTML, MaxBytes: policy.MaxHTMLBytes})
+		if err == nil && next.Status >= 200 && next.Status <= 299 {
+			if nb, err := url.Parse(next.URL); err == nil {
+				generator := pg.generator
+				resp, base, pg = next, nb, readPage(next.Body, nb)
+				if pg.generator == "" {
+					pg.generator = generator
+				}
+			}
+		}
+	}
 	home := resp.URL
 	tried := make(map[string]bool)
 	var first *model.Problem

@@ -13,6 +13,7 @@ import (
 // tried when a page advertises no feed. See docs/design/worker.md 6.1.
 var candidatePaths = []string{
 	"/feed/",           // WordPress, Typecho with URL rewriting
+	"/?feed=rss2",      // WordPress with plain permalinks
 	"/rss.xml",         // Halo, Kite
 	"/atom.xml",        // Hexo
 	"/index.xml",       // Hugo
@@ -31,6 +32,7 @@ var feedTypes = map[string]bool{
 type page struct {
 	feeds     []string // alternate feed links, absolute, in page order
 	generator string   // content of <meta name="generator">
+	refresh   string   // absolute target of <meta http-equiv="refresh">
 }
 
 // readPage extracts feed links and the generator from HTML. Only the head
@@ -64,12 +66,33 @@ func readPage(body []byte, base *url.URL) page {
 			if strings.EqualFold(attrs["name"], "generator") && p.generator == "" {
 				p.generator = strings.TrimSpace(attrs["content"])
 			}
+			if strings.EqualFold(strings.TrimSpace(attrs["http-equiv"]), "refresh") && p.refresh == "" {
+				if target := refreshTarget(attrs["content"]); target != "" {
+					if u, err := base.Parse(target); err == nil {
+						p.refresh = u.String()
+					}
+				}
+			}
 		case atom.Body:
 			if len(p.feeds) > 0 && p.generator != "" {
 				return p
 			}
 		}
 	}
+}
+
+// refreshTarget reads the address from a refresh value such as
+// "0; url=/zh/", in which the url= label and the quotes are optional.
+func refreshTarget(content string) string {
+	_, after, ok := strings.Cut(content, ";")
+	if !ok {
+		return ""
+	}
+	target := strings.TrimSpace(after)
+	if len(target) >= 4 && strings.EqualFold(target[:4], "url=") {
+		target = strings.TrimSpace(target[4:])
+	}
+	return strings.Trim(target, `"' `)
 }
 
 func attributes(z *html.Tokenizer) map[string]string {
