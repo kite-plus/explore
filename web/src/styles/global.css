@@ -99,6 +99,14 @@
     display: inline-flex;
   }
 
+  /* The arrow after a link that opens in a new tab (ExternalLink.astro). */
+  .external-mark {
+    display: inline-block;
+    margin-inline-start: 0.2em;
+    font-size: 0.85em;
+    opacity: 0.6;
+  }
+
   /* Long-form pages written in Markdown. */
   .prose-explore {
     @apply text-[0.95rem] leading-7;

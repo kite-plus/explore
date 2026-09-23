@@ -1,0 +1,23 @@
+---
+import { dict, type Lang } from "@/i18n";
+
+interface Props {
+  /** The content's language; without one, each link's own text decides. */
+  lang?: Lang;
+}
+
+// Rendered Markdown cannot use ExternalLink.astro, so its links that leave
+// Explore get the same markup here: a new tab, the arrow and the hidden hint.
+// The content is ours, and its renderer writes links as <a href="...">.
+const { lang } = Astro.props;
+const html = await Astro.slots.render("default");
+const marked = html.replace(/<a href="(https?:\/\/[^"]*)">([\s\S]*?)<\/a>/g, (_, href: string, inner: string) => {
+  const t = dict(lang ?? (/\p{Script=Han}/u.test(inner) ? "zh" : "en"));
+  return (
+    `<a href="${href}" target="_blank" rel="noopener">${inner}<span aria-hidden="true" class="external-mark">↗</span>` +
+    `<span class="sr-only" lang="${t.htmlLang}">${t.newTab}</span></a>`
+  );
+});
+---
+
+<Fragment set:html={marked} />

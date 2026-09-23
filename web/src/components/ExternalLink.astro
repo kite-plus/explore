@@ -1,0 +1,18 @@
+---
+import { dict, type Lang } from "@/i18n";
+
+interface Props {
+  lang: Lang;
+  href: string;
+  class?: string;
+}
+
+// A link that leaves Explore opens in a new tab and says so without a
+// tooltip or dialog: an arrow for the eye, hidden text for screen readers.
+// The referrer is kept, so authors still see visits from Explore
+// (docs/design/architecture.md 6.3).
+const { lang, href, class: className } = Astro.props;
+const t = dict(lang);
+---
+
+<a href={href} target="_blank" rel="noopener" class={className}><slot /><span aria-hidden="true" class="external-mark">↗</span><span class="sr-only" lang={t.htmlLang}>{t.newTab}</span></a>

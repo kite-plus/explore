@@ -1,11 +1,13 @@
 ---
+import ExternalLink from "@/components/ExternalLink.astro";
 import { dict, type Lang } from "@/i18n";
 
 interface Props {
   lang: Lang;
 }
 
-const t = dict(Astro.props.lang).footer;
+const { lang } = Astro.props;
+const t = dict(lang).footer;
 ---
 
 <footer class="border-t">
@@ -15,7 +17,7 @@ const t = dict(Astro.props.lang).footer;
       <a href="/feed.xml" class="hover:text-foreground">{t.feed}</a>
       <a href="/blogs.opml" class="hover:text-foreground">{t.opml}</a>
       <a href="/bot" class="hover:text-foreground">{t.bot}</a>
-      <a href="https://github.com/kite-plus/explore" class="hover:text-foreground">{t.source}</a>
+      <ExternalLink lang={lang} href="https://github.com/kite-plus/explore" class="hover:text-foreground">{t.source}</ExternalLink>
     </nav>
   </div>
 </footer>

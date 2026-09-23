@@ -80,6 +80,15 @@ describe("no JavaScript but the theme script, zero third parties", () => {
           assert.ok(url.startsWith(PUBLIC), `external resource ${url} on ${path}`);
         }
       }
+      // Links that leave Explore open in a new tab; links within it do not.
+      for (const [tag, url] of html.matchAll(/<a\b[^>]*\shref="([^"]+)"[^>]*>/gi)) {
+        if (/^https?:\/\//.test(url) && !url.startsWith(PUBLIC)) {
+          assert.match(tag, /\starget="_blank"/, `${url} on ${path} opens in this tab`);
+          assert.match(tag, /\srel="noopener"/, `${url} on ${path} lacks rel=noopener`);
+        } else {
+          assert.doesNotMatch(tag, /\starget=/, `${url} on ${path} leaves this tab`);
+        }
+      }
     });
   }
 });
@@ -134,13 +143,26 @@ describe("content", () => {
     const { html } = await page("/en/");
     assert.match(html, /<article class="[^"]*" lang="zh-CN">/);
     assert.match(html, /<article class="[^"]*" lang="en">/);
-    assert.match(html, /href="https:\/\/zh\.example\.com\/posts\/cache\/"/);
+    assert.match(html, /<a href="https:\/\/zh\.example\.com\/posts\/cache\/" target="_blank" rel="noopener"/);
     assert.match(html, /缓存可以随时删掉/, "titles are never translated");
   });
 
   test("the older posts link carries the cursor", async () => {
     const { html } = await page("/?lang=");
     assert.match(html, /href="\/\?cursor=page-two"/);
+  });
+
+  test("links that open a new tab say so, in the page's language", async () => {
+    const mark = '<span aria-hidden="true" class="external-mark">↗</span>';
+    const zh = (await page("/")).html;
+    const en = (await page("/en/")).html;
+    assert.ok(zh.includes(`${mark}<span class="sr-only" lang="zh-CN">（在新标签页打开）</span></a>`));
+    assert.ok(en.includes(`${mark}<span class="sr-only" lang="en"> (opens in a new tab)</span></a>`));
+    assert.match(zh, /会在新标签页打开/, "the stream says so once, up front");
+    // The crawler page has both languages; each link follows its own text.
+    const bot = (await page("/bot")).html;
+    assert.ok(bot.includes(`提交一个 Issue${mark}<span class="sr-only" lang="zh-CN">（在新标签页打开）</span></a>`));
+    assert.ok(bot.includes(`open an issue${mark}<span class="sr-only" lang="en"> (opens in a new tab)</span></a>`));
   });
 
   test("the theme toggle speaks the page's language", async () => {

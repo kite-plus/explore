@@ -11,11 +11,12 @@ export const en: Dict = {
   },
   nav: { home: "Latest", blogs: "Blogs", submit: "Submit a blog", about: "About" },
   theme: { dark: "Dark mode" },
+  newTab: " (opens in a new tab)",
   filter: { label: "Blog language", all: "All", zh: "Chinese", en: "English" },
   home: {
     title: "New posts from independent blogs",
     heading: "Latest posts",
-    intro: "From the public feeds of listed blogs, newest first. Click a title to read it on the author's site.",
+    intro: "From the public feeds of listed blogs, newest first. Click a title to read the post on the author's site, in a new tab.",
     empty: "No posts yet.",
     older: "Older posts",
   },

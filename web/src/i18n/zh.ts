@@ -9,11 +9,12 @@ export const zh = {
   },
   nav: { home: "最新", blogs: "博客", submit: "提交博客", about: "关于" },
   theme: { dark: "深色模式" },
+  newTab: "（在新标签页打开）",
   filter: { label: "博客语言", all: "全部", zh: "中文", en: "英文" },
   home: {
     title: "独立博客的最新文章",
     heading: "最新文章",
-    intro: "来自已收录博客的公开订阅源，按发布时间排列。点击标题，在作者的网站上阅读。",
+    intro: "来自已收录博客的公开订阅源，按发布时间排列。点击标题，会在新标签页打开作者的网站阅读原文。",
     empty: "暂时还没有文章。",
     older: "更早的文章",
   },

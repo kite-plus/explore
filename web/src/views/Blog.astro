@@ -1,9 +1,10 @@
 ---
 import BlogAvatar from "@/components/BlogAvatar.astro";
 import EntryItem from "@/components/EntryItem.astro";
+import ExternalLink from "@/components/ExternalLink.astro";
 import Message from "@/components/Message.astro";
 import { Badge } from "@/components/ui/badge";
-import { ButtonLink } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { dict, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import type { Loaded } from "@/lib/loaders";
@@ -39,12 +40,12 @@ const description = data
           </div>
         </header>
         <div class="mt-4 flex flex-wrap items-center gap-2">
-          <ButtonLink href={data.blog.site_url} size="sm">
+          <ExternalLink lang={lang} href={data.blog.site_url} class={buttonVariants({ size: "sm" })}>
             {t.blog.visit}
-          </ButtonLink>
-          <ButtonLink href={data.blog.feed_url} size="sm" variant="outline">
+          </ExternalLink>
+          <ExternalLink lang={lang} href={data.blog.feed_url} class={buttonVariants({ size: "sm", variant: "outline" })}>
             {t.blog.feed}
-          </ButtonLink>
+          </ExternalLink>
           {data.blog.generator && data.blog.generator !== "unknown" && data.blog.generator !== "other" && (
             <Badge variant="outline" title={t.blog.system}>
               {data.blog.generator}
