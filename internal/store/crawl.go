@@ -118,6 +118,9 @@ func (s *Store) SyncSnapshot(ctx context.Context, blogID int64, entries []model.
 			    published_at = excluded.published_at,
 			    date_trusted = excluded.date_trusted,
 			    categories   = excluded.categories,
+			    link_status = CASE WHEN entries.url = excluded.url THEN entries.link_status ELSE 'unknown' END,
+			    link_checked_at = CASE WHEN entries.url = excluded.url THEN entries.link_checked_at END,
+			    link_next_check_at = CASE WHEN entries.url = excluded.url THEN entries.link_next_check_at ELSE now() END,
 			    -- Tags belong to the title they were given for; a new title
 			    -- is tagged again.
 			    tags         = CASE WHEN entries.title = excluded.title THEN entries.tags ELSE '{}' END,

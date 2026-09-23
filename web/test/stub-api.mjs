@@ -11,13 +11,13 @@ const enBlog = { host: "en.example.com", name: "English Blog", description: "Not
 const entries = {
   first: {
     data: [
-      { id: "2", title: "缓存可以随时删掉", url: "https://zh.example.com/posts/cache/", excerpt: "第一段摘要。", image_url: "/api/v1/entries/2/image", published_at: iso(1), tags: ["backend", "ops"], blog: zhBlog },
-      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/", excerpt: null, image_url: null, published_at: iso(30), tags: [], blog: enBlog },
+      { id: "2", title: "缓存可以随时删掉", url: "https://zh.example.com/posts/cache/", excerpt: "第一段摘要。", image_url: "/api/v1/entries/2/image", published_at: iso(1), link_status: "available", link_checked_at: iso(2), tags: ["backend", "ops"], blog: zhBlog },
+      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/", excerpt: null, image_url: null, published_at: iso(30), link_status: "unavailable", link_checked_at: iso(3), tags: [], blog: enBlog },
     ],
     next_cursor: "page-two",
   },
   second: {
-    data: [{ id: "0", title: "Older post", url: "https://en.example.com/older/", excerpt: "Old.", image_url: null, published_at: iso(200), tags: ["life"], blog: enBlog }],
+    data: [{ id: "3", title: "Older post", url: "https://en.example.com/older/", excerpt: "Old.", image_url: null, published_at: iso(200), link_status: "unknown", link_checked_at: null, tags: ["life"], blog: enBlog }],
     next_cursor: null,
   },
 };
@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], tagLists: 0 };
+  const state = { down: false, submits: [], tagLists: 0, linkChecks: 0 };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -58,6 +58,14 @@ export function startStub() {
     const error = (status, code, extra = {}) => send(status, { error: { code, message: code }, ...extra });
 
     if (state.down) return error(500, "internal");
+
+    if (url.pathname === "/api/v1/entries/3/check" && req.method === "POST") {
+      state.linkChecks++;
+      return send(200, { link_status: "available", link_checked_at: new Date().toISOString(), checking: false });
+    }
+    if (url.pathname === "/api/v1/entries/3/check" && req.method === "GET") {
+      return send(200, { link_status: state.linkChecks ? "available" : "unknown", link_checked_at: state.linkChecks ? new Date().toISOString() : null, checking: false });
+    }
 
     if (req.method === "GET" && url.pathname === "/api/v1/entries/2/image") {
       res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=60" });
@@ -88,7 +96,7 @@ export function startStub() {
       const host = decodeURIComponent(url.pathname.slice("/api/v1/blogs/".length));
       const b = blogs.find((x) => x.host === host);
       if (!b) return error(404, "not_found");
-      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }, { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, image_url: null, published_at: null, tags: [] }] });
+      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }, { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, image_url: null, published_at: null, link_status: "unknown", link_checked_at: null, tags: [] }] });
     }
     if (req.method === "GET" && url.pathname === `/api/v1/submissions/${submission.id}`) {
       const localized = structuredClone(submission);

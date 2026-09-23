@@ -42,6 +42,8 @@
       "excerpt": "First paragraph of the post, cut to 140 characters…",
       "image_url": "/api/v1/entries/8412/image",
       "published_at": "2026-09-20T02:00:00Z",
+      "link_status": "available",
+      "link_checked_at": "2026-09-23T02:00:00Z",
       "tags": ["backend", "ops"],
       "blog": {
         "host": "blog.example.com",
@@ -56,6 +58,12 @@
 ```
 
 作者关闭摘要时，`excerpt` 和 `image_url` 都为 `null`；订阅源没有可用图片时，`image_url` 也为 `null`。`image_url` 是本站图片接口，不暴露源站图片地址。`tags` 是 Explore 打的标签，最合适的在前；还没打或没有合适的标签时是空数组（[accounts.md §5](accounts.md#5-文章标签)）。博客页（§2.3）的文章也带这些字段。`url` 是订阅源里的原始链接，前端必须原样输出，不能改写成跳转地址（[architecture.md §6.3](architecture.md#6-抓取与展示规则)）。
+
+`link_status` 是定时检查原文链接的结果：`available` 表示返回成功，`unavailable` 表示返回 404 或 410，`unknown` 表示尚未检查或检查未能确认。`link_checked_at` 是最近一次检查时间，未检查时为 `null`。源站可能针对抓取器返回与读者不同的结果，所以前端将 `unavailable` 表述为“疑似失效”，仍保留原文链接。
+
+### 2.1.3 `POST /api/v1/entries/{id}/check` 与 `GET /api/v1/entries/{id}/check`
+
+读者点击“待检测”时，`POST` 立即检查这篇尚未检测的可见文章；如果后台或其他读者已经认领，返回 `202`，前端用 `GET` 轮询结果。检查完成或此前已检查时返回 `200`。两者都返回 `{"link_status":"available","link_checked_at":"...","checking":false}`，检查中 `checking` 为 `true`、时间为 `null`。响应一律 `no-store`，不存在或不可见的文章返回 `404`。探测沿用定时任务的 robots.txt、公网地址、重定向和 10 秒超时规则；同一篇文章的租约阻止并发重复检查。`POST` 按客户端地址限每小时 10 次，同时最多执行 4 次；超出返回 `429`。
 
 ### 2.1.1 `GET /api/v1/tags`
 

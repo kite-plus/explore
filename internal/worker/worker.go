@@ -17,6 +17,7 @@ import (
 
 	"github.com/kite-plus/explore/internal/feed"
 	"github.com/kite-plus/explore/internal/fetch"
+	"github.com/kite-plus/explore/internal/model"
 	"github.com/kite-plus/explore/internal/normalize"
 	"github.com/kite-plus/explore/internal/policy"
 	"github.com/kite-plus/explore/internal/store"
@@ -48,6 +49,7 @@ type Worker struct {
 	Rand        func() float64
 
 	lastMaintenance time.Time
+	lastLinkCheck   time.Time
 	tagFailures     int
 	nextTagAt       time.Time
 }
@@ -76,12 +78,62 @@ func (w *Worker) Run(ctx context.Context) error {
 				break
 			}
 		}
+		w.checkLinks(ctx)
 		w.maintain(ctx)
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
 		}
+	}
+}
+
+func (w *Worker) checkLinks(ctx context.Context) {
+	now := w.now()
+	if !w.lastLinkCheck.IsZero() && now.Sub(w.lastLinkCheck) < time.Minute {
+		return
+	}
+	w.lastLinkCheck = now
+	w.LinkOnce(ctx)
+}
+
+func (w *Worker) LinkOnce(ctx context.Context) int {
+	jobs, err := w.Store.ClaimLinks(ctx, policy.LinkChecksPerMinute)
+	if err != nil {
+		if ctx.Err() == nil {
+			w.log().Error("claiming article links failed", "error", err)
+		}
+		return 0
+	}
+	var wg sync.WaitGroup
+	for _, job := range jobs {
+		wg.Go(func() {
+			code, err := w.Fetch.Probe(ctx, job.URL)
+			status := linkStatus(code)
+			interval := policy.LinkCheckInterval
+			if status == model.LinkUnknown {
+				interval = policy.LinkRetryInterval
+			}
+			if err := w.Store.RecordLinkStatus(ctx, job, status, interval); err != nil && ctx.Err() == nil {
+				w.log().Error("recording article link status failed", "entry", job.EntryID, "error", err)
+			}
+			if err != nil && ctx.Err() == nil {
+				w.log().Warn("article link check was inconclusive", "entry", job.EntryID, "error", err)
+			}
+		})
+	}
+	wg.Wait()
+	return len(jobs)
+}
+
+func linkStatus(code int) model.LinkStatus {
+	switch {
+	case code >= 200 && code < 300:
+		return model.LinkAvailable
+	case code == http.StatusNotFound || code == http.StatusGone:
+		return model.LinkUnavailable
+	default:
+		return model.LinkUnknown
 	}
 }
 

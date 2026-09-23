@@ -103,6 +103,10 @@ CREATE TABLE entries (
     categories    text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(categories) <= 10),
     tags          text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(tags) <= 3),
     tagged_at     timestamptz,
+    link_status   text        NOT NULL DEFAULT 'unknown'
+                              CHECK (link_status IN ('unknown', 'available', 'unavailable')),
+    link_checked_at timestamptz,
+    link_next_check_at timestamptz NOT NULL DEFAULT now(),
 
     UNIQUE (blog_id, identity),
     CHECK (published_at IS NOT NULL OR NOT date_trusted)
@@ -112,6 +116,7 @@ CREATE INDEX entries_stream   ON entries (published_at DESC, id DESC) WHERE date
 CREATE INDEX entries_by_blog  ON entries (blog_id, published_at DESC NULLS LAST);
 CREATE INDEX entries_tags     ON entries USING gin (tags);
 CREATE INDEX entries_untagged ON entries (published_at DESC NULLS LAST, id DESC) WHERE tagged_at IS NULL;
+CREATE INDEX entries_link_due ON entries (link_next_check_at, id);
 ```
 
 - **没有正文字段**，`excerpt` 在数据库层面限制在 140 字以内：不是"约定不存"，而是"存不进去"。140 是 [architecture.md §6.5](architecture.md#6-抓取与展示规则) 的 `[待定]` 值，E0 改动它需要一个迁移。
@@ -121,6 +126,7 @@ CREATE INDEX entries_untagged ON entries (published_at DESC NULLS LAST, id DESC)
 - 每个博客最多 20 行（[architecture.md §0.1](architecture.md#0-两个核心判断) 的 N）。1,000 个博客约 2 万行，完全不需要分区。
 - `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
 - `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
+- `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
 
 ### 2.3 `submissions`
 

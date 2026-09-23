@@ -62,6 +62,12 @@ const (
 	MaxRobotsBytes = 500 << 10 // the minimum RFC 9309 asks crawlers to parse
 	MaxRedirects   = 5
 	RobotsTTL      = 24 * time.Hour
+
+	LinkCheckInterval   = 24 * time.Hour
+	LinkRetryInterval   = 6 * time.Hour
+	LinkCheckLease      = 2 * time.Minute
+	LinkCheckTimeout    = 10 * time.Second
+	LinkChecksPerMinute = 8
 )
 
 // UserAgentToken is the product token robots.txt rules address.

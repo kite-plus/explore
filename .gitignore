@@ -11,3 +11,5 @@
 
 # Secrets for deploy/docker-compose.yaml.
 /deploy/.env
+
+/.claude/

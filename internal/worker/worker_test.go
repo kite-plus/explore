@@ -481,6 +481,42 @@ func TestMaintenanceRunsDaily(t *testing.T) {
 	}
 }
 
+func TestLinkOnceRecordsArticleStatus(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	s.handle("/robots.txt", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+	s.handle("/available", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	s.handle("/missing", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+	b := e.list(s, "/feed")
+	now := time.Now().Add(-time.Hour)
+	entries := []model.Entry{
+		{Identity: "available", URL: s.base() + "/available", Title: "Available", PublishedAt: &now, DateTrusted: true},
+		{Identity: "missing", URL: s.base() + "/missing", Title: "Missing", PublishedAt: &now, DateTrusted: true},
+	}
+	if err := e.s.SyncSnapshot(context.Background(), b.ID, entries, store.FetchState{FetchInterval: time.Hour, NextFetchAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.w.LinkOnce(context.Background()); n != 1 {
+		t.Fatalf("first link check = %d, want 1 per blog", n)
+	}
+	if n := e.w.LinkOnce(context.Background()); n != 1 {
+		t.Fatalf("second link check = %d", n)
+	}
+	_, checked, err := e.s.VisibleBlog(context.Background(), b.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range checked {
+		want := model.LinkAvailable
+		if entry.Identity == "missing" {
+			want = model.LinkUnavailable
+		}
+		if entry.LinkStatus != want || entry.LinkCheckedAt == nil {
+			t.Errorf("link status for %s = %s at %v, want %s", entry.Identity, entry.LinkStatus, entry.LinkCheckedAt, want)
+		}
+	}
+}
+
 type fakeTagger struct {
 	mu    sync.Mutex
 	calls int

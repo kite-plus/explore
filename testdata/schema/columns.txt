@@ -31,6 +31,9 @@ entries.excerpt text
 entries.id bigint
 entries.identity text
 entries.image_url text
+entries.link_checked_at timestamp with time zone
+entries.link_next_check_at timestamp with time zone
+entries.link_status text
 entries.published_at timestamp with time zone
 entries.synced_at timestamp with time zone
 entries.tagged_at timestamp with time zone

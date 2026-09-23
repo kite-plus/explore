@@ -60,17 +60,27 @@ type Blog struct {
 	UpdatedAt time.Time
 }
 
+type LinkStatus string
+
+const (
+	LinkUnknown     LinkStatus = "unknown"
+	LinkAvailable   LinkStatus = "available"
+	LinkUnavailable LinkStatus = "unavailable"
+)
+
 // Entry is one item of a blog's current feed. It never carries content.
 type Entry struct {
-	ID          int64
-	BlogID      int64
-	Identity    string
-	URL         string
-	Title       string
-	Excerpt     string // empty when hidden by the author or absent
-	ImageURL    string // source URL only; image bytes are not stored
-	PublishedAt *time.Time
-	DateTrusted bool
+	ID            int64
+	BlogID        int64
+	Identity      string
+	URL           string
+	Title         string
+	Excerpt       string // empty when hidden by the author or absent
+	ImageURL      string // source URL only; image bytes are not stored
+	PublishedAt   *time.Time
+	DateTrusted   bool
+	LinkStatus    LinkStatus
+	LinkCheckedAt *time.Time
 	// Categories are the post's own, as its feed gives them; they only guide
 	// the tagger. Tags are slugs from Tags.
 	Categories []string

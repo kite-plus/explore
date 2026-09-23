@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/policy"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -89,6 +90,89 @@ func sync(t *testing.T, s *Store, blogID int64, entries ...model.Entry) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLinkCheckState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	b := listBlog(t, s, "links.example.com", "en")
+	first := entry("first", at(time.Now().Add(-time.Hour)), true)
+	second := entry("second", at(time.Now().Add(-2*time.Hour)), true)
+	sync(t, s, b.ID, first, second)
+
+	jobs, err := s.ClaimLinks(ctx, 8)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("first claim = %+v, %v", jobs, err)
+	}
+	if err := s.RecordLinkStatus(ctx, jobs[0], model.LinkAvailable, policy.LinkCheckInterval); err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.ClaimLinks(ctx, 8)
+	if err != nil || len(next) != 1 || next[0].EntryID == jobs[0].EntryID {
+		t.Fatalf("second claim = %+v, %v", next, err)
+	}
+	if err := s.RecordLinkStatus(ctx, next[0], model.LinkUnavailable, policy.LinkCheckInterval); err != nil {
+		t.Fatal(err)
+	}
+	if due, err := s.ClaimLinks(ctx, 8); err != nil || len(due) != 0 {
+		t.Fatalf("unexpected due links = %+v, %v", due, err)
+	}
+
+	sync(t, s, b.ID, first, second)
+	_, entries, err := s.VisibleBlog(ctx, b.Host)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("entries = %+v, %v", entries, err)
+	}
+	for _, current := range entries {
+		if current.LinkStatus == model.LinkUnknown || current.LinkCheckedAt == nil {
+			t.Errorf("unchanged URL lost its status: %+v", current)
+		}
+	}
+	first.URL += "moved"
+	sync(t, s, b.ID, first, second)
+	_, entries, err = s.VisibleBlog(ctx, b.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, current := range entries {
+		if current.Identity == first.Identity && (current.LinkStatus != model.LinkUnknown || current.LinkCheckedAt != nil) {
+			t.Errorf("changed URL kept the old status: %+v", current)
+		}
+	}
+}
+
+func TestReaderClaimSharesLinkLeaseWithWorker(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	b := listBlog(t, s, "reader-links.example.com", "en")
+	sync(t, s, b.ID, entry("requested", at(time.Now().Add(-time.Hour)), true))
+	_, entries, err := s.VisibleBlog(ctx, b.Host)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("visible entries = %+v, %v", entries, err)
+	}
+	id := entries[0].ID
+	job, claimed, err := s.ClaimLinkOnDemand(ctx, id)
+	if err != nil || !claimed || job.EntryID != id {
+		t.Fatalf("reader claim = %+v, %t, %v", job, claimed, err)
+	}
+	if _, claimed, err := s.ClaimLinkOnDemand(ctx, id); err != nil || claimed {
+		t.Errorf("duplicate reader claim = %t, %v", claimed, err)
+	}
+	if jobs, err := s.ClaimLinks(ctx, 8); err != nil || len(jobs) != 0 {
+		t.Errorf("worker claimed reserved entry: %+v, %v", jobs, err)
+	}
+	if state, err := s.VisibleLinkState(ctx, id); err != nil || !state.Checking {
+		t.Errorf("reserved state = %+v, %v", state, err)
+	}
+	if err := s.RecordLinkStatus(ctx, job, model.LinkAvailable, policy.LinkCheckInterval); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := s.VisibleLinkState(ctx, id); err != nil || state.Checking || state.Status != model.LinkAvailable || state.CheckedAt == nil {
+		t.Errorf("checked state = %+v, %v", state, err)
+	}
+	if _, claimed, err := s.ClaimLinkOnDemand(ctx, id); err != nil || claimed {
+		t.Errorf("checked entry was claimed again: %t, %v", claimed, err)
 	}
 }
 

@@ -178,6 +178,45 @@ func (c *Client) Get(ctx context.Context, r Request) (*Response, error) {
 	return c.do(ctx, u, r, false)
 }
 
+func (c *Client) Probe(ctx context.Context, rawURL string) (int, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %w", ErrBadURL, err)
+	}
+	if err := c.checkURL(u); err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, policy.LinkCheckTimeout)
+	defer cancel()
+	if err := c.robotsAllow(ctx, u); err != nil {
+		return 0, err
+	}
+	status, err := c.probeRequest(ctx, u, http.MethodHead)
+	if err != nil || status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || status >= 200 && status < 300 {
+		return status, err
+	}
+	return c.probeRequest(ctx, u, http.MethodGet)
+}
+
+func (c *Client) probeRequest(ctx context.Context, u *url.URL, method string) (int, error) {
+	ctx = context.WithValue(ctx, trackerKey{}, &tracker{})
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %w", ErrBadURL, err)
+	}
+	req.Header.Set("User-Agent", c.opts.UserAgent)
+	req.Header.Set("Accept", AcceptHTML)
+	if method == http.MethodGet {
+		req.Header.Set("Range", "bytes=0-0")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
 // do performs one GET. A robots.txt request is cut off at the size limit
 // instead of failing, and its redirects skip the robots check.
 func (c *Client) do(ctx context.Context, u *url.URL, r Request, robotsFile bool) (*Response, error) {

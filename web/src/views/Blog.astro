@@ -29,7 +29,7 @@ const description = data
   : t.errors.blogNotFound;
 ---
 
-<Base lang={lang} title={title} description={description} path={`/blogs/${host}`}>
+<Base lang={lang} title={title} description={description} path={`/blogs/${host}`} entryChecks>
   {
     data ? (
       <>

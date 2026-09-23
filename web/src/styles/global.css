@@ -98,6 +98,48 @@
   [data-js] .theme-toggle {
     display: inline-flex;
   }
+  .entry-status-available {
+    color: oklch(0.47 0.17 151);
+    color: light-dark(oklch(0.47 0.17 151), oklch(0.77 0.16 151));
+  }
+  .entry-status-unavailable {
+    color: var(--destructive);
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+  }
+  .entry-status-unknown {
+    color: oklch(0.5 0.12 75);
+    color: light-dark(oklch(0.5 0.12 75), oklch(0.79 0.12 75));
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+  }
+  .entry-check-button {
+    display: none;
+    cursor: pointer;
+  }
+  .entry-check-fallback {
+    display: inline-flex;
+  }
+  [data-js] .entry-check-fallback {
+    display: none;
+  }
+  [data-js] .entry-check-button {
+    display: inline-flex;
+  }
+  [data-js] .entry-check-button[hidden] {
+    display: none;
+  }
+  .entry-check-button:disabled {
+    cursor: wait;
+    text-decoration: none;
+  }
+  .theme-toggle [data-theme-icon] {
+    display: none;
+  }
+  :root:not([data-theme-mode]) .theme-toggle [data-theme-icon="auto"],
+  :root[data-theme-mode="auto"] .theme-toggle [data-theme-icon="auto"],
+  :root[data-theme-mode="dark"] .theme-toggle [data-theme-icon="dark"],
+  :root[data-theme-mode="light"] .theme-toggle [data-theme-icon="light"] {
+    display: block;
+  }
 
   /* The arrow after a link that opens in a new tab (ExternalLink.astro). */
   .external-mark {

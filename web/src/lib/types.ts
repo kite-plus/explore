@@ -15,6 +15,8 @@ export interface Entry {
   excerpt: string | null;
   image_url: string | null;
   published_at: string | null;
+  link_status: "unknown" | "available" | "unavailable";
+  link_checked_at: string | null;
   /** Slugs from the tag list, best fit first. */
   tags: string[];
   blog?: BlogRef;

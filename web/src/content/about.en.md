@@ -4,6 +4,8 @@ Explore gathers the public feeds of independent blogs and shows their latest pos
 
 Each post shows its title, its publish date and an excerpt of at most 140 characters. Clicking a title takes you straight to the author's own site: the link is the original address, with no redirect page in between and no tracking parameters added.
 
+The status beside a post comes from a link check. Click “Awaiting check” to check a post immediately. “Possibly unavailable” means the source returned 404 or 410 to the checker; readers may get a different result, and the original link remains available.
+
 Explore **keeps neither post content nor images**. The posts here are only a cache of what each blog's feed says right now: when an author edits or deletes a post, the change shows up here after the next fetch.
 
 ## How blogs are listed

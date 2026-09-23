@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,7 @@ func newEnv(t *testing.T, admins bool) *env {
 		Store:        st,
 		Checker:      &check.Checker{Fetch: fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second})},
 		ImageFetch:   fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second}),
+		LinkFetch:    fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second}),
 		PublicURL:    "https://explore.example.org",
 		AllowPrivate: true,
 		Log:          slog.New(slog.NewTextHandler(logs, nil)),
@@ -131,14 +133,16 @@ func post(id string, hoursAgo int, excerpt string) model.Entry {
 }
 
 type entryOut struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	URL         string     `json:"url"`
-	Excerpt     *string    `json:"excerpt"`
-	ImageURL    *string    `json:"image_url"`
-	PublishedAt *time.Time `json:"published_at"`
-	Tags        []string   `json:"tags"`
-	Blog        *struct {
+	ID            string           `json:"id"`
+	Title         string           `json:"title"`
+	URL           string           `json:"url"`
+	Excerpt       *string          `json:"excerpt"`
+	ImageURL      *string          `json:"image_url"`
+	PublishedAt   *time.Time       `json:"published_at"`
+	LinkStatus    model.LinkStatus `json:"link_status"`
+	LinkCheckedAt *time.Time       `json:"link_checked_at"`
+	Tags          []string         `json:"tags"`
+	Blog          *struct {
 		Host     string `json:"host"`
 		Name     string `json:"name"`
 		SiteURL  string `json:"site_url"`
@@ -173,6 +177,9 @@ func TestEntries(t *testing.T) {
 	}
 	if first.PublishedAt.Location() != time.UTC {
 		t.Errorf("times must be UTC: %v", first.PublishedAt)
+	}
+	if first.LinkStatus != model.LinkUnknown || first.LinkCheckedAt != nil {
+		t.Errorf("new entries should await a link check: %+v", first)
 	}
 	if !strings.Contains(w.Body.String(), `"site_url"`) || strings.Contains(w.Body.String(), `"SiteURL"`) {
 		t.Errorf("fields must be snake_case: %s", w.Body.String())
@@ -218,6 +225,89 @@ func TestEntries(t *testing.T) {
 		if got, _ := errorCode(t, w); w.Code != http.StatusBadRequest || got != code {
 			t.Errorf("%s: %d %s, want 400 %s", path, w.Code, got, code)
 		}
+	}
+}
+
+func TestReaderChecksPendingArticleLink(t *testing.T) {
+	e := newEnv(t, false)
+	checks := 0
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		checks++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer source.Close()
+
+	article := post("reader-check", 1, "")
+	article.URL = source.URL + "/reader-check"
+	e.seed("reader-check.example.com", "en", article)
+	page := decode[pageOut](t, e.get("/api/v1/entries"))
+	id := page.Data[0].ID
+
+	path := "/api/v1/entries/" + id + "/check"
+	checked := e.do(req{method: http.MethodPost, path: path, header: map[string]string{"Content-Type": "application/json"}})
+	if checked.Code != http.StatusOK {
+		t.Fatalf("check = %d %s", checked.Code, checked.Body.String())
+	}
+	state := decode[struct {
+		Status    model.LinkStatus `json:"link_status"`
+		CheckedAt *time.Time       `json:"link_checked_at"`
+		Checking  bool             `json:"checking"`
+	}](t, checked)
+	if state.Status != model.LinkAvailable || state.CheckedAt == nil || state.Checking || checks != 1 {
+		t.Fatalf("link state = %+v, probes = %d", state, checks)
+	}
+	if repeat := e.do(req{method: http.MethodPost, path: path, header: map[string]string{"Content-Type": "application/json"}}); repeat.Code != http.StatusOK || checks != 1 {
+		t.Errorf("repeat = %d, probes = %d", repeat.Code, checks)
+	}
+	if current := e.get(path); current.Code != http.StatusOK || current.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("link state GET = %d %s", current.Code, current.Header())
+	}
+	if missing := e.do(req{method: http.MethodPost, path: "/api/v1/entries/999999/check", header: map[string]string{"Content-Type": "application/json"}}); missing.Code != http.StatusNotFound {
+		t.Errorf("missing link = %d", missing.Code)
+	}
+}
+
+func TestReaderLinkChecksAreRateLimited(t *testing.T) {
+	e := newEnv(t, false)
+	for i := range 11 {
+		w := e.do(req{method: http.MethodPost, path: "/api/v1/entries/1/check", header: map[string]string{"Content-Type": "application/json"}})
+		if i < 10 && w.Code != http.StatusNotFound {
+			t.Fatalf("request %d = %d", i+1, w.Code)
+		}
+		if i == 10 && (w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "") {
+			t.Errorf("eleventh request = %d %s", w.Code, w.Header())
+		}
+	}
+}
+
+func TestReaderWaitsForExistingLinkCheck(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("waiting-links.example.com", "en", post("already-claimed", 1, ""))
+	page := decode[pageOut](t, e.get("/api/v1/entries"))
+	id, err := strconv.ParseInt(page.Data[0].ID, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, claimed, err := e.s.ClaimLinkOnDemand(context.Background(), id)
+	if err != nil || !claimed {
+		t.Fatalf("initial claim = %t, %v", claimed, err)
+	}
+	path := "/api/v1/entries/" + page.Data[0].ID + "/check"
+	response := e.do(req{method: http.MethodPost, path: path, header: map[string]string{"Content-Type": "application/json"}})
+	if response.Code != http.StatusAccepted || !decode[struct {
+		Checking bool `json:"checking"`
+	}](t, response).Checking {
+		t.Fatalf("pending request = %d %s", response.Code, response.Body.String())
+	}
+	if err := e.s.RecordLinkStatus(context.Background(), job, model.LinkAvailable, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if response := e.get(path); response.Code != http.StatusOK {
+		t.Errorf("completed request = %d %s", response.Code, response.Body.String())
 	}
 }
 

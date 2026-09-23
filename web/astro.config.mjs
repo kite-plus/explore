@@ -10,12 +10,15 @@ import { defineConfig } from "astro/config";
 // The theme script runs inline before the first paint. Astro hashes only the
 // scripts it bundles, so the CSP gets this one's hash from here.
 const themeScript = readFileSync(new URL("./src/scripts/theme.js", import.meta.url), "utf8");
+const entryCheckScript = readFileSync(new URL("./src/scripts/entry-check.js", import.meta.url), "utf8");
 /** @type {`sha256-${string}`} */
 const themeHash = `sha256-${createHash("sha256").update(themeScript).digest("base64")}`;
+/** @type {`sha256-${string}`} */
+const entryCheckHash = `sha256-${createHash("sha256").update(entryCheckScript).digest("base64")}`;
 
-// See docs/design/frontend.md: pages render on the server, ship no
-// JavaScript but the theme script, and speak Chinese at the root and English
-// under /en.
+// See docs/design/frontend.md: pages render on the server. Entry lists also
+// ship the small link-check script; Chinese is at the root and English under
+// /en.
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
@@ -37,7 +40,7 @@ export default defineConfig({
   security: {
     checkOrigin: true,
     csp: {
-      scriptDirective: { hashes: [themeHash] },
+      scriptDirective: { hashes: [themeHash, entryCheckHash] },
       directives: [
         "default-src 'self'",
         "img-src 'self' data:",

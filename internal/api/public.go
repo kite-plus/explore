@@ -21,14 +21,16 @@ type blogRefJSON struct {
 }
 
 type entryJSON struct {
-	ID          string       `json:"id"`
-	Title       string       `json:"title"`
-	URL         string       `json:"url"`
-	Excerpt     *string      `json:"excerpt"`
-	ImageURL    *string      `json:"image_url"`
-	PublishedAt *time.Time   `json:"published_at"`
-	Tags        []string     `json:"tags"`
-	Blog        *blogRefJSON `json:"blog,omitempty"`
+	ID            string           `json:"id"`
+	Title         string           `json:"title"`
+	URL           string           `json:"url"`
+	Excerpt       *string          `json:"excerpt"`
+	ImageURL      *string          `json:"image_url"`
+	PublishedAt   *time.Time       `json:"published_at"`
+	Tags          []string         `json:"tags"`
+	LinkStatus    model.LinkStatus `json:"link_status"`
+	LinkCheckedAt *time.Time       `json:"link_checked_at"`
+	Blog          *blogRefJSON     `json:"blog,omitempty"`
 }
 
 type tagJSON struct {
@@ -53,7 +55,7 @@ type listJSON[T any] struct {
 }
 
 func toEntry(e model.Entry) entryJSON {
-	out := entryJSON{ID: strconv.FormatInt(e.ID, 10), Title: e.Title, URL: e.URL, PublishedAt: utc(e.PublishedAt), Tags: e.Tags}
+	out := entryJSON{ID: strconv.FormatInt(e.ID, 10), Title: e.Title, URL: e.URL, PublishedAt: utc(e.PublishedAt), Tags: e.Tags, LinkStatus: e.LinkStatus, LinkCheckedAt: utc(e.LinkCheckedAt)}
 	if out.Tags == nil {
 		out.Tags = []string{}
 	}

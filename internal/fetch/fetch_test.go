@@ -192,6 +192,41 @@ func TestGetSendsETagWithoutLastModified(t *testing.T) {
 	}
 }
 
+func TestProbeFallsBackToBoundedGet(t *testing.T) {
+	methods := make(chan string, 2)
+	srv, client := newServer(t, "", func(w http.ResponseWriter, r *http.Request) {
+		methods <- r.Method
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Header.Get("Range") != "bytes=0-0" {
+			t.Errorf("Range = %q", r.Header.Get("Range"))
+		}
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	})
+	status, err := client.Probe(context.Background(), srv.URL+"/post")
+	if err != nil || status != http.StatusPartialContent {
+		t.Fatalf("Probe = %d, %v", status, err)
+	}
+	if first, second := <-methods, <-methods; first != http.MethodHead || second != http.MethodGet {
+		t.Errorf("methods = %s, %s", first, second)
+	}
+}
+
+func TestProbeHonorsRobotsAndAddressRules(t *testing.T) {
+	srv, client := newServer(t, "User-agent: KiteExplore\nDisallow: /post\n", func(w http.ResponseWriter, r *http.Request) {
+		t.Error("blocked post was requested")
+	})
+	if _, err := client.Probe(context.Background(), srv.URL+"/post"); !errors.Is(err, ErrRobotsDisallowed) {
+		t.Errorf("robots refusal = %v", err)
+	}
+	if _, err := New(Options{UserAgent: "test"}).Probe(context.Background(), "http://127.0.0.1/post"); !errors.Is(err, ErrBlockedAddress) {
+		t.Errorf("private address = %v", err)
+	}
+}
+
 func TestGetRedirects(t *testing.T) {
 	srv, c := newServer(t, "", func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

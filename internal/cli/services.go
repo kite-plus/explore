@@ -65,6 +65,7 @@ func newServeCmd() *cobra.Command {
 				Store:          st,
 				Checker:        &check.Checker{Fetch: newFetcher(cfg)},
 				ImageFetch:     fetch.New(fetch.Options{UserAgent: fetch.UserAgent(buildinfo.Version, cfg.PublicURL), AllowPrivate: cfg.AllowPrivateNetworks, Timeout: 8 * time.Second}),
+				LinkFetch:      newFetcher(cfg),
 				PublicURL:      cfg.PublicURL,
 				Admins:         admins,
 				TrustedProxies: cfg.TrustedProxies,

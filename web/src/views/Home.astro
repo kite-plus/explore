@@ -30,25 +30,39 @@ const names = data ? tagNames(data.tags, lang) : {};
   title={t.home.title}
   description={t.site.description}
   path="/"
+  entryChecks
   noindex={Boolean(data?.paged || data?.filter || data?.tag)}
 >
   {
     data ? (
       <>
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 class="text-2xl font-semibold tracking-tight">{t.home.heading}</h1>
-            <p class="mt-2 max-w-prose text-sm text-muted-foreground">{t.home.intro}</p>
-          </div>
-          <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} />
+        <div>
+          <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.home.heading}</h1>
+          <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{t.home.intro}</p>
         </div>
-        <div class="mt-4">
-          <TagFilter lang={lang} path="/" tags={data.tags} current={data.tag} filter={data.filter} />
+        <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b">
+          <nav aria-label={t.home.feedLabel} class="flex items-end gap-6">
+            <a
+              href={withQuery(localePath(lang, "/"), { lang: data.filter, tag: data.tag })}
+              aria-current="page"
+              class="-mb-px border-b-2 border-foreground pb-3 text-sm font-semibold text-foreground outline-offset-4"
+            >
+              {t.home.discover}
+            </a>
+            <span aria-disabled="true" class="pb-3 text-sm text-muted-foreground/70">
+              {t.home.subscriptions}
+              <span class="ml-1 text-[0.7rem]">{t.home.comingSoon}</span>
+            </span>
+          </nav>
+          <div class="flex flex-wrap items-center gap-2 pb-2">
+            <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} variant="segmented" />
+            <TagFilter lang={lang} path="/" tags={data.tags} current={data.tag} filter={data.filter} />
+          </div>
         </div>
         {data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
         ) : (
-          <div class="mt-4 divide-y">
+          <div class="divide-y">
             {data.page.data.map((entry) => (
               <EntryItem lang={lang} entry={entry} tagNames={names} />
             ))}

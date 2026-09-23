@@ -8,11 +8,12 @@ interface Props {
   current?: string;
   /** The tag filter in use, kept when the language changes. */
   tag?: string;
+  variant?: "plain" | "segmented";
 }
 
 // Filtering by the blogs' language uses ?lang= and has nothing to do with
 // the interface language, which lives in the path.
-const { lang, path, current, tag } = Astro.props;
+const { lang, path, current, tag, variant = "plain" } = Astro.props;
 const t = dict(lang).filter;
 const base = localePath(lang, path);
 const options = [
@@ -22,13 +23,24 @@ const options = [
 ];
 ---
 
-<nav aria-label={t.label} class="flex gap-1 text-sm">
+<nav
+  aria-label={t.label}
+  class:list={[
+    "flex text-sm",
+    variant === "segmented" ? "gap-0.5 rounded-lg border bg-muted/50 p-0.5" : "gap-1",
+  ]}
+>
   {
     options.map((o) => (
       <a
         href={withQuery(base, { lang: o.value, tag })}
         aria-current={o.value === current ? "page" : undefined}
-        class="rounded-md px-2.5 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-secondary-foreground"
+        class:list={[
+          "rounded-md px-2.5 py-1 text-muted-foreground outline-offset-2 hover:text-foreground",
+          variant === "segmented"
+            ? "hover:bg-background/60 aria-[current=page]:bg-background aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:shadow-sm"
+            : "hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-secondary-foreground",
+        ]}
       >
         {o.label}
       </a>

@@ -2,8 +2,8 @@ import { apiURL } from "@/lib/config";
 import type { ApiError, Blog, BlogPage, Entry, Page, Submission, Tag } from "@/lib/types";
 import type { Lang } from "@/i18n";
 
-// Pages call the API from the server only; browsers never reach it. See
-// docs/design/frontend.md section 5.
+// Page loaders call the API from the server. The on-demand article check is
+// the one same-origin browser request; see docs/design/frontend.md section 5.
 
 const TIMEOUT_MS = 3000;
 const SUBMIT_TIMEOUT_MS = 35_000;

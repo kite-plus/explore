@@ -29,6 +29,7 @@ type Server struct {
 	Store      *store.Store
 	Checker    *check.Checker
 	ImageFetch *fetch.Client
+	LinkFetch  *fetch.Client
 	PublicURL  string
 	Admins     []AdminToken
 	// TrustedProxies may set X-Forwarded-For; see
@@ -42,6 +43,8 @@ type Server struct {
 
 	readLimit   *limiter
 	submitLimit *limiter
+	linkLimit   *limiter
+	linkSlots   chan struct{}
 	imageMu     sync.Mutex
 	images      map[string]cachedImage
 	faviconMu   sync.Mutex
@@ -58,6 +61,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	}
 	s.readLimit = newLimiter(300, time.Minute, s.Now)
 	s.submitLimit = newLimiter(5, time.Hour, s.Now)
+	s.linkLimit = newLimiter(10, time.Hour, s.Now)
+	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
 	// rather than gin.Default leaves out the logger that writes addresses.
@@ -77,6 +82,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1 := r.Group("/api/v1")
 	v1.GET("/entries", s.limit(s.readLimit), s.entries)
 	v1.GET("/entries/:id/image", s.limit(s.readLimit), s.entryImage)
+	v1.GET("/entries/:id/check", s.limit(s.readLimit), s.entryLinkState)
+	v1.POST("/entries/:id/check", s.limit(s.linkLimit), s.checkEntryLink)
 	v1.GET("/tags", s.limit(s.readLimit), s.tags)
 	v1.GET("/blogs", s.limit(s.readLimit), s.blogs)
 	v1.GET("/blogs/:host/favicon", s.limit(s.readLimit), s.blogFavicon)

@@ -4,7 +4,6 @@
 // localStorage and never reaches the server. See docs/design/frontend.md.
 (() => {
   const root = document.documentElement;
-  const system = matchMedia("(prefers-color-scheme: dark)");
   const read = () => {
     try {
       const saved = localStorage.getItem("theme");
@@ -14,12 +13,16 @@
     }
   };
   let theme = read();
-  const shown = () => theme ?? (system.matches ? "dark" : "light");
   const apply = () => {
     if (theme) root.dataset.theme = theme;
     else delete root.dataset.theme;
+    const mode = theme ?? "auto";
+    root.dataset.themeMode = mode;
+    const next = mode === "auto" ? "dark" : mode === "dark" ? "light" : "auto";
     for (const button of document.querySelectorAll("[data-theme-toggle]")) {
-      button.setAttribute("aria-pressed", String(shown() === "dark"));
+      const label = `${button.dataset[mode]} · ${button.dataset.switchTo}${button.dataset[next]}`;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
     }
   };
   const reload = () => {
@@ -30,7 +33,6 @@
   root.dataset.js = "";
   apply();
   document.addEventListener("DOMContentLoaded", apply);
-  system.addEventListener("change", apply);
   // Another tab, or a page restored from the back-forward cache, may be
   // behind the latest choice.
   addEventListener("storage", (event) => {
@@ -42,9 +44,7 @@
 
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof Element) || !event.target.closest("[data-theme-toggle]")) return;
-    const next = shown() === "dark" ? "light" : "dark";
-    // Picking what the system shows anyway means following the system again.
-    theme = next === (system.matches ? "dark" : "light") ? null : next;
+    theme = theme === null ? "dark" : theme === "dark" ? "light" : null;
     try {
       if (theme) localStorage.setItem("theme", theme);
       else localStorage.removeItem("theme");

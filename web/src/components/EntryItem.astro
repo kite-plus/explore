@@ -1,5 +1,6 @@
 ---
 import BlogAvatar from "@/components/BlogAvatar.astro";
+import { Check, CircleHelp, CircleX } from "lucide-react";
 import ExternalLink from "@/components/ExternalLink.astro";
 import { dict, localePath, type Lang } from "@/i18n";
 import { relativeTime } from "@/lib/format";
@@ -21,6 +22,17 @@ const t = dict(lang);
 // Titles and excerpts stay as the author wrote them; lang tells screen
 // readers and search engines which language that is.
 const contentLang = entry.blog?.language ?? blogLanguage;
+const linkStatus = entry.link_status ?? "unknown";
+const statusLabel = linkStatus === "available"
+  ? t.entryStatus.available
+  : linkStatus === "unavailable"
+    ? t.entryStatus.unavailable
+    : entry.link_checked_at
+      ? t.entryStatus.unknown
+      : t.entryStatus.pending;
+const checkedAt = entry.link_checked_at ? t.entryStatus.checkedAt(relativeTime(entry.link_checked_at, lang)) : null;
+const statusDescription = [statusLabel, checkedAt, t.entryStatus.hint].filter(Boolean).join(" · ");
+const pending = linkStatus === "unknown" && !entry.link_checked_at;
 ---
 
 <article class="flex gap-4 py-5" lang={contentLang}>
@@ -46,6 +58,61 @@ const contentLang = entry.blog?.language ?? blogLanguage;
         <span>{t.blog.undated}</span>
       )
     }
+    <span aria-hidden="true">·</span>
+    {pending ? (
+      <>
+        <span class="entry-check-fallback entry-status-unknown items-center gap-1 rounded-full px-2 py-0.5" title={statusDescription}>
+          <CircleHelp className="size-3" aria-hidden="true" />{statusLabel}
+        </span>
+        <button
+          type="button"
+          class="entry-check-button entry-status-unknown items-center gap-1 rounded-full px-2 py-0.5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+          data-entry-check={entry.id}
+          data-lang={lang}
+          data-checking={t.entryStatus.checking}
+          data-retry={t.entryStatus.retry}
+          data-failed={t.entryStatus.failed}
+          data-available={t.entryStatus.available}
+          data-unavailable={t.entryStatus.unavailable}
+          data-unknown={t.entryStatus.unknown}
+          data-just-checked={t.entryStatus.justChecked}
+          data-hint={t.entryStatus.hint}
+          aria-label={t.entryStatus.checkNow}
+          title={t.entryStatus.checkNow}
+        >
+          <CircleHelp className="size-3" aria-hidden="true" />
+          <span data-check-label>{statusLabel}</span>
+        </button>
+        <span data-entry-check-result class="hidden items-center gap-1 rounded-full" role="status">
+          <Check data-link-icon="available" className="hidden size-4" strokeWidth={2.5} aria-hidden="true" />
+          <CircleX data-link-icon="unavailable" className="hidden size-3" aria-hidden="true" />
+          <CircleHelp data-link-icon="unknown" className="hidden size-3" aria-hidden="true" />
+          <span data-link-label></span>
+        </span>
+        <time data-entry-check-time class="hidden"></time>
+      </>
+    ) : (
+      <>
+        <span
+          class:list={[
+            "inline-flex items-center gap-1 rounded-full",
+            linkStatus === "available" ? "entry-status-available" : "px-2 py-0.5",
+            linkStatus === "unavailable" ? "entry-status-unavailable" : "entry-status-unknown",
+          ]}
+          title={statusDescription}
+        >
+          {linkStatus === "available" ? (
+            <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
+          ) : linkStatus === "unavailable" ? (
+            <CircleX className="size-3" aria-hidden="true" />
+          ) : (
+            <CircleHelp className="size-3" aria-hidden="true" />
+          )}
+          {linkStatus === "available" ? <span class="sr-only">{statusDescription}</span> : statusLabel}
+        </span>
+        {entry.link_checked_at && linkStatus !== "available" && <time datetime={entry.link_checked_at}>{checkedAt}</time>}
+      </>
+    )}
     {
       tags.map((slug) => (
         <a

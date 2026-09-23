@@ -1,5 +1,5 @@
 ---
-import { SunMoon } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 import { dict, localePath, other, type Lang } from "@/i18n";
 
@@ -47,12 +47,17 @@ const switchTo = other(lang);
     <button
       type="button"
       data-theme-toggle
-      aria-pressed="false"
-      aria-label={t.theme.dark}
-      title={t.theme.dark}
+      data-auto={t.theme.auto}
+      data-dark={t.theme.dark}
+      data-light={t.theme.light}
+      data-switch-to={t.theme.switchTo}
+      aria-label={`${t.theme.auto} · ${t.theme.switchTo}${t.theme.dark}`}
+      title={`${t.theme.auto} · ${t.theme.switchTo}${t.theme.dark}`}
       class="theme-toggle items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
     >
-      <SunMoon className="size-4" aria-hidden="true" />
+      <Monitor data-theme-icon="auto" className="size-4" aria-hidden="true" />
+      <Moon data-theme-icon="dark" className="size-4" aria-hidden="true" />
+      <Sun data-theme-icon="light" className="size-4" aria-hidden="true" />
     </button>
   </div>
 </header>

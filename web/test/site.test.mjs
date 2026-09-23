@@ -56,24 +56,32 @@ async function page(path) {
 
 const themeScript = readFileSync(new URL("../src/scripts/theme.js", import.meta.url), "utf8");
 const themeHash = `'sha256-${createHash("sha256").update(themeScript).digest("base64")}'`;
+const entryCheckScript = readFileSync(new URL("../src/scripts/entry-check.js", import.meta.url), "utf8");
+const entryCheckHash = `'sha256-${createHash("sha256").update(entryCheckScript).digest("base64")}'`;
+const entryPages = new Set(["/", "/en/", "/blogs/zh.example.com", "/en/blogs/zh.example.com"]);
 
 const publicPages = ["/", "/en/", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
 
-describe("no JavaScript but the theme script, zero third parties", () => {
+describe("only local scripts, zero third parties", () => {
   for (const path of publicPages) {
     test(path, async () => {
       const { res, html } = await page(path);
       assert.equal(res.status, 200);
       assert.equal(res.headers.get("set-cookie"), null, "no cookies");
       const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
-      assert.equal(scripts.length, 1, "one script");
+      assert.equal(scripts.length, entryPages.has(path) ? 2 : 1);
       assert.equal(scripts[0][1], "", "inline, without src or type");
       assert.equal(scripts[0][2], themeScript, "the theme script as written");
+      if (entryPages.has(path)) {
+        assert.equal(scripts[1][1], "", "inline, without src or type");
+        assert.equal(scripts[1][2], entryCheckScript, "the link check script as written");
+      }
       assert.doesNotMatch(html, /\sstyle="/i, "no inline style attributes");
       const csp = res.headers.get("content-security-policy") ?? "";
       assert.match(csp, /default-src 'self'/);
       assert.match(csp, /frame-ancestors 'none'/);
       assert.ok(csp.includes(themeHash), "the CSP allows the theme script by its hash");
+      if (entryPages.has(path)) assert.ok(csp.includes(entryCheckHash), "the CSP allows the link check script by its hash");
       // Resources may only come from the site itself; links to posts are fine.
       for (const [, url] of html.matchAll(/<(?:script|img|iframe|source|link)\b[^>]*\s(?:src|href)="([^"]+)"/gi)) {
         if (/^https?:\/\//.test(url)) {
@@ -204,8 +212,39 @@ describe("content", () => {
   test("the theme toggle speaks the page's language", async () => {
     const zh = (await page("/")).html;
     const en = (await page("/en/")).html;
-    assert.match(zh, /<button type="button" data-theme-toggle aria-pressed="false" aria-label="深色模式"/);
-    assert.match(en, /<button type="button" data-theme-toggle aria-pressed="false" aria-label="Dark mode"/);
+    assert.match(zh, /<button type="button" data-theme-toggle data-auto="自动模式" data-dark="深色模式" data-light="浅色模式" data-switch-to="点击切换至" aria-label="自动模式 · 点击切换至深色模式"/);
+    assert.match(en, /<button type="button" data-theme-toggle data-auto="Automatic mode" data-dark="Dark mode" data-light="Light mode" data-switch-to="Switch to " aria-label="Automatic mode · Switch to Dark mode"/);
+    for (const mode of ["auto", "dark", "light"]) {
+      assert.match(zh, new RegExp(`data-theme-icon="${mode}"`));
+    }
+  });
+
+  test("article links show their checked status in both languages", async () => {
+    const zh = (await page("/")).html;
+    const en = (await page("/en/")).html;
+    assert.match(zh, /entry-status-available/);
+    assert.match(zh, /class="sr-only">最近检测正常/);
+    assert.match(zh, /疑似失效/);
+    assert.match(en, /class="sr-only">Last check succeeded/);
+    assert.match(en, /Possibly unavailable/);
+    const pending = (await page("/?cursor=page-two")).html;
+    assert.match(pending, /待检测/);
+    assert.match(pending, /<button type="button"[^>]*data-entry-check="3"/);
+    assert.match((await page("/en/?cursor=page-two")).html, /data-checking="Checking…"/);
+  });
+
+  test("a pending article can trigger its check through the site", async () => {
+    const before = stub.state.linkChecks;
+    const response = await get("/api/v1/entries/3/check", { method: "POST", headers: { "Content-Type": "application/json", Origin: base } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const state = await response.json();
+    assert.equal(state.link_status, "available");
+    assert.ok(state.link_checked_at);
+    assert.equal(stub.state.linkChecks, before + 1);
+    const current = await get("/api/v1/entries/3/check");
+    assert.equal(current.status, 200);
+    assert.equal((await current.json()).link_status, "available");
   });
 
   test("an undated post says so", async () => {
