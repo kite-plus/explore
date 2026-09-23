@@ -14,6 +14,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | [project-layout.md](project-layout.md) | 工程结构：目录、包的职责与依赖规则、命令、配置、测试、本地开发、部署 | 所有写代码的人 |
 | [accounts.md](accounts.md) | 读者账号、订阅、推荐流与订阅流、文章标签，以及它们对核心原则的修订 | 所有贡献者 |
 | [admin.md](admin.md) | 管理后台：产品定位、审核工作台、博客治理、健康监控、鉴权与 UI 架构 | 维护者、前端、后端 |
+| [admin-frontend.md](admin-frontend.md) | 管理后台**前端实现**：目录结构、路由、组件树、鉴权 Hook、数据类型、快捷键、错误处理规范 | 前端 |
 
 ## 阅读顺序
 
@@ -43,5 +44,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | frontend.md | E2 的读者页面和标签筛选已实现；账号相关页面见 accounts.md | 2026-09-23 |
 | project-layout.md | 已按本文搭建 | 2026-09-23 |
 | accounts.md | 文章标签已实现；账号与订阅待实现，部分细节标 `[待定]` | 2026-09-23 |
+| admin.md | 文档已完成，前端尚未开始实现 | 2026-09-24 |
+| admin-frontend.md | 设计文档已完成，实现待启动（Phase 1 优先） | 2026-09-24 |
 
 里程碑定义见 [architecture.md §9](architecture.md#9-里程碑)。
