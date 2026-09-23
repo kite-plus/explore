@@ -14,9 +14,10 @@ interface Props {
   blogLanguage?: string;
   /** Tag names by slug; tags without a name are not shown. */
   tagNames?: Record<string, string>;
+  tagPath?: string;
 }
 
-const { lang, entry, blogLanguage, tagNames = {} } = Astro.props;
+const { lang, entry, blogLanguage, tagNames = {}, tagPath = "/" } = Astro.props;
 const tags = (entry.tags ?? []).filter((slug) => tagNames[slug]);
 const t = dict(lang);
 // Titles and excerpts stay as the author wrote them; lang tells screen
@@ -116,7 +117,7 @@ const pending = linkStatus === "unknown" && !entry.link_checked_at;
     {
       tags.map((slug) => (
         <a
-          href={withQuery(localePath(lang, "/"), { tag: slug })}
+          href={withQuery(localePath(lang, tagPath), { tag: slug })}
           class="rounded-sm bg-secondary px-1.5 py-0.5 text-secondary-foreground hover:bg-accent hover:text-accent-foreground"
         >
           {tagNames[slug]}

@@ -1,0 +1,7 @@
+---
+import { AuthForm } from "@/components/reader/AuthForm";
+import Base from "@/layouts/Base.astro";
+Astro.response.headers.set("Cache-Control", "private, no-store");
+const next = Astro.url.searchParams.get("next") ?? "/en/following";
+---
+<Base lang="en" title="Sign in" description="Sign in to Explore" path="/login" noindex><AuthForm client:load lang="en" next={next} /></Base>

@@ -611,6 +611,41 @@ func TestSubmissionLifecycle(t *testing.T) {
 	}
 }
 
+func TestDirectListingClosesPendingSubmission(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	host := "direct.example.com"
+	sub, err := s.CreateSubmission(ctx, model.Submission{
+		Host: host, SiteURL: "https://direct.example.com/", FeedURL: "https://direct.example.com/feed",
+		Report: model.CheckReport{Passed: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blog, err := s.CreateBlog(ctx, NewBlog{
+		Host: host, Reviewer: "alice", Name: "Direct Blog", SiteURL: sub.SiteURL,
+		FeedURL: sub.FeedURL, Language: "en", ShowExcerpt: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Submission(ctx, sub.ID)
+	if err != nil || got.Status != model.SubmissionApproved || got.BlogID == nil || *got.BlogID != blog.ID ||
+		got.ReviewedBy != "alice" || got.ReviewedAt == nil {
+		t.Fatalf("submission after direct listing = %+v, %v", got, err)
+	}
+	pending, err := s.Submissions(ctx, model.SubmissionPending, 10)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending submissions = %+v, %v", pending, err)
+	}
+	if _, err := s.ApproveSubmission(ctx, sub.ID, Approval{Reviewer: "bob"}); !errors.Is(err, ErrNotPending) {
+		t.Errorf("approving closed submission: err = %v, want ErrNotPending", err)
+	}
+	if _, err := s.CreateSubmission(ctx, model.Submission{Host: host}); !errors.Is(err, ErrListed) {
+		t.Errorf("submitting listed host: err = %v, want ErrListed", err)
+	}
+}
+
 func TestExclusions(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], tagLists: 0, linkChecks: 0 };
+  const state = { down: false, submits: [], tagLists: 0, linkChecks: 0, adminRequests: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -58,6 +58,29 @@ export function startStub() {
     const error = (status, code, extra = {}) => send(status, { error: { code, message: code }, ...extra });
 
     if (state.down) return error(500, "internal");
+
+    if (url.pathname === "/api/v1/auth/login" && req.method === "POST") {
+      res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=test-session; Path=/; HttpOnly; SameSite=Lax" });
+      return res.end(JSON.stringify({ id: "reader", email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" }));
+    }
+    if (url.pathname === "/api/v1/me" && req.method === "GET") {
+      if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");
+      return send(200, { id: "reader", email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" });
+    }
+    if (url.pathname === "/api/v1/me/entries" && req.method === "GET") {
+      if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");
+      return send(200, { data: [entries.first.data[0]], next_cursor: null });
+    }
+
+    if (url.pathname.startsWith("/api/v1/admin/")) {
+      if (req.headers.authorization !== "Bearer test-admin-token") return error(401, "unauthorized");
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      state.adminRequests.push({ path: url.pathname, query: url.search, method: req.method, body, cookie: req.headers.cookie });
+      if (url.pathname === "/api/v1/admin/check" && req.method === "POST") return send(200, report(true, []));
+      if (url.pathname === "/api/v1/admin/submissions" && req.method === "GET") return send(200, { data: [] });
+      return error(404, "not_found");
+    }
 
     if (url.pathname === "/api/v1/entries/3/check" && req.method === "POST") {
       state.linkChecks++;

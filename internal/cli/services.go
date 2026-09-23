@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -150,6 +151,26 @@ func newMigrateCmd() *cobra.Command {
 				return err
 			}
 			printf(cmd, "migrations applied\n")
+			return nil
+		},
+	})
+	return cmd
+}
+
+func newUsersCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "users", Short: "Manage local reader accounts"}
+	cmd.AddCommand(&cobra.Command{
+		Use: "promote-admin EMAIL", Short: "Grant an existing account maintainer access", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, st, _, err := openStore(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer st.Close()
+			if err := st.SetUserAdmin(cmd.Context(), strings.ToLower(strings.TrimSpace(args[0])), true); err != nil {
+				return err
+			}
+			printf(cmd, "admin access granted\n")
 			return nil
 		},
 	})

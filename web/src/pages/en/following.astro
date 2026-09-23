@@ -1,0 +1,7 @@
+---
+import { loadFollowing } from "@/lib/loaders";
+import Following from "@/views/Following.astro";
+const result = await loadFollowing(Astro, "en");
+if (result instanceof Response) return result;
+---
+<Following lang="en" result={result} />

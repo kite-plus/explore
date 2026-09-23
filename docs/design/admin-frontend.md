@@ -4,6 +4,8 @@
 >
 > 阅读本文档的读者应已了解 admin.md 中的产品定位与 API 契约。
 
+> 2026-09-24 更新：后台现支持本站管理员账号登录，使用 `HttpOnly` 会话 Cookie 和 CSRF 请求头。本文后续关于 Token 输入与浏览器存储的描述适用于保留的维护者 Token 备用入口；账号、订阅和认领的最新模型见 [accounts.md](accounts.md)。
+
 ---
 
 ## 目录
@@ -39,11 +41,12 @@ web/src/
 │       ├── excluded-hosts.astro         # 排除名单
 │       └── tools.astro                  # 在线诊断工具
 │
-├── pages/api/v1/admin/
-│   └── [...path].ts                     # 通配符代理：同源转发所有 admin API 请求
+├── pages/api/v1/
+│   ├── admin/[...path].ts               # 通配符代理：同源转发所有 admin API 请求
+│   └── tags.ts                          # 公开标签列表的同源代理，编辑默认标签时使用
 │
 └── components/admin/
-    ├── AdminShell.tsx                   # 顶部导航 + 认证 Context Provider
+    ├── AdminShell.tsx                   # 唯一 React 岛：导航 + 认证 Context Provider + 页面主体
     ├── AdminLogin.tsx                   # Token 输入弹窗
     │
     ├── submissions/
@@ -55,24 +58,22 @@ web/src/
     │
     ├── blogs/
     │   ├── BlogsTable.tsx               # 博客列表（带搜索/筛选栏）
-    │   ├── BlogRow.tsx                  # 表格行组件
     │   ├── BlogDetailDrawer.tsx         # 博客详情侧边抽屉（编辑 + 运维操作）
+    │   ├── CreateBlogDialog.tsx         # 直接添加博客
     │   ├── EditBlogForm.tsx             # 博客元数据编辑表单
     │   └── DeleteBlogDialog.tsx         # 确认下架对话框（含排除原因选择）
     │
     ├── excluded/
-    │   ├── ExcludedTable.tsx            # 排除名单表格
-    │   └── RestoreDialog.tsx            # 确认解除排除对话框
+    │   └── ExcludedTable.tsx            # 排除名单与确认解除弹窗
     │
     ├── tools/
-    │   ├── InspectForm.tsx              # URL 输入表单
-    │   └── CheckReportView.tsx          # 完整检测报告展示（可复用 CheckReportPanel）
+    │   └── InspectTool.tsx              # URL 输入与检测报告展示
     │
     └── ui/
         ├── AdminBadge.tsx               # 状态徽章（统一状态色彩映射）
         ├── CopyButton.tsx               # 一键复制 URL/Host 按钮
         ├── TimeAgo.tsx                  # 相对时间显示（"10 分钟前"）
-        └── KeyHint.tsx                  # 键盘快捷键提示标签
+        └── TagInput.tsx                 # 域名输入
 ```
 
 ---
@@ -102,16 +103,16 @@ web/src/
   <head>
     <meta charset="UTF-8" />
     <title>Explore Admin</title>
-    <!-- 不引用读者侧 theme.js；管理端用独立 minimal-theme.js -->
+    <meta name="robots" content="noindex, nofollow" />
   </head>
   <body>
     <!-- AdminShell 是整页 React 岛，client:load 立即激活 -->
-    <AdminShell client:load activeTab="submissions">
-      <SubmissionsQueue />
-    </AdminShell>
+    <AdminShell client:load activeTab="submissions" />
   </body>
 </html>
 ```
+
+业务组件由 `AdminShell` 在同一个 React 树内按 `activeTab` 渲染，以便共享认证 Context。Astro 页面不再另开子组件 React 岛。
 
 **为什么不在 Astro 服务端做 Token 验证？**
 
@@ -149,8 +150,8 @@ export const useAdminAuth = () => useContext(AuthContext);
 
 | 存储位置 | 触发条件 | 生命周期 |
 |---|---|---|
-| `sessionStorage["admin_token"]` | 默认（不勾选"记住我"） | 标签页关闭即清除 |
-| `localStorage["admin_token"]` | 勾选"记住登录状态" | 手动登出或清除浏览器数据时清除 |
+| `sessionStorage["explore_admin_token"]` | 默认（不勾选"记住我"） | 标签页关闭即清除 |
+| `localStorage["explore_admin_token"]` | 勾选"记住登录状态" | 手动登出或清除浏览器数据时清除 |
 
 **读取优先级**：`sessionStorage` → `localStorage`
 
@@ -217,7 +218,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
 
   const res = await fetch(target, {
     method: request.method,
-    headers: request.headers, // Authorization 头原样透传
+    headers: filteredHeaders, // 仅透传 Authorization、Content-Type、Accept-Language
     body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
     // @ts-expect-error Node fetch duplex 选项
     duplex: "half",
@@ -292,7 +293,7 @@ export interface AdminBlog {
   show_excerpt: boolean;
   extra_domains: string[];
   default_tags: string[];
-  /** 是否被前端判定为健康可见（active + 30 天内成功抓取） */
+  /** 后端根据状态、失联时间和最近成功抓取时间计算 */
   visible: boolean;
   fetch_interval_seconds: number;
   next_fetch_at: string;
@@ -315,22 +316,28 @@ export interface ExcludedHost {
 /** 对应后端 model.CheckReport（公共类型，复用读者侧的定义） */
 export interface CheckReport {
   passed: boolean;
-  title: string;
-  description: string;
-  latest_entry_title: string;
-  feed_url: string;
-  generator: string;
-  language: string;
-  items_total: number;
-  items_valid: number;
-  latest_published_at: string | null;
+  input_url: string;
+  title?: string;
+  description?: string;
+  latest_entry_title?: string;
+  feed_url?: string;
+  generator?: string;
+  language?: string;
+  items?: {
+    total: number;
+    valid: number;
+    trusted_dates: number;
+    latest_published_at?: string;
+  };
   problems: Problem[];
 }
 
 export interface Problem {
   code: string;
-  message: string;
-  level: "error" | "warning" | "info";
+  severity: "error" | "warning" | "info";
+  count?: number;
+  detail?: string;
+  hint?: string;
 }
 
 /** 审批通过请求体 */
@@ -447,7 +454,7 @@ AdminLogin
 **交互细节**：
 - `Dialog` 的 `preventClose` 属性设为 `true`，禁止用户绕过登录；
 - 按下 Enter 键等同于点击"确认登录"；
-- 提交时发送一次 `GET /api/v1/admin/submissions?status=pending&limit=1` 来验证 Token 有效性，成功则登录，401 则展示错误文案。
+- 提交时发送一次 `GET /api/v1/admin/submissions?status=pending` 来验证 Token 有效性，成功则登录，401 则展示错误文案。
 
 ---
 
@@ -589,11 +596,10 @@ BlogsTable
     └── [编辑 Tab]
         └── EditBlogForm
             ├── Input: 博客名称
-            ├── Textarea: 博客简介 description
             ├── Input: 语言
             ├── Input: Feed URL
             ├── TagInput: 额外域名
-            ├── TagSelect: 默认标签（下拉多选，最多 3 个，选项来自 /api/v1/tags）
+            ├── TagSelect: 默认标签（最多 3 个，从 /api/v1/tags 读取 slug 与中文名称）
             ├── Switch: 展示文章摘要
             ├── Select: 状态（active / paused）
             ├── Input: 状态说明 status_note（status=paused 时显示）

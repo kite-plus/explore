@@ -250,6 +250,11 @@ func TestFetchCycle(t *testing.T) {
 	if got := e.blog(b.Host); got.ETag != `"v2"` || got.FetchInterval != time.Hour {
 		t.Errorf("after change = %+v", got)
 	}
+	attempts, err := e.s.FetchAttempts(context.Background(), b.Host, 10)
+	if err != nil || len(attempts) != 3 || attempts[0].Outcome != "changed" ||
+		attempts[1].Outcome != "unchanged" || attempts[2].Outcome != "changed" {
+		t.Errorf("fetch attempts = %+v, %v", attempts, err)
+	}
 }
 
 func TestDescriptionFallsBackToFeed(t *testing.T) {
@@ -361,6 +366,11 @@ func TestFailuresBackOff(t *testing.T) {
 	got := e.blog(b.Host)
 	if got.ConsecutiveFailures != 1 || got.LastError != "HTTP 500" || got.GoneSince != nil {
 		t.Fatalf("after one failure = %+v", got)
+	}
+	attempts, err := e.s.FetchAttempts(context.Background(), b.Host, 10)
+	if err != nil || len(attempts) != 1 || attempts[0].Outcome != "failed" ||
+		attempts[0].Error != "HTTP 500" || attempts[0].HTTPStatus == nil || *attempts[0].HTTPStatus != 500 {
+		t.Errorf("failed fetch attempt = %+v, %v", attempts, err)
 	}
 	near(t, "retry", got.NextFetchAt, time.Now().Add(time.Hour))
 

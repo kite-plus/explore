@@ -12,6 +12,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -58,6 +59,8 @@ type Worker struct {
 func (w *Worker) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
+	workerID := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+	wg.Go(func() { w.heartbeatLoop(ctx, workerID) })
 	if w.Tagger != nil {
 		wg.Go(func() { w.tagLoop(ctx) })
 	}
@@ -83,6 +86,28 @@ func (w *Worker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func (w *Worker) heartbeatLoop(ctx context.Context, workerID string) {
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := w.Store.RemoveWorkerHeartbeat(cleanup, workerID); err != nil {
+			w.log().Warn("removing worker heartbeat failed", "error", err)
+		}
+	}()
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		if err := w.Store.RecordWorkerHeartbeat(ctx, workerID); err != nil && ctx.Err() == nil {
+			w.log().Error("recording worker heartbeat failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 		}
 	}
@@ -159,6 +184,17 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 func (w *Worker) process(ctx context.Context, b store.Claimed) {
 	start := w.now()
 	log := w.log().With("host", b.Host, "feed", b.FeedURL)
+	outcome := "failed"
+	reason := "抓取任务意外结束"
+	var httpStatus *int
+	var entryCount *int
+	defer func() {
+		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := w.Store.FinishFetchAttempt(finishCtx, b.AttemptID, outcome, httpStatus, entryCount, reason); err != nil {
+			log.Error("recording fetch attempt failed", "error", err)
+		}
+	}()
 
 	// Without entries the cache was emptied or never filled; asking the
 	// server for changes would keep it empty.
@@ -168,6 +204,7 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 	}
 	resp, err := w.Fetch.Get(ctx, req)
 	if err != nil {
+		reason = err.Error()
 		// Only a group naming KiteExplore is the author opting out; the group
 		// for every crawler is often an SEO template aimed at search engines.
 		var refused *fetch.RobotsError
@@ -175,29 +212,42 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 		w.fail(ctx, log, b, err.Error(), 0, gone)
 		return
 	}
+	status := resp.Status
+	httpStatus = &status
 
 	switch {
 	case resp.Status == http.StatusNotModified && b.HasEntries:
-		w.unchanged(ctx, log, b, resp, start)
+		if err := w.unchanged(ctx, log, b, resp, start); err != nil {
+			reason = "recording unchanged fetch: " + err.Error()
+			return
+		}
+		outcome, reason = "unchanged", ""
 		return
 	case resp.Status == http.StatusGone:
+		reason = "HTTP 410"
 		w.fail(ctx, log, b, "HTTP 410", 0, true)
 		return
 	case resp.Status < 200 || resp.Status > 299:
-		w.fail(ctx, log, b, fmt.Sprintf("HTTP %d", resp.Status), resp.RetryAfter, false)
+		reason = fmt.Sprintf("HTTP %d", resp.Status)
+		w.fail(ctx, log, b, reason, resp.RetryAfter, false)
 		return
 	}
 
 	sum := sha256.Sum256(resp.Body)
 	if b.HasEntries && bytes.Equal(sum[:], b.BodyHash) {
-		w.unchanged(ctx, log, b, resp, start)
+		if err := w.unchanged(ctx, log, b, resp, start); err != nil {
+			reason = "recording unchanged fetch: " + err.Error()
+			return
+		}
+		outcome, reason = "unchanged", ""
 		return
 	}
 
 	f, err := feed.Parse(resp.Body)
 	if err != nil {
 		// A broken feed is a failure, never an empty snapshot.
-		w.fail(ctx, log, b, "parse: "+err.Error(), 0, false)
+		reason = "parse: " + err.Error()
+		w.fail(ctx, log, b, reason, 0, false)
 		return
 	}
 	res := normalize.Snapshot(f, normalize.Blog{Host: b.Host, ExtraDomains: b.ExtraDomains, ShowExcerpt: b.ShowExcerpt, FeedURL: resp.URL})
@@ -219,24 +269,29 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 	}
 
 	if err := w.Store.SyncSnapshot(ctx, b.ID, res.Entries, st); err != nil {
+		reason = "storing snapshot: " + err.Error()
 		log.Error("storing the snapshot failed", "error", err)
 		return
 	}
+	outcome, reason = "changed", ""
+	entries := len(res.Entries)
+	entryCount = &entries
 	w.refreshDescription(ctx, b, f.Description)
 	log.Info("fetched", "outcome", "changed", "status", resp.Status, "bytes", len(resp.Body),
 		"entries", len(res.Entries), "off_domain", res.Stats.OffDomain, "no_link", res.Stats.NoLink,
 		"untrusted", res.Stats.Untrusted, "duration", w.now().Sub(start))
 }
 
-func (w *Worker) unchanged(ctx context.Context, log *slog.Logger, b store.Claimed, resp *fetch.Response, start time.Time) {
+func (w *Worker) unchanged(ctx context.Context, log *slog.Logger, b store.Claimed, resp *fetch.Response, start time.Time) error {
 	interval := nextInterval(b.FetchInterval, false)
 	st := store.FetchState{ETag: resp.ETag, LastModified: resp.LastModified, FetchInterval: interval, NextFetchAt: w.now().Add(jitter(interval, w.rand()))}
 	if err := w.Store.RecordUnchanged(ctx, b.ID, st); err != nil {
 		log.Error("recording an unchanged fetch failed", "error", err)
-		return
+		return err
 	}
 	w.refreshDescription(ctx, b, "")
 	log.Info("fetched", "outcome", "unchanged", "status", resp.Status, "duration", w.now().Sub(start))
+	return nil
 }
 
 func (w *Worker) fail(ctx context.Context, log *slog.Logger, b store.Claimed, reason string, retryAfter time.Duration, gone bool) {

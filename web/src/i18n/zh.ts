@@ -30,7 +30,6 @@ export const zh = {
     feedLabel: "文章流",
     discover: "发现",
     subscriptions: "订阅",
-    comingSoon: "即将开放",
     intro: "来自已收录博客的公开订阅源，按发布时间排列。点击标题，会在新标签页打开作者的网站阅读原文。",
     empty: "暂时还没有文章。",
     older: "更早的文章",

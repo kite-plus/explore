@@ -56,15 +56,29 @@ func (s *Store) CreateSubmission(ctx context.Context, sub model.Submission) (mod
 	if err != nil {
 		return model.Submission{}, err
 	}
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO submissions (host, site_url, feed_url, note, check_report)
-		VALUES (@host, @site_url, @feed_url, nullif(@note, ''), @report)
-		RETURNING `+submissionColumns,
-		pgx.NamedArgs{"host": sub.Host, "site_url": sub.SiteURL, "feed_url": sub.FeedURL, "note": sub.Note, "report": raw})
-	created, err := scanSubmission(row)
-	if isUniqueViolation(err) {
-		return model.Submission{}, ErrPending
-	}
+	var created model.Submission
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockHost(ctx, tx, sub.Host); err != nil {
+			return err
+		}
+		var listed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM blogs WHERE host = $1)`, sub.Host).Scan(&listed); err != nil {
+			return err
+		}
+		if listed {
+			return ErrListed
+		}
+		var err error
+		created, err = scanSubmission(tx.QueryRow(ctx, `
+			INSERT INTO submissions (host, site_url, feed_url, note, check_report)
+			VALUES (@host, @site_url, @feed_url, nullif(@note, ''), @report)
+			RETURNING `+submissionColumns,
+			pgx.NamedArgs{"host": sub.Host, "site_url": sub.SiteURL, "feed_url": sub.FeedURL, "note": sub.Note, "report": raw}))
+		if isUniqueViolation(err) {
+			return ErrPending
+		}
+		return err
+	})
 	return created, err
 }
 
@@ -108,6 +122,15 @@ func (s *Store) ApproveSubmission(ctx context.Context, id string, a Approval) (m
 	}
 	var blog model.Blog
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var host string
+		if err := tx.QueryRow(ctx, `SELECT host FROM submissions WHERE id = $1::uuid`, id).Scan(&host); errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if err := lockHost(ctx, tx, host); err != nil {
+			return err
+		}
 		sub, err := scanSubmission(tx.QueryRow(ctx, `SELECT `+submissionColumns+` FROM submissions WHERE id = $1::uuid FOR UPDATE`, id))
 		if err != nil {
 			return err
@@ -135,6 +158,11 @@ func (s *Store) ApproveSubmission(ctx context.Context, id string, a Approval) (m
 		return err
 	})
 	return blog, err
+}
+
+func lockHost(ctx context.Context, tx pgx.Tx, host string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1570, hashtext($1))`, host)
+	return err
 }
 
 // RejectSubmission closes a pending submission with a note the author sees.

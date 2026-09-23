@@ -49,6 +49,23 @@ export async function loadHome(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Str
   return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
 }
 
+export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loaded<StreamPage> | Response> {
+  cacheControl(ctx, "private, no-store");
+  const cursor = param(ctx, "cursor");
+  const filter = param(ctx, "lang");
+  const tag = param(ctx, "tag");
+  const [r, tags] = await Promise.all([
+    api.following(lang, { cursor, lang: filter, tag, limit: 30 }, ctx.request.headers.get("cookie") ?? ""),
+    tagList(lang),
+  ]);
+  if (r.kind === "error" && r.status === 401) {
+    return ctx.redirect(localePath(lang, "/login") + `?next=${encodeURIComponent(localePath(lang, "/following"))}`, 302);
+  }
+  if (r.kind === "unavailable") return unavailable(ctx);
+  if (r.kind !== "ok") return notFound(ctx);
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
+}
+
 export interface DirectoryPage {
   page: Page<Blog>;
   filter?: string;

@@ -65,7 +65,16 @@ export interface CheckReport {
   format?: string;
   generator?: string;
   title?: string;
+  description?: string;
+  latest_entry_title?: string;
   language?: string;
+  http?: { status: number; etag: boolean; last_modified: boolean };
+  items?: {
+    total: number;
+    valid: number;
+    trusted_dates: number;
+    latest_published_at?: string;
+  };
   problems: Problem[];
   passed: boolean;
 }

@@ -37,11 +37,16 @@ func init() { gin.SetMode(gin.TestMode) }
 type env struct {
 	t    *testing.T
 	s    *store.Store
+	srv  *api.Server
 	h    http.Handler
 	logs *bytes.Buffer
 }
 
 func newEnv(t *testing.T, admins bool) *env {
+	return newEnvWithPrivate(t, admins, true)
+}
+
+func newEnvWithPrivate(t *testing.T, admins, allowPrivate bool) *env {
 	st := storetest.New(t)
 	logs := &bytes.Buffer{}
 	srv := &api.Server{
@@ -50,7 +55,7 @@ func newEnv(t *testing.T, admins bool) *env {
 		ImageFetch:   fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second}),
 		LinkFetch:    fetch.New(fetch.Options{UserAgent: "test", AllowPrivate: true, Timeout: 3 * time.Second}),
 		PublicURL:    "https://explore.example.org",
-		AllowPrivate: true,
+		AllowPrivate: allowPrivate,
 		Log:          slog.New(slog.NewTextHandler(logs, nil)),
 	}
 	if admins {
@@ -60,7 +65,7 @@ func newEnv(t *testing.T, admins bool) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &env{t: t, s: st, h: h, logs: logs}
+	return &env{t: t, s: st, srv: srv, h: h, logs: logs}
 }
 
 type req struct {
@@ -590,6 +595,86 @@ func TestSubmissionFlow(t *testing.T) {
 	}
 }
 
+func TestDirectListingRemovesPendingSubmission(t *testing.T) {
+	e := newEnv(t, true)
+	site := blogSite(t, true)
+
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `{"site_url":"` + site + `"}`})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("submit = %d %s", w.Code, w.Body.String())
+	}
+	sub := decode[submissionOut](t, w)
+
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/blogs", body: `{"site_url":"` + site + `"}`, admin: true})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("direct listing = %d %s", w.Code, w.Body.String())
+	}
+
+	w = e.do(req{method: http.MethodGet, path: "/api/v1/admin/submissions?status=pending", admin: true})
+	pending := decode[struct {
+		Data []submissionOut `json:"data"`
+	}](t, w)
+	if w.Code != http.StatusOK || len(pending.Data) != 0 {
+		t.Fatalf("pending after direct listing = %d %s", w.Code, w.Body.String())
+	}
+
+	w = e.get("/api/v1/submissions/" + sub.ID)
+	got := decode[submissionOut](t, w)
+	if got.Status != "approved" {
+		t.Errorf("submission status after direct listing = %q", got.Status)
+	}
+	stored, err := e.s.Submission(context.Background(), sub.ID)
+	if err != nil || stored.ReviewedBy != "alice" || stored.BlogID == nil {
+		t.Errorf("stored review after direct listing = %+v, %v", stored, err)
+	}
+}
+
+func TestFetchQueueShowsWorkerAndAttemptState(t *testing.T) {
+	e := newEnv(t, true)
+	ctx := context.Background()
+	blog, err := e.s.CreateBlog(ctx, store.NewBlog{
+		Host: "queue.example.com", Name: "Queue Blog", SiteURL: "https://queue.example.com/",
+		FeedURL: "https://queue.example.com/feed", Language: "en", ShowExcerpt: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/fetch-queue", admin: true})
+	queue := decode[struct {
+		WorkerOnline bool `json:"worker_online"`
+		Data         []struct {
+			Host        string `json:"host"`
+			QueueStatus string `json:"queue_status"`
+		} `json:"data"`
+	}](t, w)
+	if w.Code != http.StatusOK || queue.WorkerOnline || len(queue.Data) != 1 ||
+		queue.Data[0].Host != blog.Host || queue.Data[0].QueueStatus != "queued" {
+		t.Fatalf("offline queue = %d %s", w.Code, w.Body.String())
+	}
+	if err := e.s.RecordWorkerHeartbeat(ctx, "test-worker"); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := e.s.ClaimDue(ctx, 1, time.Minute)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claimed = %+v, %v", claimed, err)
+	}
+	w = e.do(req{method: http.MethodGet, path: "/api/v1/admin/fetch-queue", admin: true})
+	queue = decode[struct {
+		WorkerOnline bool `json:"worker_online"`
+		Data         []struct {
+			Host        string `json:"host"`
+			QueueStatus string `json:"queue_status"`
+		} `json:"data"`
+	}](t, w)
+	if !queue.WorkerOnline || queue.Data[0].QueueStatus != "running" {
+		t.Errorf("running queue = %d %s", w.Code, w.Body.String())
+	}
+	w = e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs/queue.example.com/fetch-attempts", admin: true})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"outcome":"running"`) {
+		t.Errorf("fetch attempts = %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestFailedCheckStoresNothing(t *testing.T) {
 	e := newEnv(t, false)
 	site := blogSite(t, false)
@@ -671,8 +756,8 @@ func TestAdminAuth(t *testing.T) {
 	}
 
 	closed := newEnv(t, false)
-	if w := closed.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusNotFound {
-		t.Errorf("without configured tokens the admin API must not exist: %d", w.Code)
+	if w := closed.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusUnauthorized {
+		t.Errorf("without a maintainer credential the admin API must reject access: %d", w.Code)
 	}
 }
 
@@ -771,7 +856,7 @@ func TestLogsCarryNoClientAddress(t *testing.T) {
 }
 
 func TestSubmissionsAreRateLimited(t *testing.T) {
-	e := newEnv(t, false)
+	e := newEnvWithPrivate(t, false, false)
 	for i := range 6 {
 		w := e.do(req{method: http.MethodPost, path: "/api/v1/submissions", body: `not json`})
 		if i < 5 && w.Code != http.StatusBadRequest {

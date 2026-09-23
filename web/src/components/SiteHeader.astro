@@ -1,5 +1,6 @@
 ---
 import Logo from "@/components/Logo.astro";
+import { AccountNav } from "@/components/reader/AccountNav";
 import { Monitor, Moon, Sun } from "lucide-react";
 
 import { dict, localePath, other, type Lang } from "@/i18n";
@@ -15,6 +16,7 @@ const t = dict(lang);
 const links = [
   { href: localePath(lang, "/"), label: t.nav.home, current: path === "/" },
   { href: localePath(lang, "/blogs"), label: t.nav.blogs, current: path.startsWith("/blogs") },
+  { href: localePath(lang, "/following"), label: t.home.subscriptions, current: path === "/following" },
   { href: localePath(lang, "/submit"), label: t.nav.submit, current: path === "/submit" },
   { href: localePath(lang, "/about"), label: t.nav.about, current: path === "/about" },
 ];
@@ -40,6 +42,7 @@ const switchTo = other(lang);
         ))
       }
     </nav>
+    <AccountNav client:load lang={lang} />
     <a
       href={localePath(switchTo, bilingual ? path : "/")}
       hreflang={switchTo}

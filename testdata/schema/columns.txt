@@ -1,3 +1,10 @@
+blog_claim_challenges.blog_id bigint
+blog_claim_challenges.expires_at timestamp with time zone
+blog_claim_challenges.token_hash bytea
+blog_claim_challenges.user_id uuid
+blog_owners.blog_id bigint
+blog_owners.user_id uuid
+blog_owners.verified_at timestamp with time zone
 blogs.body_hash bytea
 blogs.consecutive_failures integer
 blogs.created_at timestamp with time zone
@@ -44,6 +51,18 @@ excluded_hosts.created_at timestamp with time zone
 excluded_hosts.host text
 excluded_hosts.note text
 excluded_hosts.reason text
+fetch_attempts.blog_id bigint
+fetch_attempts.entry_count integer
+fetch_attempts.error text
+fetch_attempts.finished_at timestamp with time zone
+fetch_attempts.http_status integer
+fetch_attempts.id bigint
+fetch_attempts.outcome text
+fetch_attempts.started_at timestamp with time zone
+sessions.created_at timestamp with time zone
+sessions.expires_at timestamp with time zone
+sessions.token_hash bytea
+sessions.user_id uuid
 submissions.blog_id bigint
 submissions.check_report jsonb
 submissions.created_at timestamp with time zone
@@ -56,3 +75,19 @@ submissions.reviewed_at timestamp with time zone
 submissions.reviewed_by text
 submissions.site_url text
 submissions.status text
+subscriptions.blog_id bigint
+subscriptions.created_at timestamp with time zone
+subscriptions.user_id uuid
+user_identities.issuer text
+user_identities.linked_at timestamp with time zone
+user_identities.subject text
+user_identities.user_id uuid
+users.created_at timestamp with time zone
+users.display_name text
+users.email text
+users.id uuid
+users.is_admin boolean
+users.password_hash text
+worker_heartbeats.last_seen_at timestamp with time zone
+worker_heartbeats.started_at timestamp with time zone
+worker_heartbeats.worker_id text

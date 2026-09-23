@@ -61,6 +61,12 @@ export const api = {
       { lang },
     ),
 
+  following: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
+    call<Page<Entry>>(
+      `/api/v1/me/entries${query({ cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
+      { lang, headers: { Cookie: cookie } },
+    ),
+
   tags: (lang: Lang) => call<{ data: Tag[] }>("/api/v1/tags", { lang }),
 
   blogs: (lang: Lang, p: { cursor?: string; lang?: string; limit?: number }) =>

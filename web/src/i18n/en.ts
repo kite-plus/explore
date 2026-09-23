@@ -32,7 +32,6 @@ export const en: Dict = {
     feedLabel: "Post feeds",
     discover: "Discover",
     subscriptions: "Following",
-    comingSoon: "Soon",
     intro: "From the public feeds of listed blogs, newest first. Click a title to read the post on the author's site, in a new tab.",
     empty: "No posts yet.",
     older: "Older posts",

@@ -13,6 +13,7 @@ import (
 // NewBlog is a blog about to be listed.
 type NewBlog struct {
 	Host         string
+	Reviewer     string
 	Name         string
 	SiteURL      string
 	FeedURL      string
@@ -27,7 +28,17 @@ func (s *Store) CreateBlog(ctx context.Context, nb NewBlog) (model.Blog, error) 
 	var blog model.Blog
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
+		if err = lockHost(ctx, tx, nb.Host); err != nil {
+			return err
+		}
 		blog, err = createBlog(ctx, tx, nb)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE submissions
+			SET status = 'approved', blog_id = $2, reviewed_by = coalesce(nullif($3, ''), 'system'), reviewed_at = now()
+			WHERE host = $1 AND status = 'pending'`, nb.Host, blog.ID, nb.Reviewer)
 		return err
 	})
 	return blog, err

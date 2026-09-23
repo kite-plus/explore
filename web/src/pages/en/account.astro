@@ -1,0 +1,6 @@
+---
+import { AccountPanel } from "@/components/reader/AccountPanel";
+import Base from "@/layouts/Base.astro";
+Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+<Base lang="en" title="My account" description="Manage subscriptions and claimed blogs" path="/account" noindex><AccountPanel client:load lang="en" /></Base>

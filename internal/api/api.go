@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"log/slog"
 	"net/http"
@@ -32,6 +33,7 @@ type Server struct {
 	LinkFetch  *fetch.Client
 	PublicURL  string
 	Admins     []AdminToken
+	LookupTXT  func(context.Context, string) ([]string, error)
 	// TrustedProxies may set X-Forwarded-For; see
 	// docs/design/project-layout.md section 6.
 	TrustedProxies []string
@@ -41,15 +43,17 @@ type Server struct {
 	Log          *slog.Logger
 	Now          func() time.Time
 
-	readLimit    *limiter
-	submitLimit  *limiter
-	previewLimit *limiter
-	linkLimit    *limiter
-	linkSlots    chan struct{}
-	imageMu      sync.Mutex
-	images       map[string]cachedImage
-	faviconMu    sync.Mutex
-	favicons     map[string]cachedImage
+	readLimit     *limiter
+	submitLimit   *limiter
+	previewLimit  *limiter
+	linkLimit     *limiter
+	linkSlots     chan struct{}
+	imageMu       sync.Mutex
+	registerLimit *limiter
+	loginLimit    *limiter
+	images        map[string]cachedImage
+	faviconMu     sync.Mutex
+	favicons      map[string]cachedImage
 }
 
 // Handler builds the router.
@@ -69,6 +73,8 @@ func (s *Server) Handler() (http.Handler, error) {
 		s.previewLimit = newLimiter(60, time.Hour, s.Now)
 	}
 	s.linkLimit = newLimiter(10, time.Hour, s.Now)
+	s.registerLimit = newLimiter(5, time.Hour, s.Now)
+	s.loginLimit = newLimiter(10, time.Minute, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -98,22 +104,36 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.POST("/submissions", s.limit(s.submitLimit), s.submit)
 	v1.POST("/submissions/preview", s.limit(s.previewLimit), s.previewSubmission)
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)
+	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
+	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
+	account := v1.Group("/", func(c *gin.Context) { c.Header("Cache-Control", "private, no-store"); c.Next() }, s.requireUser())
+	account.GET("/me", s.me)
+	account.PATCH("/me", s.updateMe)
+	account.DELETE("/me", s.deleteMe)
+	account.POST("/auth/logout", s.logout)
+	account.GET("/me/subscriptions", s.subscriptions)
+	account.PUT("/me/subscriptions/:host", s.addSubscription)
+	account.DELETE("/me/subscriptions/:host", s.removeSubscription)
+	account.GET("/me/entries", s.following)
+	account.GET("/me/blogs", s.ownedBlogs)
+	account.POST("/me/blog-claims/:host", s.startBlogClaim)
+	account.POST("/me/blog-claims/:host/verify", s.verifyBlogClaim)
 
-	// Without tokens the admin routes do not exist at all.
-	if len(s.Admins) > 0 {
-		admin := v1.Group("/admin", s.requireAdmin())
-		admin.GET("/submissions", s.adminSubmissions)
-		admin.POST("/submissions/:id/approve", s.adminApprove)
-		admin.POST("/submissions/:id/reject", s.adminReject)
-		admin.GET("/blogs", s.adminBlogs)
-		admin.POST("/blogs", s.adminCreateBlog)
-		admin.PATCH("/blogs/:host", s.adminUpdateBlog)
-		admin.DELETE("/blogs/:host", s.adminDeleteBlog)
-		admin.POST("/blogs/:host/fetch", s.adminFetchNow)
-		admin.GET("/excluded-hosts", s.adminExcluded)
-		admin.DELETE("/excluded-hosts/:host", s.adminDeleteExcluded)
-		admin.POST("/check", s.adminCheck)
-	}
+	admin := v1.Group("/admin", s.requireAdmin())
+	admin.GET("/session", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	admin.GET("/submissions", s.adminSubmissions)
+	admin.POST("/submissions/:id/approve", s.adminApprove)
+	admin.POST("/submissions/:id/reject", s.adminReject)
+	admin.GET("/blogs", s.adminBlogs)
+	admin.GET("/fetch-queue", s.adminFetchQueue)
+	admin.POST("/blogs", s.adminCreateBlog)
+	admin.GET("/blogs/:host/fetch-attempts", s.adminFetchAttempts)
+	admin.PATCH("/blogs/:host", s.adminUpdateBlog)
+	admin.DELETE("/blogs/:host", s.adminDeleteBlog)
+	admin.POST("/blogs/:host/fetch", s.adminFetchNow)
+	admin.GET("/excluded-hosts", s.adminExcluded)
+	admin.DELETE("/excluded-hosts/:host", s.adminDeleteExcluded)
+	admin.POST("/check", s.adminCheck)
 	return r, nil
 }
 

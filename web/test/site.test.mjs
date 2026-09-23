@@ -71,14 +71,10 @@ describe("only local scripts, zero third parties", () => {
       assert.equal(res.status, 200);
       assert.equal(res.headers.get("set-cookie"), null, "no cookies");
       const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
-      assert.equal(scripts.length, entryPages.has(path) ? 3 : 1);
-      assert.equal(scripts[0][1], "", "inline, without src or type");
-      assert.equal(scripts[0][2], themeScript, "the theme script as written");
+      assert.ok(scripts.some(([, attrs, body]) => attrs === "" && body === themeScript), "the theme script stays inline");
       if (entryPages.has(path)) {
-        assert.equal(scripts[1][1], "", "inline, without src or type");
-        assert.equal(scripts[1][2], entryCheckScript, "the link check script as written");
-        assert.equal(scripts[2][1], "", "inline, without src or type");
-        assert.equal(scripts[2][2], entryStreamScript, "the stream script as written");
+        assert.ok(scripts.some(([, attrs, body]) => attrs === "" && body === entryCheckScript), "the link check script stays inline");
+        assert.ok(scripts.some(([, attrs, body]) => attrs === "" && body === entryStreamScript), "the stream script stays inline");
       }
       assert.doesNotMatch(html, /\sstyle="/i, "no inline style attributes");
       const csp = res.headers.get("content-security-policy") ?? "";
@@ -364,5 +360,78 @@ describe("submissions", () => {
     assert.match(zh, /等待审核/);
     assert.match(en, /English hint/);
     assert.match(en, /Waiting for review/);
+  });
+});
+
+describe("admin console", () => {
+  for (const path of ["/admin/submissions", "/admin/blogs", "/admin/queue", "/admin/excluded-hosts", "/admin/tools"]) {
+    test(`${path} serves a private single-island shell`, async () => {
+      const { res, html } = await page(path);
+      assert.equal(res.status, 200);
+      assert.match(html, /name="robots" content="noindex, nofollow"/);
+      assert.equal([...html.matchAll(/<astro-island\b/g)].length, 1);
+      assert.doesNotMatch(html, /ok\.example\.com/, "private data is loaded only after authentication");
+    });
+  }
+
+  test("the admin proxy forwards the token, session cookie, query and JSON body", async () => {
+    const unauthorized = await get("/api/v1/admin/submissions?status=pending");
+    assert.equal(unauthorized.status, 401);
+    const authorized = await get("/api/v1/admin/submissions?status=pending", {
+      headers: { Authorization: "Bearer test-admin-token", Cookie: "unrelated=secret" },
+    });
+    assert.equal(authorized.status, 200);
+    assert.equal(authorized.headers.get("cache-control"), "no-store");
+    const checked = await get("/api/v1/admin/check", {
+      method: "POST",
+      headers: { Authorization: "Bearer test-admin-token", "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ url: "https://ok.example.com/" }),
+    });
+    assert.equal(checked.status, 200);
+    assert.equal((await checked.json()).passed, true);
+    const [list, check] = stub.state.adminRequests.slice(-2);
+    assert.equal(list.query, "?status=pending");
+    assert.equal(list.cookie, "unrelated=secret");
+    assert.equal(check.method, "POST");
+    assert.deepEqual(JSON.parse(check.body), { url: "https://ok.example.com/" });
+  });
+
+  test("the tag proxy exposes backend slugs for blog editing", async () => {
+    const res = await get("/api/v1/tags");
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).data[0].slug, "backend");
+  });
+});
+
+describe("reader accounts", () => {
+  test("login and account pages are private", async () => {
+    for (const path of ["/login", "/en/login", "/account", "/en/account"]) {
+      const { res, html } = await page(path);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get("cache-control"), "private, no-store");
+      assert.match(html, /name="robots" content="noindex, follow"/);
+    }
+  });
+
+  test("following redirects anonymous readers and renders authenticated entries", async () => {
+    const anonymous = await get("/following");
+    assert.equal(anonymous.status, 302);
+    assert.match(anonymous.headers.get("location"), /^\/login\?next=/);
+    const response = await get("/following", { headers: { Cookie: "explore_session=test-session" } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.match(await response.text(), /缓存可以随时删掉/);
+  });
+
+  test("account proxy preserves the server session cookie", async () => {
+    const login = await get("/api/v1/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ email: "reader@example.com", password: "long-password" }),
+    });
+    assert.equal(login.status, 200);
+    assert.match(login.headers.get("set-cookie"), /explore_session=test-session/);
+    const me = await get("/api/v1/me", { headers: { Cookie: "explore_session=test-session" } });
+    assert.equal(me.status, 200);
+    assert.equal((await me.json()).display_name, "Reader");
   });
 });

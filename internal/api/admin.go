@@ -129,6 +129,95 @@ func (s *Server) adminBlogs(c *gin.Context) {
 	writeJSON(c, http.StatusOK, gin.H{"data": out})
 }
 
+type fetchAttemptJSON struct {
+	ID         int64      `json:"id"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+	Outcome    string     `json:"outcome"`
+	HTTPStatus *int       `json:"http_status"`
+	EntryCount *int       `json:"entry_count"`
+	Error      string     `json:"error"`
+}
+
+func toFetchAttempt(attempt store.FetchAttempt) fetchAttemptJSON {
+	return fetchAttemptJSON{
+		ID: attempt.ID, StartedAt: attempt.StartedAt.UTC(), FinishedAt: utc(attempt.FinishedAt),
+		Outcome: attempt.Outcome, HTTPStatus: attempt.HTTPStatus, EntryCount: attempt.EntryCount, Error: attempt.Error,
+	}
+}
+
+type fetchQueueItemJSON struct {
+	Host                string            `json:"host"`
+	Name                string            `json:"name"`
+	QueueStatus         string            `json:"queue_status"`
+	NextFetchAt         time.Time         `json:"next_fetch_at"`
+	LastFetchedAt       *time.Time        `json:"last_fetched_at"`
+	LastSucceededAt     *time.Time        `json:"last_succeeded_at"`
+	ConsecutiveFailures int               `json:"consecutive_failures"`
+	LastError           string            `json:"last_error"`
+	LastAttempt         *fetchAttemptJSON `json:"last_attempt"`
+}
+
+func (s *Server) adminFetchQueue(c *gin.Context) {
+	items, err := s.Store.FetchQueue(c.Request.Context(), 1000)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	workerCount, lastSeen, err := s.Store.WorkerHeartbeats(c.Request.Context())
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	now := s.Now()
+	workerOnline := workerCount > 0
+	out := make([]fetchQueueItemJSON, 0, len(items))
+	for _, item := range items {
+		status := "scheduled"
+		switch {
+		case item.Status == string(model.BlogPaused):
+			status = "paused"
+		case item.LastAttempt != nil && item.LastAttempt.Outcome == "running" &&
+			(!workerOnline || now.Sub(item.LastAttempt.StartedAt) > policy.FetchLease):
+			status = "stalled"
+		case item.LastAttempt != nil && item.LastAttempt.Outcome == "running":
+			status = "running"
+		case !item.NextFetchAt.After(now):
+			status = "queued"
+		case item.ConsecutiveFailures > 0:
+			status = "retry"
+		}
+		row := fetchQueueItemJSON{
+			Host: item.Host, Name: item.Name, QueueStatus: status,
+			NextFetchAt: item.NextFetchAt.UTC(), LastFetchedAt: utc(item.LastFetchedAt),
+			LastSucceededAt: utc(item.LastSucceededAt), ConsecutiveFailures: item.ConsecutiveFailures,
+			LastError: item.LastError,
+		}
+		if item.LastAttempt != nil {
+			attempt := toFetchAttempt(*item.LastAttempt)
+			row.LastAttempt = &attempt
+		}
+		out = append(out, row)
+	}
+	writeJSON(c, http.StatusOK, gin.H{
+		"worker_online": workerOnline, "worker_count": workerCount,
+		"worker_last_seen_at": utc(lastSeen), "data": out,
+	})
+}
+
+func (s *Server) adminFetchAttempts(c *gin.Context) {
+	attempts, err := s.Store.FetchAttempts(c.Request.Context(), strings.ToLower(c.Param("host")), 20)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	out := make([]fetchAttemptJSON, 0, len(attempts))
+	for _, attempt := range attempts {
+		out = append(out, toFetchAttempt(attempt))
+	}
+	writeJSON(c, http.StatusOK, gin.H{"data": out})
+}
+
 type createBlogRequest struct {
 	SiteURL      string   `json:"site_url"`
 	FeedURL      string   `json:"feed_url"`
@@ -161,7 +250,7 @@ func (s *Server) adminCreateBlog(c *gin.Context) {
 		return
 	}
 	blog, err := s.Store.CreateBlog(c.Request.Context(), store.NewBlog{
-		Host: t.host, SiteURL: t.site, FeedURL: report.FeedURL,
+		Host: t.host, Reviewer: reviewer(c), SiteURL: t.site, FeedURL: report.FeedURL,
 		Name:         firstNonEmpty(strings.TrimSpace(req.Name), report.Title, t.host),
 		Language:     firstNonEmpty(strings.TrimSpace(req.Language), report.Language, "und"),
 		Generator:    report.Generator,

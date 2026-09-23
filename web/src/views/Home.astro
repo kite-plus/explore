@@ -49,10 +49,9 @@ const names = data ? tagNames(data.tags, lang) : {};
             >
               {t.home.discover}
             </a>
-            <span aria-disabled="true" class="pb-3 text-sm text-muted-foreground/70">
+            <a href={localePath(lang, "/following")} class="pb-3 text-sm text-muted-foreground hover:text-foreground">
               {t.home.subscriptions}
-              <span class="ml-1 text-[0.7rem]">{t.home.comingSoon}</span>
-            </span>
+            </a>
           </nav>
           <div class="flex flex-wrap items-center gap-2 pb-2">
             <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} variant="segmented" />

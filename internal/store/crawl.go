@@ -14,6 +14,7 @@ import (
 // Claimed is a blog the worker took for one fetch.
 type Claimed struct {
 	ID                   int64
+	AttemptID            int64
 	Host                 string
 	SiteURL              string
 	FeedURL              string
@@ -34,19 +35,29 @@ type Claimed struct {
 // into the future, so a worker that dies mid-fetch only delays them.
 func (s *Store) ClaimDue(ctx context.Context, batch int, lease time.Duration) ([]Claimed, error) {
 	rows, err := s.pool.Query(ctx, `
-		UPDATE blogs
-		SET next_fetch_at = now() + (@lease * interval '1 second')
-		WHERE id IN (
+		WITH due AS (
 			SELECT id FROM blogs
 			WHERE status = 'active' AND next_fetch_at <= now()
 			ORDER BY next_fetch_at
 			LIMIT @batch
 			FOR UPDATE SKIP LOCKED
+		), claimed AS (
+			UPDATE blogs b
+			SET next_fetch_at = now() + (@lease * interval '1 second')
+			WHERE b.id IN (SELECT id FROM due)
+			RETURNING b.id, b.host, b.site_url, b.feed_url, b.description_checked_at,
+			          b.etag, b.last_modified, b.body_hash, b.fetch_interval,
+			          b.consecutive_failures, b.show_excerpt, b.extra_domains
+		), attempts AS (
+			INSERT INTO fetch_attempts (blog_id)
+			SELECT id FROM claimed RETURNING id, blog_id
 		)
-		RETURNING id, host, site_url, feed_url, description_checked_at, coalesce(etag, ''), coalesce(last_modified, ''), body_hash,
-		          extract(epoch FROM fetch_interval)::bigint, consecutive_failures,
-		          show_excerpt, extra_domains,
-		          EXISTS (SELECT 1 FROM entries e WHERE e.blog_id = blogs.id)`,
+		SELECT c.id, a.id, c.host, c.site_url, c.feed_url, c.description_checked_at,
+		       coalesce(c.etag, ''), coalesce(c.last_modified, ''), c.body_hash,
+		       extract(epoch FROM c.fetch_interval)::bigint, c.consecutive_failures,
+		       c.show_excerpt, c.extra_domains,
+		       EXISTS (SELECT 1 FROM entries e WHERE e.blog_id = c.id)
+		FROM claimed c JOIN attempts a ON a.blog_id = c.id`,
 		pgx.NamedArgs{"lease": seconds(lease), "batch": batch})
 	if err != nil {
 		return nil, err
@@ -54,7 +65,7 @@ func (s *Store) ClaimDue(ctx context.Context, batch int, lease time.Duration) ([
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Claimed, error) {
 		var c Claimed
 		var interval int64
-		err := row.Scan(&c.ID, &c.Host, &c.SiteURL, &c.FeedURL, &c.DescriptionCheckedAt, &c.ETag, &c.LastModified, &c.BodyHash,
+		err := row.Scan(&c.ID, &c.AttemptID, &c.Host, &c.SiteURL, &c.FeedURL, &c.DescriptionCheckedAt, &c.ETag, &c.LastModified, &c.BodyHash,
 			&interval, &c.ConsecutiveFailures, &c.ShowExcerpt, &c.ExtraDomains, &c.HasEntries)
 		c.FetchInterval = time.Duration(interval) * time.Second
 		return c, err

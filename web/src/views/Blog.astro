@@ -1,5 +1,6 @@
 ---
 import BlogAvatar from "@/components/BlogAvatar.astro";
+import { SubscribeButton } from "@/components/reader/SubscribeButton";
 import EntryItem from "@/components/EntryItem.astro";
 import ExternalLink from "@/components/ExternalLink.astro";
 import Message from "@/components/Message.astro";
@@ -48,6 +49,7 @@ const description = data
           <ExternalLink lang={lang} href={data.blog.feed_url} class={buttonVariants({ size: "sm", variant: "outline" })}>
             {t.blog.feed}
           </ExternalLink>
+          <SubscribeButton client:load host={data.blog.host} lang={lang} />
           {data.blog.generator && data.blog.generator !== "unknown" && data.blog.generator !== "other" && (
             <Badge variant="outline" title={t.blog.system}>
               {data.blog.generator}

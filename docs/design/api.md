@@ -1,8 +1,8 @@
 # API 设计
 
-> 状态：设计中 · 最近更新：2026-09-23
+> 状态：公开 API、本站账号与订阅接口已实现 · 最近更新：2026-09-24
 > 服务：`explore serve`（Gin）。读者看到的页面由独立的前端在服务端渲染（[architecture.md §8](architecture.md#8-前端与-seo)），前端只调用本文的公开接口。
-> 读者的登录、会话和订阅的接口还没实现，设计见 [accounts.md §7](accounts.md#7-接口)，实现时并入本文。标签已经实现（§2.1、§2.1.1）。
+> 登录、会话、订阅和博客认领接口见下文及 [accounts.md](accounts.md)。标签已经实现（§2.1、§2.1.1）。
 
 ---
 
@@ -14,12 +14,20 @@
 - **错误**：HTTP 状态码加 `{"error": {"code": "...", "message": "..."}}`。`code` 是稳定的机器可读值（§5），`message` 给人看。
 - **缓存**：公开的 GET 接口返回 `Cache-Control: public, max-age=60` 和弱 `ETag`，支持 `If-None-Match`，前端和 CDN 可以直接缓存。
 - **限流**：按客户端地址在内存里计数，超出返回 `429` 和 `Retry-After`。地址不写日志、不入库。
-- **匿名读者不设 Cookie**；登录后的会话 Cookie 由前端设置，前端调用 API 时原样转发（[accounts.md §2.3](accounts.md#23-会话)）。CORS 不开放：浏览器从不直接调用 `/api/v1`，前端在服务端调用（[frontend.md §5](frontend.md#5-数据获取)）。
+- **匿名读者不设 Cookie**；登录后 API 设置 `HttpOnly`、`SameSite=Lax` 会话 Cookie，由同源前端代理透传。已登录写操作需要从 `GET /api/v1/me` 获取 `csrf_token` 并放入 `X-CSRF-Token`。CORS 不开放。
 - **语言**：给人看的文字只有错误的 `message` 和检查报告的 `hint`，按 `Accept-Language` 返回简体中文或英文，默认英文；含这类文字的响应带 `Vary: Accept-Language`。`code` 与语言无关，客户端只按 `code` 做判断。时间流、目录、博客页的响应不含这类文字，与语言无关（[frontend.md §3.5](frontend.md#35-接口返回的文字)）。
 
 ---
 
 ## 2. 公开接口
+
+### 账号与个人接口
+
+`POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；`POST /api/v1/auth/login` 接收邮箱和密码。成功后都设置本站会话 Cookie 并返回用户资料与 `csrf_token`。`POST /api/v1/auth/logout` 撤销当前会话。
+
+`GET /api/v1/me` 返回当前用户；`PATCH /api/v1/me` 修改显示名称，`DELETE /api/v1/me` 删除本站账号及其订阅。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
+
+`GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`，维护者 Bearer Token 仍可使用。
 
 ### 2.1 `GET /api/v1/entries`
 
@@ -240,7 +248,9 @@
 | POST | `/api/v1/admin/submissions/{id}/approve` | 通过并创建博客；可以覆盖 `name`、`language`、`feed_url`、`extra_domains`、`show_excerpt`。新博客立即进入抓取 |
 | POST | `/api/v1/admin/submissions/{id}/reject` | 拒绝，必须填 `review_note`，作者查询进度时能看到 |
 | GET | `/api/v1/admin/blogs?health=unhealthy` | 全部博客及其抓取状态（`last_error`、`consecutive_failures` 等） |
-| POST | `/api/v1/admin/blogs` | 维护者直接收录，同样先运行检查 `[待定]`，取决于 [architecture.md §13](architecture.md#13-待确认的问题) 的问题 3 |
+| GET | `/api/v1/admin/fetch-queue` | 查看各博客的真实调度状态、最近抓取结果和 worker 心跳；离线或中断时明确标记 |
+| GET | `/api/v1/admin/blogs/{host}/fetch-attempts` | 查看该博客最近 20 次抓取的时间、结果、HTTP 状态和错误 |
+| POST | `/api/v1/admin/blogs` | 维护者检查后直接收录；若同域名有待审提交，则在同一事务中将其关联到新博客并标记为已通过 |
 | PATCH | `/api/v1/admin/blogs/{host}` | 修改 `name`、`language`、`feed_url`、`extra_domains`、`show_excerpt`、`default_tags`（最多 3 个标签表里的标签）；暂停或恢复（`status`、`status_note`）。改动影响规范化结果的字段时强制重建（[data-model.md §3](data-model.md#3-同步事务)）；改了默认标签，这个博客的文章重新打标签 |
 | DELETE | `/api/v1/admin/blogs/{host}?exclude=opt_out` | 移除博客，文章级联删除；`exclude` 为 `opt_out` 或 `blocked` 时同时写入排除名单。处理作者的退出申请用 `opt_out` |
 | POST | `/api/v1/admin/blogs/{host}/fetch` | 立即抓取，返回 `202` |

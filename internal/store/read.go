@@ -23,7 +23,8 @@ type BlogRef struct {
 // StreamEntry is an entry of the home stream.
 type StreamEntry struct {
 	model.Entry
-	Blog BlogRef
+	Blog   BlogRef
+	SortAt time.Time
 }
 
 // Cursor is a position in a list ordered by time, then id.

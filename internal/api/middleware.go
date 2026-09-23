@@ -56,22 +56,31 @@ func (s *Server) limit(l *limiter) gin.HandlerFunc {
 func (s *Server) requireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if !ok || token == "" {
-			s.fail(c, http.StatusUnauthorized, codeUnauthorized)
-			return
-		}
-		sum := sha256.Sum256([]byte(token))
-		name := ""
-		for _, a := range s.Admins {
-			if subtle.ConstantTimeCompare(sum[:], a.Hash[:]) == 1 {
-				name = a.Name
+		if ok && token != "" {
+			sum := sha256.Sum256([]byte(token))
+			name := ""
+			for _, a := range s.Admins {
+				if subtle.ConstantTimeCompare(sum[:], a.Hash[:]) == 1 {
+					name = a.Name
+				}
+			}
+			if name != "" {
+				c.Set("admin", name)
+				c.Next()
+				return
 			}
 		}
-		if name == "" {
+		u, session, err := s.sessionUser(c)
+		if err != nil || !u.IsAdmin {
 			s.fail(c, http.StatusUnauthorized, codeUnauthorized)
 			return
 		}
-		c.Set("admin", name)
+		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead &&
+			subtle.ConstantTimeCompare([]byte(c.GetHeader("X-CSRF-Token")), []byte(csrfToken(session))) != 1 {
+			s.fail(c, http.StatusForbidden, codeInvalidRequest)
+			return
+		}
+		c.Set("admin", u.Email)
 		c.Next()
 	}
 }

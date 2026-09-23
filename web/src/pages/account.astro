@@ -1,0 +1,6 @@
+---
+import { AccountPanel } from "@/components/reader/AccountPanel";
+import Base from "@/layouts/Base.astro";
+Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+<Base lang="zh" title="我的账号" description="管理订阅与认领的博客" path="/account" noindex><AccountPanel client:load lang="zh" /></Base>

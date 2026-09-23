@@ -21,33 +21,39 @@ import (
 
 // Error codes; see docs/design/api.md section 5.
 const (
-	codeInvalidRequest = "invalid_request"
-	codeInvalidURL     = "invalid_url"
-	codeInvalidCursor  = "invalid_cursor"
-	codeUnauthorized   = "unauthorized"
-	codeExcluded       = "excluded"
-	codeNotFound       = "not_found"
-	codeAlreadyListed  = "already_listed"
-	codeAlreadyPending = "already_pending"
-	codeNotPending     = "not_pending"
-	codeCheckFailed    = "check_failed"
-	codeRateLimited    = "rate_limited"
-	codeInternal       = "internal"
+	codeInvalidRequest     = "invalid_request"
+	codeInvalidURL         = "invalid_url"
+	codeInvalidCursor      = "invalid_cursor"
+	codeUnauthorized       = "unauthorized"
+	codeExcluded           = "excluded"
+	codeNotFound           = "not_found"
+	codeAlreadyListed      = "already_listed"
+	codeAlreadyPending     = "already_pending"
+	codeNotPending         = "not_pending"
+	codeCheckFailed        = "check_failed"
+	codeRateLimited        = "rate_limited"
+	codeInternal           = "internal"
+	codeConflict           = "conflict"
+	codeVerificationFailed = "verification_failed"
+	codeBadCredentials     = "bad_credentials"
 )
 
 var messages = map[string]struct{ en, zh string }{
-	codeInvalidRequest: {"The request is malformed.", "请求格式不正确。"},
-	codeInvalidURL:     {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
-	codeInvalidCursor:  {"The cursor is not valid.", "游标无效。"},
-	codeUnauthorized:   {"A valid maintainer token is required.", "需要有效的维护者令牌。"},
-	codeExcluded:       {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
-	codeNotFound:       {"Not found.", "没有找到。"},
-	codeAlreadyListed:  {"This blog is already listed.", "这个博客已经收录了。"},
-	codeAlreadyPending: {"This blog already has a submission waiting for review.", "这个博客已经有一条等待审核的提交。"},
-	codeNotPending:     {"This submission has already been reviewed.", "这条提交已经审核过了。"},
-	codeCheckFailed:    {"The blog did not pass the check; see the report.", "博客没有通过检查，原因见检查报告。"},
-	codeRateLimited:    {"Too many requests; try again later.", "请求太频繁，请稍后再试。"},
-	codeInternal:       {"Something went wrong on our side.", "服务端出错了。"},
+	codeInvalidRequest:     {"The request is malformed.", "请求格式不正确。"},
+	codeInvalidURL:         {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
+	codeInvalidCursor:      {"The cursor is not valid.", "游标无效。"},
+	codeUnauthorized:       {"Sign in or provide a valid maintainer token.", "请先登录或提供有效维护者令牌。"},
+	codeExcluded:           {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
+	codeNotFound:           {"Not found.", "没有找到。"},
+	codeAlreadyListed:      {"This blog is already listed.", "这个博客已经收录了。"},
+	codeAlreadyPending:     {"This blog already has a submission waiting for review.", "这个博客已经有一条等待审核的提交。"},
+	codeNotPending:         {"This submission has already been reviewed.", "这条提交已经审核过了。"},
+	codeCheckFailed:        {"The blog did not pass the check; see the report.", "博客没有通过检查，原因见检查报告。"},
+	codeRateLimited:        {"Too many requests; try again later.", "请求太频繁，请稍后再试。"},
+	codeInternal:           {"Something went wrong on our side.", "服务端出错了。"},
+	codeConflict:           {"This account already exists or the resource is already owned.", "账号已存在或资源已被认领。"},
+	codeVerificationFailed: {"The domain verification record was not found.", "未找到匹配的域名验证记录。"},
+	codeBadCredentials:     {"The email or password is incorrect.", "邮箱或密码不正确。"},
 }
 
 type errorBody struct {
@@ -94,6 +100,8 @@ func (s *Server) storeError(c *gin.Context, err error) {
 		s.fail(c, http.StatusConflict, codeNotPending)
 	case errors.Is(err, store.ErrExcluded):
 		s.fail(c, http.StatusForbidden, codeExcluded)
+	case errors.Is(err, store.ErrConflict):
+		s.fail(c, http.StatusConflict, codeConflict)
 	default:
 		s.Log.Error("store", "route", c.FullPath(), "error", err)
 		s.fail(c, http.StatusInternalServerError, codeInternal)
