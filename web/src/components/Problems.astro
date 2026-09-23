@@ -1,0 +1,30 @@
+---
+import { Badge } from "@/components/ui/badge";
+import { dict, type Lang } from "@/i18n";
+import type { Problem } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  problems: Problem[];
+}
+
+const { lang, problems } = Astro.props;
+const t = dict(lang);
+const variant = { error: "destructive", warning: "warning", info: "secondary" } as const;
+---
+
+<ul class="divide-y rounded-lg border">
+  {
+    problems.map((p) => (
+      <li class="flex flex-col gap-1.5 p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge variant={variant[p.severity]}>{t.severity[p.severity]}</Badge>
+          <code class="text-xs text-muted-foreground">{p.code}</code>
+          {p.count ? <span class="text-xs text-muted-foreground">×{p.count}</span> : null}
+        </div>
+        {p.hint && <p class="text-sm">{p.hint}</p>}
+        {p.detail && <p class="text-xs break-all text-muted-foreground">{p.detail}</p>}
+      </li>
+    ))
+  }
+</ul>

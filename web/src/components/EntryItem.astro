@@ -1,0 +1,44 @@
+---
+import BlogAvatar from "@/components/BlogAvatar.astro";
+import { dict, localePath, type Lang } from "@/i18n";
+import { relativeTime } from "@/lib/format";
+import type { Entry } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  entry: Entry;
+  /** The blog's language, when the entry does not carry its blog. */
+  blogLanguage?: string;
+}
+
+const { lang, entry, blogLanguage } = Astro.props;
+const t = dict(lang);
+// Titles and excerpts stay as the author wrote them; lang tells screen
+// readers and search engines which language that is.
+const contentLang = entry.blog?.language ?? blogLanguage;
+---
+
+<article class="py-5" lang={contentLang}>
+  <h2 class="text-base leading-snug font-medium">
+    <a href={entry.url} class="hover:underline">{entry.title}</a>
+  </h2>
+  {entry.excerpt && <p class="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{entry.excerpt}</p>}
+  <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" lang={t.htmlLang}>
+    {
+      entry.blog && (
+        <a href={localePath(lang, `/blogs/${entry.blog.host}`)} class="inline-flex items-center gap-1.5 hover:text-foreground">
+          <BlogAvatar host={entry.blog.host} name={entry.blog.name} />
+          <span lang={contentLang}>{entry.blog.name}</span>
+        </a>
+      )
+    }
+    {entry.blog && <span aria-hidden="true">·</span>}
+    {
+      entry.published_at ? (
+        <time datetime={entry.published_at}>{relativeTime(entry.published_at, lang)}</time>
+      ) : (
+        <span>{t.blog.undated}</span>
+      )
+    }
+  </div>
+</article>

@@ -1,0 +1,46 @@
+---
+import { dict, localePath, other, type Lang } from "@/i18n";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  bilingual: boolean;
+}
+
+const { lang, path, bilingual } = Astro.props;
+const t = dict(lang);
+const links = [
+  { href: localePath(lang, "/"), label: t.nav.home, current: path === "/" },
+  { href: localePath(lang, "/blogs"), label: t.nav.blogs, current: path.startsWith("/blogs") },
+  { href: localePath(lang, "/submit"), label: t.nav.submit, current: path === "/submit" },
+  { href: localePath(lang, "/about"), label: t.nav.about, current: path === "/about" },
+];
+const switchTo = other(lang);
+---
+
+<header class="border-b">
+  <div class="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4 sm:px-6">
+    <a href={localePath(lang, "/")} class="text-lg font-semibold tracking-tight">Explore</a>
+    <nav class="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      {
+        links.map((l) => (
+          <a
+            href={l.href}
+            aria-current={l.current ? "page" : undefined}
+            class="text-muted-foreground hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+          >
+            {l.label}
+          </a>
+        ))
+      }
+    </nav>
+    <a
+      href={localePath(switchTo, bilingual ? path : "/")}
+      hreflang={switchTo}
+      lang={switchTo === "zh" ? "zh-CN" : "en"}
+      class="text-sm text-muted-foreground hover:text-foreground"
+    >
+      {t.otherLangName}
+    </a>
+  </div>
+</header>

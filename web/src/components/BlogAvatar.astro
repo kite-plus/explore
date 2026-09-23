@@ -1,0 +1,23 @@
+---
+import { avatarColor, initial } from "@/lib/avatar";
+import { cn } from "@/lib/utils";
+
+interface Props {
+  host: string;
+  name: string;
+  size?: "sm" | "lg";
+}
+
+const { host, name, size = "sm" } = Astro.props;
+---
+
+<span
+  aria-hidden="true"
+  class={cn(
+    "inline-flex shrink-0 items-center justify-center rounded-full font-medium text-white",
+    avatarColor(host),
+    size === "sm" ? "size-5 text-[0.65rem]" : "size-12 text-xl",
+  )}
+>
+  {initial(name)}
+</span>

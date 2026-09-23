@@ -1,0 +1,20 @@
+---
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+
+interface Props {
+  lang: Lang;
+  kind: "notFound" | "unavailable" | "blogNotFound";
+}
+
+const { lang, kind } = Astro.props;
+const t = dict(lang).errors;
+const heading = kind === "unavailable" ? t.unavailable : t.notFound;
+const body = kind === "unavailable" ? t.unavailableBody : kind === "blogNotFound" ? t.blogNotFound : t.notFoundBody;
+---
+
+<section class="py-16 text-center">
+  <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+  <p class="mt-3 text-muted-foreground">{body}</p>
+  <ButtonLink href={localePath(lang, "/")} variant="outline" className="mt-8">{t.home}</ButtonLink>
+</section>

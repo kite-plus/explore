@@ -1,0 +1,7 @@
+---
+import About from "@/views/About.astro";
+
+Astro.response.headers.set("Cache-Control", "public, max-age=86400");
+---
+
+<About lang="en" />

@@ -1,0 +1,59 @@
+---
+import EntryItem from "@/components/EntryItem.astro";
+import LangFilter from "@/components/LangFilter.astro";
+import Message from "@/components/Message.astro";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import type { Loaded, StreamPage } from "@/lib/loaders";
+
+interface Props {
+  lang: Lang;
+  result: Loaded<StreamPage>;
+}
+
+const { lang, result } = Astro.props;
+const t = dict(lang);
+const data = result.kind === "ok" ? result.data : undefined;
+
+let older: string | undefined;
+if (data?.page.next_cursor) {
+  const q = new URLSearchParams({ cursor: data.page.next_cursor });
+  if (data.filter) q.set("lang", data.filter);
+  older = `${localePath(lang, "/")}?${q}`;
+}
+---
+
+<Base lang={lang} title={t.home.title} description={t.site.description} path="/" noindex={Boolean(data?.paged || data?.filter)}>
+  {
+    data ? (
+      <>
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">{t.home.heading}</h1>
+            <p class="mt-2 max-w-prose text-sm text-muted-foreground">{t.home.intro}</p>
+          </div>
+          <LangFilter lang={lang} path="/" current={data.filter} />
+        </div>
+        {data.page.data.length === 0 ? (
+          <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
+        ) : (
+          <div class="mt-4 divide-y">
+            {data.page.data.map((entry) => (
+              <EntryItem lang={lang} entry={entry} />
+            ))}
+          </div>
+        )}
+        {older && (
+          <div class="mt-6">
+            <ButtonLink href={older} variant="outline">
+              {t.home.older}
+            </ButtonLink>
+          </div>
+        )}
+      </>
+    ) : (
+      <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
+    )
+  }
+</Base>

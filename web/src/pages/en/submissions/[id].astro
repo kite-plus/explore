@@ -1,0 +1,8 @@
+---
+import { loadSubmission } from "@/lib/loaders";
+import Submission from "@/views/Submission.astro";
+
+const result = await loadSubmission(Astro, "en");
+---
+
+<Submission lang="en" id={Astro.params.id ?? ""} result={result} />

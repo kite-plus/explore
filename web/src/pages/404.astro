@@ -1,0 +1,12 @@
+---
+import Message from "@/components/Message.astro";
+import Base from "@/layouts/Base.astro";
+import type { Lang } from "@/i18n";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") || Astro.url.pathname === "/en" ? "en" : "zh";
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<Base lang={lang} title={lang === "zh" ? "页面不存在" : "Page not found"} description="" path="/" noindex>
+  <Message lang={lang} kind="notFound" />
+</Base>

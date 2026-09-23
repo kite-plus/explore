@@ -1,0 +1,8 @@
+---
+import { loadBlog } from "@/lib/loaders";
+import Blog from "@/views/Blog.astro";
+
+const result = await loadBlog(Astro, "zh");
+---
+
+<Blog lang="zh" host={Astro.params.host ?? ""} result={result} />

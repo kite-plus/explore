@@ -1,0 +1,75 @@
+---
+import BlogAvatar from "@/components/BlogAvatar.astro";
+import LangFilter from "@/components/LangFilter.astro";
+import Message from "@/components/Message.astro";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import { relativeTime } from "@/lib/format";
+import type { DirectoryPage, Loaded } from "@/lib/loaders";
+
+interface Props {
+  lang: Lang;
+  result: Loaded<DirectoryPage>;
+}
+
+const { lang, result } = Astro.props;
+const t = dict(lang);
+const data = result.kind === "ok" ? result.data : undefined;
+
+let more: string | undefined;
+if (data?.page.next_cursor) {
+  const q = new URLSearchParams({ cursor: data.page.next_cursor });
+  if (data.filter) q.set("lang", data.filter);
+  more = `${localePath(lang, "/blogs")}?${q}`;
+}
+---
+
+<Base lang={lang} title={t.blogs.title} description={t.blogs.intro} path="/blogs" noindex={Boolean(data?.paged || data?.filter)}>
+  {
+    data ? (
+      <>
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">{t.blogs.title}</h1>
+            <p class="mt-2 text-sm text-muted-foreground">{t.blogs.intro}</p>
+          </div>
+          <LangFilter lang={lang} path="/blogs" current={data.filter} />
+        </div>
+        {data.page.data.length === 0 ? (
+          <p class="py-16 text-center text-muted-foreground">{t.blogs.empty}</p>
+        ) : (
+          <ul class="mt-4 divide-y">
+            {data.page.data.map((b) => (
+              <li class="flex items-center gap-3 py-4" lang={b.language}>
+                <BlogAvatar host={b.host} name={b.name} size="lg" />
+                <div class="min-w-0 flex-1">
+                  <a href={localePath(lang, `/blogs/${b.host}`)} class="font-medium hover:underline">
+                    {b.name}
+                  </a>
+                  <p class="truncate text-sm text-muted-foreground">{b.host}</p>
+                </div>
+                <span class="shrink-0 text-xs text-muted-foreground" lang={t.htmlLang}>
+                  {b.last_published_at ? (
+                    <time datetime={b.last_published_at}>{relativeTime(b.last_published_at, lang)}</time>
+                  ) : (
+                    t.blogs.noDated
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {more && (
+          <div class="mt-6">
+            <ButtonLink href={more} variant="outline">
+              {t.blogs.more}
+            </ButtonLink>
+          </div>
+        )}
+      </>
+    ) : (
+      <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
+    )
+  }
+</Base>

@@ -1,0 +1,8 @@
+---
+import { loadHome } from "@/lib/loaders";
+import Home from "@/views/Home.astro";
+
+const result = await loadHome(Astro, "en");
+---
+
+<Home lang="en" result={result} />

@@ -1,0 +1,69 @@
+---
+import "@/styles/global.css";
+
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import { dict, localePath, other, type Lang } from "@/i18n";
+import { publicURL } from "@/lib/config";
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** The page's path without the /en prefix and without a query string. */
+  path: string;
+  /** Pages that only change with query parameters stay out of the index. */
+  noindex?: boolean;
+  /** False for pages that exist only once, such as /bot. */
+  bilingual?: boolean;
+}
+
+const { lang, title, description, path, noindex = false, bilingual = true } = Astro.props;
+const t = dict(lang);
+const base = publicURL();
+const canonical = base + localePath(lang, path);
+const fullTitle = title === t.site.name ? title : `${title} - ${t.site.name}`;
+const verification = {
+  baidu: process.env.EXPLORE_SITE_VERIFICATION_BAIDU,
+  google: process.env.EXPLORE_SITE_VERIFICATION_GOOGLE,
+};
+---
+
+<!doctype html>
+<html lang={t.htmlLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {
+      bilingual && (
+        <>
+          <link rel="alternate" hreflang="zh" href={base + localePath("zh", path)} />
+          <link rel="alternate" hreflang="en" href={base + localePath("en", path)} />
+          <link rel="alternate" hreflang="x-default" href={base + localePath("en", path)} />
+        </>
+      )
+    }
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Explore" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={t.ogLocale} />
+    {bilingual && <meta property="og:locale:alternate" content={dict(other(lang)).ogLocale} />}
+    <link rel="alternate" type="application/rss+xml" title="Explore" href="/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {verification.baidu && <meta name="baidu-site-verification" content={verification.baidu} />}
+    {verification.google && <meta name="google-site-verification" content={verification.google} />}
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <SiteHeader lang={lang} path={path} bilingual={bilingual} />
+    <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <slot />
+    </main>
+    <SiteFooter lang={lang} />
+  </body>
+</html>

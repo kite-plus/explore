@@ -1,0 +1,77 @@
+---
+import Message from "@/components/Message.astro";
+import Problems from "@/components/Problems.astro";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import type { SubmitState } from "@/lib/loaders";
+
+interface Props {
+  lang: Lang;
+  state: SubmitState;
+}
+
+// A plain HTML form: it works without JavaScript, and the browser's own
+// loading indicator covers the check's wait. See docs/design/frontend.md 6.
+const { lang, state } = Astro.props;
+const t = dict(lang);
+const outcome = state.outcome;
+---
+
+<Base lang={lang} title={t.submit.title} description={t.submit.intro} path="/submit" noindex>
+  {
+    outcome?.kind === "unavailable" ? (
+      <Message lang={lang} kind="unavailable" />
+    ) : (
+      <>
+        <h1 class="text-2xl font-semibold tracking-tight">{t.submit.title}</h1>
+        <p class="mt-2 max-w-prose text-sm text-muted-foreground">{t.submit.intro}</p>
+
+        {outcome?.kind === "listed" && (
+          <div class="mt-6 rounded-lg border p-4 text-sm">
+            <p>{t.submit.listed}</p>
+            {outcome.host && (
+              <ButtonLink href={localePath(lang, `/blogs/${outcome.host}`)} variant="link" className="mt-1 h-auto px-0">
+                {t.submit.viewBlog}
+              </ButtonLink>
+            )}
+          </div>
+        )}
+        {outcome?.kind === "message" && (
+          <p role="alert" class="mt-6 rounded-lg border border-destructive/30 p-4 text-sm text-destructive">
+            {outcome.text}
+          </p>
+        )}
+        {outcome?.kind === "failed" && (
+          <section class="mt-6" role="alert">
+            <p class="mb-3 text-sm font-medium text-destructive">{t.submit.failed}</p>
+            <Problems lang={lang} problems={outcome.report.problems} />
+          </section>
+        )}
+
+        <form method="post" class="mt-8 flex max-w-xl flex-col gap-5">
+          <label class="flex flex-col gap-2 text-sm font-medium">
+            {t.submit.site}
+            <Input type="url" name="site_url" required placeholder="https://blog.example.com/" defaultValue={state.values.site_url} />
+          </label>
+          <label class="flex flex-col gap-2 text-sm font-medium">
+            {t.submit.feed}
+            <Input type="url" name="feed_url" placeholder="https://blog.example.com/atom.xml" defaultValue={state.values.feed_url} />
+            <span class="text-xs font-normal text-muted-foreground">{t.submit.feedHint}</span>
+          </label>
+          <label class="flex flex-col gap-2 text-sm font-medium">
+            {t.submit.note}
+            <Textarea name="note" maxLength={500} rows={3} defaultValue={state.values.note} />
+            <span class="text-xs font-normal text-muted-foreground">{t.submit.noteHint}</span>
+          </label>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button type="submit">{t.submit.button}</Button>
+            <span class="text-xs text-muted-foreground">{t.submit.wait}</span>
+          </div>
+        </form>
+      </>
+    )
+  }
+</Base>

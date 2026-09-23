@@ -134,9 +134,10 @@ type entryOut struct {
 	Excerpt     *string    `json:"excerpt"`
 	PublishedAt *time.Time `json:"published_at"`
 	Blog        *struct {
-		Host    string `json:"host"`
-		Name    string `json:"name"`
-		SiteURL string `json:"site_url"`
+		Host     string `json:"host"`
+		Name     string `json:"name"`
+		SiteURL  string `json:"site_url"`
+		Language string `json:"language"`
 	} `json:"blog"`
 }
 
@@ -159,7 +160,7 @@ func TestEntries(t *testing.T) {
 		t.Fatalf("page = %+v", page)
 	}
 	first := page.Data[0]
-	if first.Title != "Post a" || first.Excerpt == nil || *first.Excerpt != "摘要" || first.Blog == nil || first.Blog.Host != "zh.example.com" {
+	if first.Title != "Post a" || first.Excerpt == nil || *first.Excerpt != "摘要" || first.Blog == nil || first.Blog.Host != "zh.example.com" || first.Blog.Language != "zh-CN" {
 		t.Errorf("first entry = %+v", first)
 	}
 	if page.Data[2].Excerpt != nil {

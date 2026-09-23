@@ -1,0 +1,9 @@
+---
+import { loadSubmit } from "@/lib/loaders";
+import Submit from "@/views/Submit.astro";
+
+const state = await loadSubmit(Astro, "zh");
+if (state instanceof Response) return state;
+---
+
+<Submit lang="zh" state={state} />

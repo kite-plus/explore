@@ -1,0 +1,34 @@
+---
+import { dict, localePath, type Lang } from "@/i18n";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  current?: string;
+}
+
+// Filtering by the blogs' language uses ?lang= and has nothing to do with
+// the interface language, which lives in the path.
+const { lang, path, current } = Astro.props;
+const t = dict(lang).filter;
+const base = localePath(lang, path);
+const options = [
+  { value: undefined, label: t.all },
+  { value: "zh", label: t.zh },
+  { value: "en", label: t.en },
+];
+---
+
+<nav aria-label={t.label} class="flex gap-1 text-sm">
+  {
+    options.map((o) => (
+      <a
+        href={o.value ? `${base}?lang=${o.value}` : base}
+        aria-current={o.value === current ? "page" : undefined}
+        class="rounded-md px-2.5 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-secondary-foreground"
+      >
+        {o.label}
+      </a>
+    ))
+  }
+</nav>

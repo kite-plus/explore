@@ -1,0 +1,65 @@
+---
+import Message from "@/components/Message.astro";
+import Problems from "@/components/Problems.astro";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import { formatDate } from "@/lib/format";
+import type { Loaded } from "@/lib/loaders";
+import type { Submission } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  id: string;
+  result: Loaded<Submission>;
+}
+
+const { lang, id, result } = Astro.props;
+const t = dict(lang);
+const sub = result.kind === "ok" ? result.data : undefined;
+const variant = { pending: "secondary", approved: "default", rejected: "destructive" } as const;
+---
+
+<Base lang={lang} title={t.submission.title} description={t.submit.intro} path={`/submissions/${id}`} noindex>
+  {
+    sub ? (
+      <>
+        <h1 class="text-2xl font-semibold tracking-tight">{t.submission.title}</h1>
+        <div class="mt-6 rounded-lg border p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="font-medium break-all">{sub.host}</p>
+            <Badge variant={variant[sub.status]}>{t.submission.status[sub.status]}</Badge>
+          </div>
+          <dl class="mt-4 grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-6">
+            <dt class="text-muted-foreground">{t.submission.feed}</dt>
+            <dd class="break-all">{sub.feed_url}</dd>
+            <dt class="text-muted-foreground">{t.submission.submittedAt}</dt>
+            <dd>
+              <time datetime={sub.created_at}>{formatDate(sub.created_at, lang)}</time>
+            </dd>
+            {sub.review_note && (
+              <>
+                <dt class="text-muted-foreground">{t.submission.reviewNote}</dt>
+                <dd>{sub.review_note}</dd>
+              </>
+            )}
+          </dl>
+          {sub.status === "approved" && (
+            <ButtonLink href={localePath(lang, `/blogs/${sub.host}`)} size="sm" className="mt-4">
+              {t.submission.viewBlog}
+            </ButtonLink>
+          )}
+        </div>
+        <h2 class="mt-8 mb-3 text-sm font-medium text-muted-foreground">{t.submission.checks}</h2>
+        {sub.check_report && sub.check_report.problems.length > 0 ? (
+          <Problems lang={lang} problems={sub.check_report.problems} />
+        ) : (
+          <p class="text-sm text-muted-foreground">{t.submission.noProblems}</p>
+        )}
+      </>
+    ) : (
+      <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
+    )
+  }
+</Base>

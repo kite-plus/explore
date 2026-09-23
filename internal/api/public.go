@@ -13,9 +13,10 @@ import (
 )
 
 type blogRefJSON struct {
-	Host    string `json:"host"`
-	Name    string `json:"name"`
-	SiteURL string `json:"site_url"`
+	Host     string `json:"host"`
+	Name     string `json:"name"`
+	SiteURL  string `json:"site_url"`
+	Language string `json:"language"`
 }
 
 type entryJSON struct {
@@ -86,7 +87,7 @@ func (s *Server) entries(c *gin.Context) {
 	}
 	for _, r := range rows {
 		e := toEntry(r.Entry)
-		e.Blog = &blogRefJSON{Host: r.Blog.Host, Name: r.Blog.Name, SiteURL: r.Blog.SiteURL}
+		e.Blog = &blogRefJSON{Host: r.Blog.Host, Name: r.Blog.Name, SiteURL: r.Blog.SiteURL, Language: r.Blog.Language}
 		out.Data = append(out.Data, e)
 	}
 	cached(c, time.Minute, "application/json; charset=utf-8", encode(out))

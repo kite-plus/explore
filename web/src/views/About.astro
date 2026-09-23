@@ -1,0 +1,20 @@
+---
+import { Content as AboutEn } from "@/content/about.en.md";
+import { Content as AboutZh } from "@/content/about.zh.md";
+import { dict, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = dict(lang).about;
+---
+
+<Base lang={lang} title={t.title} description={t.description} path="/about">
+  <h1 class="text-2xl font-semibold tracking-tight">{t.title}</h1>
+  <div class="prose-explore mt-6">
+    {lang === "zh" ? <AboutZh /> : <AboutEn />}
+  </div>
+</Base>

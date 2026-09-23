@@ -1,0 +1,20 @@
+---
+import { Content } from "@/content/bot.md";
+import Base from "@/layouts/Base.astro";
+
+// One page in both languages: whoever finds the User-Agent in their logs
+// may read either. See docs/design/frontend.md section 2.
+Astro.response.headers.set("Cache-Control", "public, max-age=86400");
+---
+
+<Base
+  lang="zh"
+  title="KiteExplore"
+  description="Explore 的抓取器说明 · About the crawler of Explore"
+  path="/bot"
+  bilingual={false}
+>
+  <div class="prose-explore">
+    <Content />
+  </div>
+</Base>
