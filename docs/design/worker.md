@@ -47,6 +47,7 @@ RETURNING id, host, feed_url, etag, last_modified, body_hash,
           fetch_interval, consecutive_failures, show_excerpt, extra_domains;
 ```
 
+- 领取时一并返回这个博客在 `entries` 里有没有文章（§3.6 用它）。
 - 领取时先把 `next_fetch_at` 推后一个租期（10 分钟）。worker 在抓取中途崩溃的话，租期一过这个博客会被重新领取。
 - `SKIP LOCKED` 让多个 worker 可以同时领取而互不重复。V1 只跑一个 worker，将来加 worker 不需要改任何东西。
 - worker 每 30 秒领取一批，批大小等于并发数（`EXPLORE_WORKER_CONCURRENCY`）。每个博客一个主机名，同一主机天然只有一个请求在进行。
@@ -124,6 +125,7 @@ If-Modified-Since: ...
 
 ### 3.6 变化检测
 
+0. 博客在 `entries` 里没有文章时跳过这一节：不带条件请求头，也不比较哈希，直接解析重建（[data-model.md §3](data-model.md#3-同步事务)）。
 1. `304`：没有变化。
 2. 否则计算响应体的 SHA-256，与 `body_hash` 相同就算没有变化。Halo 和 Typecho 不支持条件请求，靠这一步省掉解析。本地 Halo 2.26.1 连续两次请求的响应完全相同 `[EV]`，这一步对它有效。
 3. 否则进入解析。

@@ -112,7 +112,7 @@
 
 | 情况 | 响应 |
 |---|---|
-| 地址不是公网的 `http(s)` 地址 | `400 invalid_url` |
+| 地址不是 `http(s)` 地址，或主机是 IP 地址、没有点的单段主机名（如 `localhost`）；`EXPLORE_ALLOW_PRIVATE_NETWORKS` 打开时不检查主机形式 | `400 invalid_url` |
 | 主机在 `excluded_hosts` 里 | `403 excluded` |
 | 主机已经收录 | `409 already_listed` |
 | 主机已有待审核的提交 | `409 already_pending`，响应里带那条提交的 `id` |
@@ -199,7 +199,8 @@
 | `excluded` | 403 | 博客已退出或被屏蔽 |
 | `not_found` | 404 | 资源不存在或不可见 |
 | `already_listed` | 409 | 博客已经收录 |
-| `already_pending` | 409 | 已有待审核的提交 |
+| `already_pending` | 409 | 已有待审核的提交；响应里带 `submission_id` |
+| `not_pending` | 409 | 审核一条已经审核过的提交 |
 | `check_failed` | 422 | 检查不通过，响应里带 `check_report` |
 | `rate_limited` | 429 | 超出限流，带 `Retry-After` |
 | `internal` | 500 | 服务端错误，细节只写日志 |

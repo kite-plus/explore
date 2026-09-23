@@ -194,6 +194,8 @@ WHERE id = @blog_id;
 
 解析失败**绝不能**当成"空快照"处理，否则一次服务器故障就会清空这个博客的全部文章。只有成功解析、而且订阅源里确实没有可用文章时，才会删到零行。
 
+**清空之后怎么恢复**：一个博客在 `entries` 里一篇文章都没有时，worker 抓取它不带条件请求头，也不比较响应体哈希，直接完整重建。否则服务器会回 `304`（或哈希相同），缓存就永远是空的。所以单独清空 `entries`（`store.ClearCache`）就能自愈，不需要同时清抓取字段。
+
 修改会影响规范化结果的字段（`show_excerpt`、`extra_domains`、`feed_url`）时，同时清空 `etag`、`last_modified`、`body_hash`，并把 `next_fetch_at` 设为 `now()`，强制下一轮完整重建。
 
 ---
@@ -261,7 +263,7 @@ pg_dump --exclude-table-data=entries "$EXPLORE_DATABASE_URL" > explore.sql
 两条集成测试，从第一个迁移起就在 CI 里跑：
 
 1. **列清单黄金文件**：从 `information_schema.columns` 读出所有表的列，与 `testdata/schema/columns.txt` 比较。任何加列都会让测试失败，必须同时更新这个文件，于是在 code review 里一目了然。给 `entries` 加正文字段、给任何表加读者信息，都过不了这一关。
-2. **清空恢复**（[architecture.md §0.1](architecture.md#0-两个核心判断) 的可验证条款）：用本地 HTTP 服务提供夹具订阅源，跑一轮 worker，记下 API 的输出；`TRUNCATE entries` 之后再跑一轮，输出必须完全相同。
+2. **清空恢复**（[architecture.md §0.1](architecture.md#0-两个核心判断) 的可验证条款，`internal/worker` 的 `TestClearingTheCacheLosesNothing`）：用本地 HTTP 服务提供夹具订阅源，跑一轮 worker，记下首页时间流、目录和博客页；`TRUNCATE entries` 之后再跑一轮，输出必须完全相同。测试服务器对旧的 ETag 仍会回 `304`，所以它同时证明了 worker 在缓存为空时不发条件请求。
 
 ---
 

@@ -54,10 +54,10 @@ explore/
 | `normalize` | 规范化，纯函数（[worker.md §5](worker.md#5-规范化)） | `policy`、`model`、`feed` |
 | `publicfeed` | 生成 `/feed.xml` 和 OPML，纯函数 | `model` |
 | `fetch` | 礼貌抓取、SSRF 防护、robots.txt（[worker.md §3](worker.md#3-抓取internalfetch)） | `policy` |
-| `check` | 发现订阅源、检查、生成报告（[worker.md §6](worker.md#6-检查internalcheck)） | `policy`、`model`、`feed`、`normalize`、`fetch` |
-| `store` | 数据库访问、事务、迁移入口 | `policy`、`model`、`migrations` |
+| `check` | 发现订阅源、检查、生成报告（[worker.md §6](worker.md#6-检查internalcheck)） | `policy`、`model`、`i18n`、`feed`、`normalize`、`fetch` |
+| `store` | 数据库访问、事务、迁移入口；子包 `storetest` 给每个集成测试一个独立的 schema | `policy`、`model`、`migrations` |
 | `worker` | 调度、同步、每日维护 | `policy`、`model`、`feed`、`normalize`、`fetch`、`store` |
-| `api` | Gin 路由与处理函数 | `policy`、`model`、`check`、`store`、`publicfeed` |
+| `api` | Gin 路由与处理函数 | `policy`、`model`、`i18n`、`check`、`store`、`publicfeed` |
 | `config` | 读取环境变量 | 无 |
 | `cli` | 命令入口，负责组装 | 全部 |
 
@@ -67,7 +67,7 @@ explore/
 
 1. **纯逻辑包**（`policy`、`model`、`i18n`、`feed`、`normalize`、`publicfeed`）不依赖 `fetch`、`check`、`store`、`worker`、`api`、`cli`、`config`，也不依赖 Gin 和 pgx。它们没有 I/O，全部用夹具做黄金文件测试。
 2. **只有 `api` 可以依赖 Gin**：Web 框架留在最外层，换框架只动一个包。
-3. **只有 `store` 可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。
+3. **只有 `store`（及其子包）可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。
 4. **`check` 不依赖 `store`**：`explore check` 不需要数据库也能运行，作者和 E0 都要用。
 5. **`api` 和 `worker` 互不依赖**，只通过数据库协作，所以可以分开部署、分开重启。
 
@@ -207,9 +207,9 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 | `worker` | `explore worker` | 抓取；V1 一个实例 |
 | `web` | 前端镜像（`web/Dockerfile`），Node 服务 | E2 起；只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)） |
 
-后端的四个服务用同一个镜像、不同的命令；`web` 是单独的镜像。反向代理（Caddy 或 Nginx）为 explore.kite.plus 终止 TLS：`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。反向代理的访问日志同样不记录客户端 IP。
+后端的四个服务用同一个镜像（`deploy/Dockerfile`）、不同的命令，编排在 `deploy/docker-compose.yaml`，配置从 `deploy/.env` 读取（照 `deploy/.env.example` 填写，不进版本库）；`web` 是单独的镜像。反向代理（Caddy 或 Nginx）为 explore.kite.plus 终止 TLS：`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。反向代理的访问日志同样不记录客户端 IP。
 
-CI 用 GitHub Actions 运行 `make check`，附带一个 PostgreSQL 服务容器，并设置 `EXPLORE_TEST_DATABASE_URL`，让集成测试和不变量测试都能跑。
+CI（`.github/workflows/ci.yml`）用 GitHub Actions 运行格式检查、`vet`、依赖守护、`check-tidy`、lint 和带 `-race` 的测试，附带一个 PostgreSQL 服务容器并设置 `EXPLORE_TEST_DATABASE_URL`，让集成测试和不变量测试都能跑。
 
 ---
 
