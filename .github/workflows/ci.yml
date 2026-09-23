@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    # Pinned like Kite's CI: a runner image that changes underneath turns CI
+    # red with no commit to blame.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: explore
+          POSTGRES_PASSWORD: explore
+          POSTGRES_DB: explore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U explore"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # Runs the integration and invariant tests instead of skipping them.
+      EXPLORE_TEST_DATABASE_URL: postgres://explore:explore@localhost:5432/explore?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - run: go vet ./...
+      - run: sh scripts/check-imports.sh
+      - run: make check-tidy
+      - run: make lint
+      - run: go test -race -count=1 ./...

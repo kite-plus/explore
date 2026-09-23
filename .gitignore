@@ -8,3 +8,6 @@
 /web/.astro/
 
 .DS_Store
+
+# Secrets for deploy/docker-compose.yaml.
+/deploy/.env

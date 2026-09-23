@@ -1,0 +1,21 @@
+# PostgreSQL for local development and integration tests. Port 5433 keeps
+# clear of a PostgreSQL already running on this machine.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: explore
+      POSTGRES_PASSWORD: explore
+      POSTGRES_DB: explore
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - explore-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "explore"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  explore-dev-db:

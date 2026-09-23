@@ -1,0 +1,60 @@
+# Explore in production: PostgreSQL, a one-off migration, the API and the
+# worker. Settings come from deploy/.env; copy .env.example to start.
+# A reverse proxy in front terminates TLS; see
+# docs/design/project-layout.md section 10.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: explore
+      POSTGRES_DB: explore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - explore-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "explore"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["migrate", "up"]
+    env_file: .env
+    environment:
+      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  serve:
+    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
+    command: ["serve"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
+    command: ["worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  explore-db:

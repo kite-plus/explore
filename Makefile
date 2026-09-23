@@ -8,7 +8,7 @@ LDFLAGS  := -s -w \
 	-X github.com/kite-plus/explore/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/kite-plus/explore/internal/buildinfo.Date=$(DATE)
 
-.PHONY: all build test test-race cover fmt vet lint check-imports check-tidy check tidy clean
+.PHONY: all build test test-race cover fmt vet lint check-imports check-tidy check tidy clean db-up db-down migrate docker
 
 all: check build
 
@@ -58,3 +58,22 @@ tidy:
 
 clean:
 	rm -rf bin coverage.out
+
+DEV_COMPOSE := docker compose -f deploy/docker-compose.dev.yaml
+DEV_DATABASE_URL ?= postgres://explore:explore@127.0.0.1:5433/explore?sslmode=disable
+
+db-up:
+	$(DEV_COMPOSE) up -d --wait postgres
+
+db-down:
+	$(DEV_COMPOSE) down
+
+migrate:
+	EXPLORE_DATABASE_URL='$(DEV_DATABASE_URL)' $(GO) run ./cmd/explore migrate up
+
+IMAGE ?= kiteplus/explore
+
+docker:
+	docker build -f deploy/Dockerfile \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
+		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
