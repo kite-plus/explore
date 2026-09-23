@@ -42,7 +42,8 @@
       "blog": {
         "host": "blog.example.com",
         "name": "Example Blog",
-        "site_url": "https://blog.example.com/"
+        "site_url": "https://blog.example.com/",
+        "language": "zh-CN"
       }
     }
   ],
@@ -220,4 +221,4 @@
 - **没有单篇文章的接口，也就没有文章页**（[architecture.md §8](architecture.md#8-前端与-seo)）。
 - 前端（Astro，见 [frontend.md](frontend.md)）只在服务端调用接口；接口的缓存头让前端和 CDN 可以直接复用响应。
 - 前端代读者调用提交接口时带上 `X-Forwarded-For`；`web` 服务要列在 `EXPLORE_TRUSTED_PROXIES` 里，限流才能拿到读者的真实地址。
-- E1 接口定稿后写成 OpenAPI 3.1（`api/openapi.yaml`），前端据此生成类型。它与本文冲突时，先改本文 `[设计中]`。
+- 接口还没有写成 OpenAPI 3.1（`api/openapi.yaml`）`[待定]`。在那之前，前端的类型手写在 `web/src/lib/types.ts`，与本文保持一致；写好后改为生成，与本文冲突时先改本文。

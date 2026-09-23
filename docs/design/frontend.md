@@ -1,6 +1,6 @@
 # 前端（web）
 
-> 状态：设计中，E2 开工 · 最近更新：2026-09-23
+> 状态：E2 已按本文实现，标 `[待定]` 的部分除外 · 最近更新：2026-09-23
 > 不能动摇的约束见 [architecture.md §8](architecture.md#8-前端与-seo)；接口见 [api.md](api.md)。本文写前端怎么满足它们。
 
 ---
@@ -9,14 +9,14 @@
 
 | 方面 | 选择 |
 |---|---|
-| 框架 | Astro，`output: 'server'`：页面默认按需渲染，说明页这类静态页面用 `export const prerender = true` 在构建时生成 |
+| 框架 | Astro，`output: 'server'`：全部页面按需渲染。说明页也不预渲染：Node 适配器对预渲染的文件一律返回 `max-age=0`，按需渲染才能设置缓存头，CSP 也统一走响应头（§8） |
 | 运行 | `@astrojs/node` 适配器，输出一个独立的 Node 服务，打进 Docker |
 | 多语言 | 中英双语，用 Astro 自带的国际化路由（§3） |
 | 样式 | Tailwind CSS v4，与 Kite 后台一致 |
 | 组件 | shadcn/ui（官方支持 Astro）和 lucide 图标，与 Kite 后台一致 |
 | 交互组件 | React（`@astrojs/react`），只用在"岛"里（§4） |
 | 包管理与运行时 | pnpm、Node 22，与 Kite 相同 |
-| 接口类型 | 从 `api/openapi.yaml` 生成 TypeScript 类型，与 Kite 后台从 `openapi.json` 生成的做法相同 |
+| 接口类型 | 目前手写在 `web/src/lib/types.ts`；`api/openapi.yaml` 写好后改为生成，与 Kite 后台从 `openapi.json` 生成的做法相同 `[待定]` |
 
 ### 1.1 为什么是 Astro
 
@@ -47,7 +47,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/` | 首页时间流 | `GET /api/v1/entries` | 按需 | `public, max-age=60` | 收录 |
 | `/blogs` | 博客目录 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
 | `/blogs/{host}` | 一个博客的最新文章和订阅地址 | `GET /api/v1/blogs/{host}` | 按需 | `public, max-age=300` | 收录 |
-| `/about` | 收录规则、退出方式、隐私说明 | —— | 构建时生成 | `public, max-age=86400` | 收录 |
+| `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
 | `/submit` | 提交博客的表单 | —— | 按需 | `no-store` | `noindex` |
 | `/submissions/{id}` | 提交进度 | `GET /api/v1/submissions/{id}` | 按需 | `no-store` | `noindex` |
 
@@ -55,9 +55,9 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 
 | 路由 | 内容 | 渲染 |
 |---|---|---|
-| `/bot` | 抓取器说明，中英对照的单页：用途、频率、退出方式、联系方式。User-Agent 指向这里，看到它的站长可能说任何语言 | 构建时生成 |
+| `/bot` | 抓取器说明，中英对照的单页：用途、频率、退出方式、联系方式。User-Agent 指向这里，看到它的站长可能说任何语言 | 按需，`public, max-age=86400` |
 | `/sitemap.xml` | 两种语言的首页、目录、说明页和全部博客页 | 按需，`public, max-age=3600` |
-| `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面 | 静态文件 |
+| `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面 | 按需，`public, max-age=86400`；写成接口而不是静态文件，sitemap 地址才能跟着 `EXPLORE_PUBLIC_URL` |
 
 - **带查询参数的列表页**（翻页的 `?cursor=`、博客语言筛选的 `?lang=`）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
 - `/feed.xml`、`/blogs.opml`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
@@ -84,7 +84,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 
 ### 3.2 告诉搜索引擎
 
-每个页面在 `<head>` 里声明两种语言的对应关系。Astro 不会自动生成，基础布局里用 `astro:i18n` 的 `getAbsoluteLocaleUrl` 统一输出：
+每个页面在 `<head>` 里声明两种语言的对应关系。Astro 不会自动生成，基础布局用 `EXPLORE_PUBLIC_URL` 加上本地化路径统一输出。没有用 `astro:i18n` 的 `getAbsoluteLocaleUrl`：它依赖构建时的 `site` 配置，而对外地址要在运行时读取，同一个镜像才能部署到任何域名。
 
 ```html
 <link rel="alternate" hreflang="zh" href="https://explore.kite.plus/blogs/blog.example.com">
@@ -129,11 +129,11 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 
 ```astro
 ---
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import SubmitForm from "@/components/submit-form";
 ---
 
-<Button asChild><a href="/submit">提交博客</a></Button>
+<ButtonLink href="/submit">提交博客</ButtonLink>
 <SubmitForm client:visible />
 ```
 
@@ -152,7 +152,7 @@ import SubmitForm from "@/components/submit-form";
 | 场景 | 做法 | 浏览器里的 JS |
 |---|---|---|
 | 按钮、卡片、徽章、表格 | shadcn/ui 组件，不加指令 | 无 |
-| 链接样式的按钮 | `<Button asChild><a href="…">` | 无 |
+| 链接样式的按钮 | `<ButtonLink href="…">`，代替 `asChild`，服务端渲染不需要 slot 原语 | 无 |
 | 导航菜单、折叠内容 | `<details>` | 无 |
 | 翻页、博客语言筛选、界面语言切换 | 链接 | 无 |
 | 提交表单 | 第一版用普通 HTML 表单；需要即时校验和加载状态时改成岛 | 无，或只在提交页有 |
@@ -166,7 +166,7 @@ E2 用端到端测试守住这条规则：除提交页外，公开页面不应�
 
 - **只在服务端调用 API**：页面在服务端渲染时调用 Gin，浏览器从不直接请求 `/api/v1`。提交表单也先提交给前端服务，由它转发（§6）。
 - API 地址来自环境变量 `EXPLORE_API_URL`，部署时指向内网的 `serve`。
-- 接口类型从 `api/openapi.yaml` 生成，不手写。
+- 接口类型目前手写，与 api.md 保持一致；OpenAPI 写好后改为生成（§1）。
 - 游标原样透传：`/?cursor=X` 对应 `GET /api/v1/entries?cursor=X`。
 - **前端不做任何数据规则**：摘要截断、过滤、每日上限都在后端（[architecture.md §6](architecture.md#6-抓取与展示规则)），前端只负责展示。
 - 错误处理：
@@ -196,7 +196,7 @@ E2 用端到端测试守住这条规则：除提交页外，公开页面不应�
 
 ## 7. SEO
 
-- **每页**：`<title>`、`<meta name="description">`、canonical（基于 `EXPLORE_PUBLIC_URL` 的绝对地址）、Open Graph 信息，都用当前页面的语言。两种语言的对应关系见 §3.2。标题、描述写成纯文本；Open Graph 图片用站内的一张静态图。
+- **每页**：`<title>`、`<meta name="description">`、canonical（基于 `EXPLORE_PUBLIC_URL` 的绝对地址）、Open Graph 信息，都用当前页面的语言。两种语言的对应关系见 §3.2。标题、描述写成纯文本。Open Graph 图片 `[待定]`：放一张站内的静态图即可，还没有做。
 - **博客页**：标题形如"{博客名} - Explore"；描述由它最近几篇文章的标题组成，内容会随订阅源更新。
 - **状态码**要真实：`404` 就是 `404`，故障就是 `503`（§5）。
 - **sitemap.xml** 由前端写接口生成：Astro 官方的 [sitemap 集成](https://docs.astro.build/en/guides/integrations-guide/sitemap/)不支持按需渲染的动态路由，列不出博客页。每个博客页的 `lastmod` 取接口返回的 `last_published_at`。
@@ -210,10 +210,10 @@ E2 用端到端测试守住这条规则：除提交页外，公开页面不应�
 
 ## 8. CSP 与隐私
 
-- 启用 Astro 的 `security.csp`：自动为 Astro 生成的脚本和 `<style>` 计算哈希，写进页面的 `<meta>`。不使用 `<ClientRouter />`（视图过渡），它和这个功能不兼容。
-- 策略以 `default-src 'self'` 为底，脚本和样式只认哈希，图片只允许本站。其他指令通过 `security.csp` 的 `directives` 追加。
-- 个别组件在服务端渲染时会输出 `style="..."` 属性，哈希管不到它。选用的组件如果输出这种属性，就追加 `style-src-attr 'unsafe-inline'`。这只放宽了样式属性，仍然不能加载任何外部资源，"零第三方请求"不受影响。E2 选组件时逐个验证。
-- `frame-ancestors` 不能写在 `<meta>` 里，和 `Referrer-Policy: strict-origin-when-cross-origin` 一起由反向代理以响应头下发。
+- 启用 Astro 的 `security.csp`：自动为 Astro 生成的脚本和样式计算哈希。按需渲染的页面由 Astro 以**响应头**下发策略（只有预渲染页面才用 `<meta>`），所以 `frame-ancestors 'none'` 直接写进 `directives` 就能生效 `[EV]`。不使用 `<ClientRouter />`（视图过渡），它和这个功能不兼容。
+- 策略以 `default-src 'self'` 为底，脚本和样式只认哈希，图片只允许本站和 `data:`。其他指令通过 `security.csp` 的 `directives` 追加。
+- **页面不输出内联 `style` 属性**：哈希管不到它，而 Astro 的 `directives` 也不接受 `style-src-attr`。所以博客头像的颜色用一组固定的 Tailwind 类按主机名挑选，而不是计算出颜色值；Markdown 的代码高亮也关掉了，因为 Shiki 用内联 `style` 上色。测试会检查每个公开页面都没有 `style` 属性（§10）。
+- `Referrer-Policy: strict-origin-when-cross-origin` 是浏览器的默认值，反向代理可以再显式下发一次。
 - 不设 Cookie，不接任何统计脚本，不加载外部字体和图片。
 
 ---
@@ -225,13 +225,15 @@ web/
 ├── src/
 │   ├── pages/          routes; English pages live under pages/en/
 │   ├── layouts/        base layout with head, SEO and hreflang tags
+│   ├── views/          page bodies shared by the zh and en routes
 │   ├── components/     Astro components and React islands
 │   │   └── ui/         shadcn/ui components
 │   ├── i18n/           zh.ts and en.ts interface strings
 │   ├── content/        long-form pages in both languages
-│   ├── lib/            API client, generated types, formatting
+│   ├── lib/            API client, loaders, types, formatting
 │   └── styles/         Tailwind entry
-├── public/             favicon, Open Graph image, robots.txt
+├── public/             favicon
+├── test/               HTML tests against a stub API
 ├── astro.config.mjs
 ├── components.json     shadcn/ui config
 ├── package.json
@@ -251,15 +253,17 @@ web/
 | `EXPLORE_API_URL` | `http://127.0.0.1:8080` | Gin API 的内网地址 |
 | `EXPLORE_PUBLIC_URL` | `https://explore.kite.plus` | canonical、hreflang、sitemap、Open Graph 用的对外地址 |
 | `HOST`、`PORT` | `@astrojs/node` 的默认值 | 前端服务的监听地址 |
+| `EXPLORE_SITE_VERIFICATION_BAIDU`、`EXPLORE_SITE_VERIFICATION_GOOGLE` | 空 | 搜索引擎站点验证的 meta 标签 |
 
 **开发**：`pnpm dev`，`EXPLORE_API_URL` 指向本地的 `explore serve`（[project-layout.md §9](project-layout.md#9-本地开发)）。
 
-**测试** `[设计中]`：用 Playwright 对一个桩 API 渲染两种语言的各个页面，断言：
+**测试**：`pnpm test` 用 `node:test` 启动构建好的前端和一个桩 API（`test/stub-api.mjs`），直接请求 HTML 做断言，不需要浏览器：
 
 - 标题、canonical、robots 和 hreflang 标签正确，两种语言的页面互相对应；
 - `404` 与 `503` 的状态码正确；
-- 除提交页外，公开页面不包含 `<script>`；
-- 页面不引用任何外部域名的资源。
+- 公开页面不包含 `<script>`、没有内联 `style` 属性、不发 Cookie，并带着 CSP 响应头；
+- 页面不引用任何外部域名的资源；
+- 提交流程的各种结果，以及跨站提交被拒绝。
 
 **部署**：`web` 服务和 `serve`、`worker`、`postgres` 在同一个 Compose 里（[project-layout.md §10](project-layout.md#10-部署)）。反向代理把 `/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。
 

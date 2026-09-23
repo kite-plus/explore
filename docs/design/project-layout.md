@@ -171,7 +171,8 @@ printf %s "$TOKEN" | shasum -a 256
 | `db-up`、`db-down` | 启动或停止本地开发用的 PostgreSQL |
 | `migrate` | 对本地数据库执行 `explore migrate up` |
 | `docker` | 构建镜像 |
-| `web`、`web-gen`、`web-check` | E2 起：构建前端、从 `api/openapi.yaml` 生成接口类型、前端的检查，与 Kite 的同名目标对应 |
+| `web`、`web-check`、`web-test` | 构建前端、类型检查、对桩 API 跑 HTML 测试，与 Kite 的同名目标对应；从 `api/openapi.yaml` 生成类型的 `web-gen` 等 OpenAPI 写好后再加 |
+| `docker-web` | 构建前端镜像 |
 | `clean` | 清理构建产物 |
 
 ---
@@ -205,7 +206,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 | `migrate` | `explore migrate up` | 每次发布先跑一次，跑完退出 |
 | `serve` | `explore serve` | API；可以多实例 |
 | `worker` | `explore worker` | 抓取；V1 一个实例 |
-| `web` | 前端镜像（`web/Dockerfile`），Node 服务 | E2 起；只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)） |
+| `web` | 前端镜像（`web/Dockerfile`），Node 服务 | 只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)）。compose 给网络固定了 `10.89.0.0/24`，`serve` 默认信任它，限流才能拿到读者的地址 |
 
 后端的四个服务用同一个镜像（`deploy/Dockerfile`）、不同的命令，编排在 `deploy/docker-compose.yaml`，配置从 `deploy/.env` 读取（照 `deploy/.env.example` 填写，不进版本库）；`web` 是单独的镜像。反向代理（Caddy 或 Nginx）为 explore.kite.plus 终止 TLS：`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。反向代理的访问日志同样不记录客户端 IP。
 

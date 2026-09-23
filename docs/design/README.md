@@ -34,11 +34,11 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 
 | 文档 | 状态 | 最近更新 |
 |---|---|---|
-| architecture.md | 设计中（E0 开工前的基线） | 2026-09-23 |
-| data-model.md | 设计中 | 2026-09-23 |
-| worker.md | 设计中，阈值待 E0 回填 | 2026-09-23 |
-| api.md | 设计中 | 2026-09-23 |
-| frontend.md | 设计中，E2 开工 | 2026-09-23 |
-| project-layout.md | 设计中 | 2026-09-23 |
+| architecture.md | E0 至 E2 已实现；§13 的问题待确认 | 2026-09-23 |
+| data-model.md | E1 已实现 | 2026-09-23 |
+| worker.md | E1 已实现；阈值待 E0 批量实测回填 | 2026-09-23 |
+| api.md | E1 已实现；OpenAPI 与发布即出现待定 | 2026-09-23 |
+| frontend.md | E2 已实现 | 2026-09-23 |
+| project-layout.md | 已按本文搭建 | 2026-09-23 |
 
 里程碑定义见 [architecture.md §9](architecture.md#9-里程碑)。
