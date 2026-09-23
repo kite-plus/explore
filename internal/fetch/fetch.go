@@ -61,7 +61,8 @@ type Options struct {
 	Timeout time.Duration
 }
 
-// Request is one GET.
+// Request is one GET. ETag and LastModified are the validators of an
+// earlier response; at most one of them is sent.
 type Request struct {
 	URL          string
 	Accept       string
@@ -170,11 +171,15 @@ func (c *Client) do(ctx context.Context, u *url.URL, r Request, truncate bool) (
 		accept = AcceptFeed
 	}
 	req.Header.Set("Accept", accept)
-	if r.ETag != "" {
-		req.Header.Set("If-None-Match", r.ETag)
-	}
-	if r.LastModified != "" {
+	// One validator, Last-Modified when there is one: compression layers
+	// rewrite ETags (Apache appends -gzip, nginx and Cloudflare weaken them),
+	// and WordPress answers 304 only when every validator it gets matches.
+	// See docs/design/worker.md section 3.6.
+	switch {
+	case r.LastModified != "":
 		req.Header.Set("If-Modified-Since", r.LastModified)
+	case r.ETag != "":
+		req.Header.Set("If-None-Match", r.ETag)
 	}
 
 	resp, err := c.http.Do(req)

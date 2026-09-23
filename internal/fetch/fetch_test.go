@@ -147,7 +147,10 @@ func TestGetSendsIdentityAndConditionalHeaders(t *testing.T) {
 		if !strings.Contains(r.Header.Get("Accept"), "application/rss+xml") {
 			t.Errorf("Accept = %q", r.Header.Get("Accept"))
 		}
-		if r.Header.Get("If-None-Match") == `"v1"` && r.Header.Get("If-Modified-Since") != "" {
+		if r.Header.Get("If-None-Match") != "" && r.Header.Get("If-Modified-Since") != "" {
+			t.Error("both validators sent; WordPress then wants both to match")
+		}
+		if r.Header.Get("If-Modified-Since") == "Sun, 20 Sep 2026 02:00:00 GMT" {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -169,6 +172,23 @@ func TestGetSendsIdentityAndConditionalHeaders(t *testing.T) {
 	}
 	if second.Status != http.StatusNotModified {
 		t.Fatalf("second status = %d, want 304", second.Status)
+	}
+}
+
+func TestGetSendsETagWithoutLastModified(t *testing.T) {
+	srv, c := newServer(t, "", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("If-None-Match") == `W/"v1"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte("<rss/>"))
+	})
+	resp, err := c.Get(context.Background(), Request{URL: srv.URL + "/feed", ETag: `W/"v1"`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != http.StatusNotModified {
+		t.Fatalf("status = %d, want 304", resp.Status)
 	}
 }
 
