@@ -15,11 +15,22 @@ const large = size === "lg";
 <span
   aria-hidden="true"
   class={cn(
-    "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white",
+    "group/avatar relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white",
     avatarColor(host),
     large ? "size-12 text-xl" : "size-5 text-[0.65rem]",
   )}
 >
-  {initial(name)}
-  {large && <img src={`/api/v1/blogs/${encodeURIComponent(host)}/favicon`} alt="" loading="lazy" decoding="async" class="absolute inset-0 size-full object-contain" />}
+  <span class="group-[.has-favicon]/avatar:hidden">{initial(name)}</span>
+  {
+    large && (
+      <img
+        src={`/api/v1/blogs/${encodeURIComponent(host)}/favicon`}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        data-blog-favicon
+        class="absolute inset-0 size-full object-contain p-1 group-[.has-favicon]/avatar:bg-white"
+      />
+    )
+  }
 </span>

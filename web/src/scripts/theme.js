@@ -53,4 +53,30 @@
     }
     apply();
   });
+
+  const updateAvatar = (img) => {
+    if (img && img.naturalWidth > 1) {
+      img.parentElement?.classList.add("has-favicon");
+    }
+  };
+  const initAvatars = () => {
+    if (typeof document === "undefined" || !document.querySelectorAll) return;
+    for (const img of document.querySelectorAll("[data-blog-favicon]")) {
+      if (img.complete) updateAvatar(img);
+    }
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener?.("DOMContentLoaded", initAvatars);
+    document.addEventListener?.(
+      "load",
+      (event) => {
+        const target = event.target;
+        if (target && target.nodeType === 1 && target.hasAttribute?.("data-blog-favicon")) {
+          updateAvatar(target);
+        }
+      },
+      true,
+    );
+    initAvatars();
+  }
 })();
