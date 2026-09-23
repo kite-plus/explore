@@ -8,7 +8,7 @@ LDFLAGS  := -s -w \
 	-X github.com/kite-plus/explore/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/kite-plus/explore/internal/buildinfo.Date=$(DATE)
 
-.PHONY: all build test test-race cover fmt vet lint check-imports check-tidy check tidy clean db-up db-down migrate docker
+.PHONY: all build test test-race cover fmt vet lint check-imports check-tidy check tidy clean db-up db-down migrate docker web web-check web-test docker-web
 
 all: check build
 
@@ -77,3 +77,19 @@ docker:
 	docker build -f deploy/Dockerfile \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+
+PNPM ?= pnpm
+
+# The frontend needs Node, which a Go-only contributor should not have to
+# install, so it has its own targets.
+web:
+	cd web && $(PNPM) install --frozen-lockfile && $(PNPM) build
+
+web-check:
+	cd web && $(PNPM) check
+
+web-test: web
+	cd web && $(PNPM) test
+
+docker-web:
+	docker build -t $(IMAGE)-web:$(VERSION) -t $(IMAGE)-web:latest web

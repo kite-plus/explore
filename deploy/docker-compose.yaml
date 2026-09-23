@@ -1,5 +1,5 @@
-# Explore in production: PostgreSQL, a one-off migration, the API and the
-# worker. Settings come from deploy/.env; copy .env.example to start.
+# Explore in production: PostgreSQL, a one-off migration, the API, the worker
+# and the web frontend. Settings come from deploy/.env; copy .env.example.
 # A reverse proxy in front terminates TLS; see
 # docs/design/project-layout.md section 10.
 services:
@@ -39,6 +39,9 @@ services:
     env_file: .env
     environment:
       EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
+      # web calls the API for readers; trusting this network lets the rate
+      # limit see the reader's address rather than web's.
+      EXPLORE_TRUSTED_PROXIES: ${EXPLORE_TRUSTED_PROXIES:-10.89.0.0/24}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -55,6 +58,27 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  web:
+    image: ${EXPLORE_WEB_IMAGE:-kiteplus/explore-web:latest}
+    build:
+      context: ../web
+    restart: unless-stopped
+    environment:
+      EXPLORE_API_URL: http://serve:8080
+      EXPLORE_PUBLIC_URL: ${EXPLORE_PUBLIC_URL:-https://explore.kite.plus}
+      EXPLORE_SITE_VERIFICATION_BAIDU: ${EXPLORE_SITE_VERIFICATION_BAIDU:-}
+      EXPLORE_SITE_VERIFICATION_GOOGLE: ${EXPLORE_SITE_VERIFICATION_GOOGLE:-}
+    ports:
+      - "127.0.0.1:4321:4321"
+    depends_on:
+      - serve
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24
 
 volumes:
   explore-db:
