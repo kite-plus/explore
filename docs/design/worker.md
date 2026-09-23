@@ -97,7 +97,8 @@ If-Modified-Since: ...
 
 - 拒绝回环、私有网段（`10/8`、`172.16/12`、`192.168/16`、`fc00::/7`）、链路本地（`169.254/16`、`fe80::/10`，包括云厂商的元数据地址）、运营商级 NAT（`100.64/10`）、组播和未指定地址，也包括它们的 IPv4 映射形式。
 - 每次连接都检查，所以对重定向和 DNS 重绑定同样有效。
-- `EXPLORE_ALLOW_PRIVATE_NETWORKS=true` 可以关掉这项检查，只用于测试和本地开发（例如检查 `http://127.0.0.1:8090/` 上的本地 Halo）。
+- `EXPLORE_ALLOW_PRIVATE_NETWORKS=true` 可以关掉这项检查（连同端口限制），只用于测试和本地开发（例如检查 `http://127.0.0.1:8090/` 上的本地 Halo）。
+- 被拒绝时，报告里写明是哪个地址。开发机上的代理工具如果开着 fake-IP 模式，会把所有域名解析到 `198.18.0.0/15` 这类保留网段，于是每个博客都被拒绝 `[EV]`；在这样的机器上检查，同样要打开上面的开关。生产服务器上的 DNS 返回真实地址，不受影响。
 
 ### 3.4 结果分类
 
@@ -146,8 +147,8 @@ If-Modified-Since: ...
   }
   ```
 
-- 非 UTF-8 编码（例如 GBK）的处理方式在 E0 验证：靠 `gofeed` 自身的支持，还是在解析前统一转码。
-- 日期解析要宽松，E0 用 Halo 的一位数日期（`Thu, 3 Sep 2026 01:02:03 GMT`）验证。
+- 非 UTF-8 编码由 `gofeed` 按文档自己声明的编码转码，GBK 已验证 `[EV]`。
+- 日期解析要宽松：Halo 的一位数日期（`Thu, 3 Sep 2026 01:02:03 GMT`）能正确解析 `[EV]`。
 - 解析失败只报错，**绝不**当作空订阅源。
 - `Content`（全文）只在内存里停留到规范化结束，用来在没有 `Summary` 时生成摘要，之后立即丢弃。
 
@@ -165,7 +166,7 @@ If-Modified-Since: ...
 2. **身份键**：`guid` 或 `id` 去掉首尾空白后非空就用它（超过 500 字符时改用它的 SHA-256）；否则用规范化后的链接（协议和主机小写，去掉默认端口和 `#` 片段）。身份键只用来去重，永远不当链接访问。
 3. **标题**：去掉 HTML 标签、还原实体、合并空白。为空时丢弃，记 `no_title` `[待定]`；超过 300 字截断并加省略号。
 4. **发布时间**：`Published`，没有就用 `Updated`。早于 1990 年的（包括 Hugo 输出的 `0001-01-01`）视为没有。
-5. **摘要**：只在 `show_excerpt` 为真时生成。来源是 `Summary`，为空时用 `Content`；先用 `bluemonday` 去掉全部 HTML、还原实体、合并空白，**再**截断到 140 字（省略号计入 140）。绝不在去掉标签之前截断，Hexo 插件截断 HTML 的问题就出在这里（[architecture.md §5.1](architecture.md#5-接入的博客系统)）。
+5. **摘要**：只在 `show_excerpt` 为真时生成。来源是 `Summary`，为空时用 `Content`；先用 `golang.org/x/net/html` 提取纯文本（去掉脚本和样式的内容，块级元素之间补一个空格，不是 HTML 元素的标签如 `<T>` 保留原样）、合并空白，**再**截断到 140 字（省略号计入 140）。绝不在去掉标签之前截断，Hexo 插件截断 HTML 的问题就出在这里（[architecture.md §5.1](architecture.md#5-接入的博客系统)）。
 6. **去重**：同一快照里身份键重复的，保留第一次出现的那条。
 
 ### 5.2 整个快照
@@ -213,9 +214,10 @@ If-Modified-Since: ...
 | `http_error` | error | 订阅地址返回非 2xx | —— |
 | `too_large` | error | 订阅源超过 5 MiB | Hugo：设置 `services.rss.limit` |
 | `parse_error` | error | 不是合法的 RSS、Atom 或 JSON Feed | —— |
-| `links_off_domain` | error | 超过一半 `[待定]` 的文章链接不在博客的域名内 | Hexo：改 `_config.yml` 的 `url`；Hugo：改 `baseURL`；Halo：改 `halo.external-url`；WordPress：设置 → 常规 → 站点地址（URL）；Jekyll：改 `_config.yml` 的 `url` |
+| `links_off_domain` | error | 超过一半 `[待定]` 的文章链接不在博客的域名内，而且订阅源声明的站点地址也不在博客的域名内：站点地址配错了 | Hexo：改 `_config.yml` 的 `url`；Hugo：改 `baseURL`；Halo：改 `halo.external-url`；WordPress：设置 → 常规 → 站点地址（URL）；Jekyll：改 `_config.yml` 的 `url` |
 | `no_valid_items` | error | 没有一篇可用的文章 | —— |
 | `stale` | error | 近 12 个月没有更新 | —— |
+| `links_elsewhere` | error | 超过一半的文章链接指向别的网站，但订阅源声明的站点地址是对的：订阅源本来就在链接外部（例如 gohugo.io 的订阅源是 GitHub 上的发布说明 `[EV]`） | Explore 只收录发布在博客本身的文章 |
 | `some_links_off_domain` | warning | 少数文章链接不在博客的域名内，这些文章会被跳过 | 博客确实跨多个域名的，提交时说明 |
 | `no_dates` | warning | 有文章没有发布时间，它们不会出现在首页 | Hugo：在 front matter 里写 `date` |
 | `dates_untrusted` | warning | 大量文章的发布时间相同 | Hexo：给每篇文章写上 `date` |
@@ -289,6 +291,19 @@ worker 每天运行一次（多个 worker 时用 PostgreSQL 的 advisory lock �
 ---
 
 ## 10. E0 要回答的问题
+
+已经实测过的（2026-09-23，`explore check`）：
+
+| 站点 | 系统 | 结果 |
+|---|---|---|
+| 本地 Halo 2.26.1 | Halo | 通过；靠默认地址找到 `/rss.xml`，不支持条件请求。用 `127.0.0.1` 访问时，文章链接写的是外部访问地址 `localhost`，报 `links_off_domain` |
+| 本地 Hugo 0.157 站点 | Hugo | 通过；报 `no_dates`（没写日期的文章）和 `includes_non_posts`（首页订阅源混有 About） |
+| wordpress.org/news | WordPress | 通过；自动发现 `/news/feed/`，10 篇，支持 `Last-Modified` |
+| hexo.io | Hexo | 通过；自动发现 `/atom.xml`，20 篇，支持 `ETag` |
+| ruanyifeng.com/blog | 其他 | 通过；订阅源托管在 FeedBurner，但文章链接指回博客本身 |
+| gohugo.io | Hugo | 不通过：订阅源是 GitHub 上的发布说明，报 `links_elsewhere`。由此把"站点地址配错"和"本来就链接外部"分成了两个问题代码 |
+
+还要用数据回答的：
 
 E0 对 WordPress、Halo、Hugo、Hexo 各至少 10 个真实博客运行 `explore check`，用数据回答下面的问题，结果回填到 architecture.md 的 `[待定]` 和本文：
 

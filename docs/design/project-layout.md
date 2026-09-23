@@ -48,6 +48,7 @@ explore/
 | 包 | 职责 | 允许依赖的内部包 |
 |---|---|---|
 | `policy` | [architecture.md §6](architecture.md#6-抓取与展示规则) 的数值常量，代码里唯一的出处 | 无 |
+| `i18n` | 选择给人看的文字用中文还是英文（`Accept-Language`、`--lang`） | 无 |
 | `model` | `Blog`、`Entry`、`Submission`、`CheckReport` 等领域类型和枚举 | 无 |
 | `feed` | 解析订阅源（[worker.md §4](worker.md#4-解析internalfeed)） | 无 |
 | `normalize` | 规范化，纯函数（[worker.md §5](worker.md#5-规范化)） | `policy`、`model`、`feed` |
@@ -64,7 +65,7 @@ explore/
 
 `scripts/check-imports.sh` 在 `make check` 里强制执行这些规则，写法照搬 Kite 的同名脚本。规则靠文档是守不住的，一次 import 就能打破它。
 
-1. **纯逻辑包**（`policy`、`model`、`feed`、`normalize`、`publicfeed`）不依赖 `fetch`、`check`、`store`、`worker`、`api`、`cli`、`config`，也不依赖 Gin 和 pgx。它们没有 I/O，全部用夹具做黄金文件测试。
+1. **纯逻辑包**（`policy`、`model`、`i18n`、`feed`、`normalize`、`publicfeed`）不依赖 `fetch`、`check`、`store`、`worker`、`api`、`cli`、`config`，也不依赖 Gin 和 pgx。它们没有 I/O，全部用夹具做黄金文件测试。
 2. **只有 `api` 可以依赖 Gin**：Web 框架留在最外层，换框架只动一个包。
 3. **只有 `store` 可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。
 4. **`check` 不依赖 `store`**：`explore check` 不需要数据库也能运行，作者和 E0 都要用。
@@ -96,7 +97,7 @@ explore/
 | `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用提交接口（[frontend.md §6](frontend.md#6-提交流程)） |
 | `EXPLORE_ADMIN_TOKENS` | 空 | 维护者令牌，`名字:SHA-256` 逗号分隔；为空时不注册管理接口 |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
-| `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址，只用于测试和本地开发 |
+| `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 
 **抓取与展示规则的阈值不做成配置**。它们是产品规则，写在 architecture.md §6，代码里定义在 `internal/policy`，改动走文档和 code review，而不是改一个环境变量。
@@ -120,9 +121,9 @@ printf %s "$TOKEN" | shasum -a 256
 | 迁移 | `github.com/pressly/goose/v3`，SQL 文件嵌入二进制 |
 | 命令行 | `github.com/spf13/cobra`，与 Kite 一致 |
 | 订阅源解析 | `github.com/mmcdole/gofeed` |
-| HTML 清理 | `github.com/microcosm-cc/bluemonday` |
-| 域名与编码 | `golang.org/x/net` 的 `publicsuffix` 和 `html/charset` |
-| robots.txt | 符合 RFC 9309 的解析库，E0 选定 `[待定]` |
+| HTML 转纯文本 | `golang.org/x/net/html`：要的是纯文本而不是净化后的 HTML，块级元素之间要补空格 |
+| 域名、编码与语言 | `golang.org/x/net` 的 `publicsuffix`、`html/charset`；`golang.org/x/text` 的 `language`、`width` |
+| robots.txt | `github.com/jimsmart/grobotstxt`：Google 官方 robots.txt 解析器的移植，与 RFC 9309 一致 |
 | 日志 | 标准库 `log/slog`，JSON 输出 |
 
 依赖版本在 E1 初始化 `go.mod` 时取当时的稳定版并固定。

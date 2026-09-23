@@ -348,7 +348,7 @@ Gin 提供 `/api/v1` 下的公开接口（首页时间流、博客目录、博�
 | 数据访问 | `pgx`，SQL 手写在 `internal/store` 里：查询里有窗口函数、`SKIP LOCKED` 和批量 upsert，直接写 SQL 比 ORM 清楚，每条查询都有集成测试 | `[设计中]` |
 | 数据库迁移 | `goose`，SQL 文件嵌入二进制 | `[设计中]` |
 | 订阅源解析 | `gofeed`，覆盖 RSS、Atom、JSON Feed | `[设计中]`，E0 用真实订阅源验证 |
-| 摘要清理 | `bluemonday` 去掉全部 HTML | `[设计中]` |
+| 摘要清理 | `golang.org/x/net/html` 提取纯文本 | `[设计中]` |
 | 部署 | Docker Compose：postgres、migrate、serve、worker | `[设计中]` |
 
 版本与其余依赖见 [project-layout.md §5](project-layout.md#5-技术选型与版本)。抓取调度用 `FOR UPDATE SKIP LOCKED` 领取到期的博客，V1 只跑一个 worker，将来加 worker 不需要改表结构，也不需要引入消息队列（[worker.md §2](worker.md#2-调度)）。
