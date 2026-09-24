@@ -87,3 +87,7 @@ make build
 ## 参与其中
 
 对内容发现有想法？欢迎[提交 Issue](https://github.com/kite-plus/explore/issues) 一起讨论。
+
+## 许可证
+
+Explore 以 [Apache License 2.0](LICENSE) 授权。管理后台移植自采用 MIT 许可的 [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin)，它的许可文本保留在 [web/src/admin/LICENSE-shadcn-admin.txt](web/src/admin/LICENSE-shadcn-admin.txt)。

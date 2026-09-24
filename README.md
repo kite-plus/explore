@@ -87,3 +87,7 @@ Running the API and the worker locally is described in [docs/design/project-layo
 ## Get involved
 
 Have an idea about how discovery should work? [Open an issue](https://github.com/kite-plus/explore/issues) to start the conversation.
+
+## License
+
+Explore is licensed under the [Apache License 2.0](LICENSE). The admin console is adapted from [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin), which is MIT licensed; its license is kept in [web/src/admin/LICENSE-shadcn-admin.txt](web/src/admin/LICENSE-shadcn-admin.txt).
