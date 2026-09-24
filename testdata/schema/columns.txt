@@ -78,11 +78,32 @@ submissions.status text
 subscriptions.blog_id bigint
 subscriptions.created_at timestamp with time zone
 subscriptions.user_id uuid
+suppressed_entries.blog_id bigint
+suppressed_entries.created_at timestamp with time zone
+suppressed_entries.identity text
+suppressed_entries.reason text
+suppressed_entries.reviewed_by text
+system_settings.key text
+system_settings.updated_at timestamp with time zone
+system_settings.updated_by text
+system_settings.value text
+takedown_requests.blog_id bigint
+takedown_requests.created_at timestamp with time zone
+takedown_requests.entry_identity text
+takedown_requests.id uuid
+takedown_requests.reason text
+takedown_requests.requester_id uuid
+takedown_requests.review_note text
+takedown_requests.reviewed_at timestamp with time zone
+takedown_requests.reviewed_by text
+takedown_requests.status text
+takedown_requests.target_type text
 user_identities.issuer text
 user_identities.linked_at timestamp with time zone
 user_identities.subject text
 user_identities.user_id uuid
 users.created_at timestamp with time zone
+users.disabled_at timestamp with time zone
 users.display_name text
 users.email text
 users.id uuid

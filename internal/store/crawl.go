@@ -38,6 +38,7 @@ func (s *Store) ClaimDue(ctx context.Context, batch int, lease time.Duration) ([
 		WITH due AS (
 			SELECT id FROM blogs
 			WHERE status = 'active' AND next_fetch_at <= now()
+			  AND EXISTS (SELECT 1 FROM system_settings WHERE key = 'crawler_paused' AND value = 'false')
 			ORDER BY next_fetch_at
 			LIMIT @batch
 			FOR UPDATE SKIP LOCKED

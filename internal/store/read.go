@@ -71,6 +71,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 			FROM entries e
 			JOIN blogs b ON b.id = e.blog_id
 			WHERE `+visible+`
+			  AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 			  AND e.date_trusted
 			  AND e.published_at >  now() - (@window * interval '1 second')
 			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
@@ -135,6 +136,7 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 			SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 			       (SELECT max(e.published_at) FROM entries e
 			        WHERE e.blog_id = b.id AND e.date_trusted
+			          AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 			          AND e.published_at <= now() + (@future_tolerance * interval '1 second')) AS last_published_at
 			FROM blogs b
 			WHERE `+visible+`
@@ -169,6 +171,7 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 		SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 		       (SELECT max(e.published_at) FROM entries e
 		        WHERE e.blog_id = b.id AND e.date_trusted
+		          AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 		          AND e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		FROM blogs b
 		WHERE b.host = @host AND `+visible, args)
@@ -186,7 +189,8 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 	rows, err = s.pool.Query(ctx, `
 		SELECT id, blog_id, identity, url, title, coalesce(excerpt, ''), coalesce(image_url, ''), published_at, date_trusted, tags, link_status, link_checked_at
 		FROM entries
-		WHERE blog_id = @id AND (published_at IS NULL OR published_at <= now() + (@future_tolerance * interval '1 second'))
+		WHERE blog_id = @id AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = entries.blog_id AND se.identity = entries.identity)
+		  AND (published_at IS NULL OR published_at <= now() + (@future_tolerance * interval '1 second'))
 		ORDER BY published_at DESC NULLS LAST, id`,
 		pgx.NamedArgs{"id": blog.ID, "future_tolerance": seconds(policy.FutureTolerance)})
 	if err != nil {

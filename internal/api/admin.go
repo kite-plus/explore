@@ -169,6 +169,11 @@ func (s *Server) adminFetchQueue(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
+	crawlerPaused, err := s.Store.Setting(c.Request.Context(), "crawler_paused")
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
 	now := s.Now()
 	workerOnline := workerCount > 0
 	out := make([]fetchQueueItemJSON, 0, len(items))
@@ -201,7 +206,7 @@ func (s *Server) adminFetchQueue(c *gin.Context) {
 	}
 	writeJSON(c, http.StatusOK, gin.H{
 		"worker_online": workerOnline, "worker_count": workerCount,
-		"worker_last_seen_at": utc(lastSeen), "data": out,
+		"worker_last_seen_at": utc(lastSeen), "crawler_paused": crawlerPaused == "true", "data": out,
 	})
 }
 

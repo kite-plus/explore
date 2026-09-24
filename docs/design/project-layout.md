@@ -98,7 +98,7 @@ explore/
 | `EXPLORE_HTTP_ADDR` | `127.0.0.1:8080` | API 监听地址 |
 | `EXPLORE_PUBLIC_URL` | `https://explore.kite.plus` | 对外地址：User-Agent 里的说明页、`/feed.xml` 里的链接 |
 | `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用提交接口（[frontend.md §6](frontend.md#6-提交流程)） |
-| `EXPLORE_ADMIN_TOKENS` | 空 | 维护者令牌，`名字:SHA-256` 逗号分隔；为空时不注册管理接口 |
+| `EXPLORE_ADMIN_TOKENS` | 空 | 可选的维护者令牌，`名字:SHA-256` 逗号分隔；为空时仍可由管理员账号访问后台 |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
 | `EXPLORE_TAGGER_MODEL` | 空 | 打标签用的模型，例如 `claude-opus-5`；和下一项一起设置才会打标签（[accounts.md §5.3](accounts.md#53-模型与费用-待定)） |
 | `EXPLORE_ANTHROPIC_API_KEY` | 空 | Claude API 的密钥；只能和上一项一起设置 |

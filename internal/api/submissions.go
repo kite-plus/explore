@@ -126,6 +126,15 @@ func (s *Server) runCheck(c *gin.Context, t target) (*model.CheckReport, bool) {
 }
 
 func (s *Server) submit(c *gin.Context) {
+	enabled, err := s.Store.Setting(c.Request.Context(), "submissions_enabled")
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	if enabled != "true" {
+		s.fail(c, http.StatusForbidden, codeFeatureDisabled)
+		return
+	}
 	var req submitRequest
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
 	if err := c.ShouldBindJSON(&req); err != nil || utf8.RuneCountInString(req.Note) > 500 {

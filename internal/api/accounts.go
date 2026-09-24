@@ -85,6 +85,15 @@ func validEmail(raw string) string {
 }
 
 func (s *Server) register(c *gin.Context) {
+	enabled, err := s.Store.Setting(c.Request.Context(), "registration_enabled")
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	if enabled != "true" {
+		s.fail(c, http.StatusForbidden, codeFeatureDisabled)
+		return
+	}
 	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
 		s.fail(c, http.StatusUnsupportedMediaType, codeInvalidRequest)
 		return
@@ -138,7 +147,7 @@ func (s *Server) login(c *gin.Context) {
 	if errors.Is(err, store.ErrNotFound) {
 		_ = bcrypt.CompareHashAndPassword(unusedPasswordHash, []byte(body.Password))
 	}
-	if errors.Is(err, store.ErrNotFound) || (err == nil && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.Password)) != nil) {
+	if errors.Is(err, store.ErrNotFound) || (err == nil && (u.Disabled || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.Password)) != nil)) {
 		s.fail(c, http.StatusUnauthorized, codeBadCredentials)
 		return
 	}

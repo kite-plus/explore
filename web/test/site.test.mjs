@@ -364,7 +364,7 @@ describe("submissions", () => {
 });
 
 describe("admin console", () => {
-  for (const path of ["/admin/submissions", "/admin/blogs", "/admin/queue", "/admin/excluded-hosts", "/admin/tools"]) {
+  for (const path of ["/admin", "/admin/submissions", "/admin/blogs", "/admin/entries", "/admin/takedowns", "/admin/users", "/admin/queue", "/admin/settings", "/admin/excluded-hosts", "/admin/tools"]) {
     test(`${path} serves a private single-island shell`, async () => {
       const { res, html } = await page(path);
       assert.equal(res.status, 200);
@@ -401,6 +401,19 @@ describe("admin console", () => {
     assert.equal(res.status, 200);
     assert.equal((await res.json()).data[0].slug, "backend");
   });
+
+  test("new management and public configuration proxies return backend values", async () => {
+    const overview = await get("/api/v1/admin/overview", { headers: { Authorization: "Bearer test-admin-token" } });
+    assert.equal(overview.status, 200);
+    assert.equal((await overview.json()).stats.blogs, 2);
+    const directory = await get("/api/v1/blogs?limit=3");
+    assert.equal(directory.status, 200);
+    assert.equal((await directory.json()).data[0].host, "zh.example.com");
+    const config = await get("/api/v1/site-config");
+    assert.equal(config.status, 200);
+    assert.equal(config.headers.get("cache-control"), "no-store");
+    assert.equal((await config.json()).notice, "维护公告");
+  });
 });
 
 describe("reader accounts", () => {
@@ -433,5 +446,13 @@ describe("reader accounts", () => {
     const me = await get("/api/v1/me", { headers: { Cookie: "explore_session=test-session" } });
     assert.equal(me.status, 200);
     assert.equal((await me.json()).display_name, "Reader");
+  });
+
+  test("reader reports are forwarded with session and CSRF protection", async () => {
+    const anonymous = await get("/api/v1/reports", { method: "POST", headers: { "Content-Type": "application/json", Origin: base }, body: JSON.stringify({ target_type: "blog", blog_host: "zh.example.com", reason: "需要审核" }) });
+    assert.equal(anonymous.status, 401);
+    const reported = await get("/api/v1/reports", { method: "POST", headers: { "Content-Type": "application/json", Origin: base, Cookie: "explore_session=test-session", "X-CSRF-Token": "test-csrf" }, body: JSON.stringify({ target_type: "blog", blog_host: "zh.example.com", reason: "需要审核" }) });
+    assert.equal(reported.status, 201);
+    assert.equal(stub.state.reports.at(-1).blog_host, "zh.example.com");
   });
 });

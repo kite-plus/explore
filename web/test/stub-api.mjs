@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], tagLists: 0, linkChecks: 0, adminRequests: [] };
+  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -71,6 +71,16 @@ export function startStub() {
       if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");
       return send(200, { data: [entries.first.data[0]], next_cursor: null });
     }
+    if (url.pathname === "/api/v1/site-config" && req.method === "GET") {
+      return send(200, { notice: "维护公告", registration_enabled: true });
+    }
+    if (url.pathname === "/api/v1/reports" && req.method === "POST") {
+      if (req.headers.cookie !== "explore_session=test-session" || req.headers["x-csrf-token"] !== "test-csrf") return error(401, "unauthorized");
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      state.reports.push(JSON.parse(body));
+      return send(201, {});
+    }
 
     if (url.pathname.startsWith("/api/v1/admin/")) {
       if (req.headers.authorization !== "Bearer test-admin-token") return error(401, "unauthorized");
@@ -79,6 +89,7 @@ export function startStub() {
       state.adminRequests.push({ path: url.pathname, query: url.search, method: req.method, body, cookie: req.headers.cookie });
       if (url.pathname === "/api/v1/admin/check" && req.method === "POST") return send(200, report(true, []));
       if (url.pathname === "/api/v1/admin/submissions" && req.method === "GET") return send(200, { data: [] });
+      if (url.pathname === "/api/v1/admin/overview" && req.method === "GET") return send(200, { stats: { blogs: 2, entries: 3, users: 1 } });
       return error(404, "not_found");
     }
 

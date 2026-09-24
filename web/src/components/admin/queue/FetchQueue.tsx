@@ -89,7 +89,9 @@ export function FetchQueue() {
     try {
       await fetchBlogNow(host, token, onUnauthorized);
       const updated = await load(true);
-      setMessage(updated?.worker_online
+      setMessage(updated?.crawler_paused
+        ? `${host} 已设为立即抓取，但系统已暂停领取任务。请先到系统设置恢复抓取。`
+        : updated?.worker_online
         ? `${host} 已设为立即抓取，请等待 worker 领取。`
         : `${host} 已设为立即抓取，但 worker 当前离线，任务暂不会执行。`);
     } catch (cause) {
@@ -111,10 +113,10 @@ export function FetchQueue() {
   });
 
   return (
-    <div className="space-y-5">
+    <div className="admin-legacy-panel space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">抓取队列</h1>
+          <h2 className="text-lg font-semibold">抓取队列</h2>
           <p className="text-sm text-muted-foreground">每 15 秒更新一次，展示真实调度与最近执行记录。</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
@@ -125,6 +127,7 @@ export function FetchQueue() {
       {error && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
       {snapshot && (
         <>
+          {snapshot.crawler_paused && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">系统已暂停领取抓取任务。队列保留，<a className="font-medium underline" href="/admin/settings">前往系统设置恢复</a>。</div>}
           <div role="status" className={snapshot.worker_online
             ? "rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
             : "rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"}>

@@ -59,6 +59,18 @@ async function adminFetch(
   return res;
 }
 
+export async function adminRequest<T>(
+  path: string,
+  token: string,
+  onUnauthorized: () => void,
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await adminFetch(path, options, token, onUnauthorized);
+  if (!response.ok) throw new Error(await extractError(response));
+  const body = await response.text();
+  return body ? JSON.parse(body) as T : undefined as T;
+}
+
 /** 从响应体中提取错误消息 */
 async function extractError(res: Response): Promise<string> {
   try {

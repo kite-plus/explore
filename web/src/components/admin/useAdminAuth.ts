@@ -42,14 +42,15 @@ export function useAdminAuth(): AdminAuthContext {
 export function useAuthState() {
   const [token, setToken] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
 
   // 挂载后从存储中恢复 Token
   useEffect(() => {
     const stored = readToken();
-    if (stored) { setToken(stored); return; }
+    if (stored) { setToken(stored); setChecking(false); return; }
     void fetch("/api/v1/admin/session", { credentials: "same-origin" }).then(response => {
       if (response.ok) setToken(ACCOUNT_ADMIN);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setChecking(false));
   }, []);
 
   const login = useCallback((newToken: string, remember: boolean) => {
@@ -87,5 +88,5 @@ export function useAuthState() {
     setAuthError("登录已失效，请重新登录");
   }, []);
 
-  return { token, authError, login, logout, onUnauthorized };
+  return { token, authError, login, logout, onUnauthorized, checking };
 }

@@ -5,7 +5,7 @@ import { apiURL } from "@/lib/config";
 export const readerProxy: APIRoute = async ({ request, params, clientAddress }) => {
   const url = new URL(request.url);
   const path = params.path ?? "";
-  const group = url.pathname.startsWith("/api/v1/auth/") ? "auth" : "me";
+  const group = url.pathname.startsWith("/api/v1/auth/") ? "auth" : url.pathname === "/api/v1/reports" ? "reports" : "me";
   const target = `${apiURL()}/api/v1/${group}${path ? `/${path}` : ""}${url.search}`;
   const headers = new Headers();
   for (const name of ["cookie", "content-type", "accept-language", "x-csrf-token"]) {

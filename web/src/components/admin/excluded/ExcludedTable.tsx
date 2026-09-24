@@ -69,9 +69,9 @@ export function ExcludedTable() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="admin-legacy-panel space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">排除名单</h1>
+        <h2 className="text-lg font-semibold">排除名单</h2>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCwIcon className={["size-3.5", loading ? "animate-spin" : ""].join(" ")} />
           刷新

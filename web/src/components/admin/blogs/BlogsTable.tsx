@@ -103,9 +103,9 @@ export function BlogsTable() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="admin-legacy-panel space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">收录博客</h1>
+        <h2 className="text-lg font-semibold">收录博客</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCwIcon className={["size-3.5", loading ? "animate-spin" : ""].join(" ")} />

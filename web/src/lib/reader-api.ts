@@ -28,7 +28,8 @@ export async function readerRequest<T>(path: string, init: RequestInit = {}, csr
     try { message = (await response.json()).error?.message ?? message; } catch { /* 响应可能没有正文。 */ }
     throw new Error(message);
   }
-  return response.status === 204 ? undefined as T : await response.json() as T;
+  const body = await response.text();
+  return body ? JSON.parse(body) as T : undefined as T;
 }
 
 export async function currentReader(): Promise<ReaderUser | null> {

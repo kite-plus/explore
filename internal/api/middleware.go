@@ -81,6 +81,7 @@ func (s *Server) requireAdmin() gin.HandlerFunc {
 			return
 		}
 		c.Set("admin", u.Email)
+		c.Set("admin_user_id", u.ID)
 		c.Next()
 	}
 }

@@ -19,11 +19,12 @@ type User struct {
 	PasswordHash string
 	DisplayName  string
 	IsAdmin      bool
+	Disabled     bool
 }
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -32,7 +33,7 @@ func scanUser(row pgx.Row) (User, error) {
 
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash, displayName string) (User, error) {
 	u, err := scanUser(s.pool.QueryRow(ctx, `INSERT INTO users(email, password_hash, display_name)
-		VALUES ($1, $2, $3) RETURNING id::text, email, password_hash, display_name, is_admin`, email, passwordHash, displayName))
+		VALUES ($1, $2, $3) RETURNING id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL`, email, passwordHash, displayName))
 	if isUniqueViolation(err) {
 		return User{}, ErrConflict
 	}
@@ -40,13 +41,13 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash, displayName
 }
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `SELECT id::text, email, password_hash, display_name, is_admin FROM users WHERE email = $1`, email))
+	return scanUser(s.pool.QueryRow(ctx, `SELECT id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL FROM users WHERE email = $1`, email))
 }
 
 func (s *Store) UserBySession(ctx context.Context, tokenHash [sha256.Size]byte) (User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `SELECT u.id::text, u.email, u.password_hash, u.display_name, u.is_admin
+	return scanUser(s.pool.QueryRow(ctx, `SELECT u.id::text, u.email, u.password_hash, u.display_name, u.is_admin, u.disabled_at IS NOT NULL
 		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now()`, tokenHash[:]))
+		WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL`, tokenHash[:]))
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash [sha256.Size]byte, expires time.Time) error {
@@ -108,7 +109,8 @@ func (s *Store) RemoveSubscription(ctx context.Context, userID, host string) err
 
 func (s *Store) Subscriptions(ctx context.Context, userID string) ([]ListedBlog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
-		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted) AS last_published_at
+		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted
+		 AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)) AS last_published_at
 		FROM subscriptions s JOIN blogs b ON b.id = s.blog_id
 		WHERE s.user_id = $1 ORDER BY s.created_at DESC, b.id DESC`, userID)
 	if err != nil {
@@ -132,6 +134,7 @@ func (s *Store) FollowingStream(ctx context.Context, userID string, q StreamQuer
 			e.tags, e.link_status, e.link_checked_at, b.host, b.name, b.site_url, b.feed_url, b.language
 		FROM subscriptions sub JOIN blogs b ON b.id = sub.blog_id JOIN entries e ON e.blog_id = b.id
 		WHERE sub.user_id = @user_id AND `+visible+`
+		AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 		AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 		AND (@tag::text = '' OR @tag = ANY(e.tags))
@@ -213,7 +216,8 @@ func (s *Store) BlogClaimHash(ctx context.Context, userID, host string) ([sha256
 
 func (s *Store) OwnedBlogs(ctx context.Context, userID string) ([]ListedBlog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
-		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted)
+		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted
+		 AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity))
 		FROM blog_owners o JOIN blogs b ON b.id = o.blog_id WHERE o.user_id = $1 ORDER BY b.host`, userID)
 	if err != nil {
 		return nil, err

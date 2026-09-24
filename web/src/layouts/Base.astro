@@ -20,9 +20,10 @@ interface Props {
   /** False for pages that exist only once, such as /bot. */
   bilingual?: boolean;
   entryChecks?: boolean;
+  wide?: boolean;
 }
 
-const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false } = Astro.props;
+const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false } = Astro.props;
 const t = dict(lang);
 const base = publicURL();
 const canonical = base + localePath(lang, path);
@@ -65,11 +66,18 @@ const verification = {
     {verification.google && <meta name="google-site-verification" content={verification.google} />}
   </head>
   <body class="flex min-h-dvh flex-col">
-    <SiteHeader lang={lang} path={path} bilingual={bilingual} />
-    <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+    <SiteHeader lang={lang} path={path} bilingual={bilingual} wide={wide} />
+    <div id="site-notice" hidden class="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"></div>
+    <main class:list={["mx-auto w-full flex-1 px-4 py-8 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
       <slot />
     </main>
     <SiteFooter lang={lang} />
+    <script is:inline>
+      fetch('/api/v1/site-config').then(response => response.ok ? response.json() : null).then(config => {
+        const notice = document.getElementById('site-notice');
+        if (notice && config?.notice) { notice.textContent = config.notice; notice.hidden = false; }
+      }).catch(() => {});
+    </script>
     {entryChecks && <script is:inline set:html={entryCheckScript} />}
     {entryChecks && <script is:inline set:html={entryStreamScript} />}
   </body>

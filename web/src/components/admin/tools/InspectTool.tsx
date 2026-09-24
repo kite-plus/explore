@@ -59,8 +59,8 @@ export function InspectTool() {
   const infos = report?.problems?.filter((p) => p.severity === "info") ?? [];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-lg font-semibold">在线诊断工具</h1>
+    <div className="admin-legacy-panel space-y-6">
+      <h2 className="text-lg font-semibold">在线诊断工具</h2>
 
       {/* 输入表单 */}
       <form onSubmit={handleCheck} className="space-y-3 rounded-lg border bg-card p-4">

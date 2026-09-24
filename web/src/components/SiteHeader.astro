@@ -9,9 +9,10 @@ interface Props {
   lang: Lang;
   path: string;
   bilingual: boolean;
+  wide?: boolean;
 }
 
-const { lang, path, bilingual } = Astro.props;
+const { lang, path, bilingual, wide = false } = Astro.props;
 const t = dict(lang);
 const links = [
   { href: localePath(lang, "/"), label: t.nav.home, current: path === "/" },
@@ -24,12 +25,12 @@ const switchTo = other(lang);
 ---
 
 <header class="border-b">
-  <div class="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4 sm:px-6">
-    <a href={localePath(lang, "/")} class="inline-flex items-center gap-2 text-lg font-semibold tracking-tight">
+  <div class:list={["mx-auto flex w-full flex-wrap items-center gap-x-4 gap-y-4 px-4 py-4 sm:gap-x-6 sm:gap-y-2 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
+    <a href={localePath(lang, "/")} class="mr-auto inline-flex items-center gap-2 text-lg font-semibold tracking-tight sm:mr-0">
       <Logo class="h-6 w-auto" />
       <span>Explore</span>
     </a>
-    <nav class="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+    <nav class="order-last flex w-full flex-none flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:order-none sm:w-auto sm:flex-1">
       {
         links.map((l) => (
           <a

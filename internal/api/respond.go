@@ -36,6 +36,7 @@ const (
 	codeConflict           = "conflict"
 	codeVerificationFailed = "verification_failed"
 	codeBadCredentials     = "bad_credentials"
+	codeFeatureDisabled    = "feature_disabled"
 )
 
 var messages = map[string]struct{ en, zh string }{
@@ -54,6 +55,7 @@ var messages = map[string]struct{ en, zh string }{
 	codeConflict:           {"This account already exists or the resource is already owned.", "账号已存在或资源已被认领。"},
 	codeVerificationFailed: {"The domain verification record was not found.", "未找到匹配的域名验证记录。"},
 	codeBadCredentials:     {"The email or password is incorrect.", "邮箱或密码不正确。"},
+	codeFeatureDisabled:    {"This feature is currently disabled.", "这项功能当前已关闭。"},
 }
 
 type errorBody struct {

@@ -75,6 +75,7 @@ export interface FetchQueueSnapshot {
   worker_online: boolean;
   worker_count: number;
   worker_last_seen_at: string | null;
+  crawler_paused: boolean;
   data: FetchQueueItem[];
 }
 
