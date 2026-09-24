@@ -262,6 +262,37 @@ func TestDetectGenerator(t *testing.T) {
 	}
 }
 
+func TestLanguage(t *testing.T) {
+	cases := map[string]string{
+		"zh":         "zh",
+		"zh-CN":      "zh-CN",
+		"zh-cn":      "zh-CN",
+		"zh_CN":      "zh-CN",
+		"ZH_cn":      "zh-CN",
+		"zh-Hans":    "zh-Hans",
+		"zh-hans":    "zh-Hans",
+		"zh_hant_tw": "zh-Hant-TW",
+		"zh-TW":      "zh-TW",
+		"en":         "en",
+		"en-us":      "en-US",
+		"en-US":      "en-US",
+		"es-419":     "es-419",
+		" en-us\n":   "en-US",
+		"iw":         "he",
+		"und":        "und",
+		"":           "und",
+		"  ":         "und",
+		"English":    "und",
+		"zh-CN,en":   "und",
+		"中文":         "und",
+	}
+	for in, want := range cases {
+		if got := Language(in); got != want {
+			t.Errorf("Language(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestCategories(t *testing.T) {
 	raw := []string{"Go", "go", "Uncategorized", "  <b>Web</b>  ", "", "未分类", strings.Repeat("长", 60)}
 	for i := range 12 {

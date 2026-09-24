@@ -250,7 +250,9 @@ func (c *Checker) describe(ctx context.Context, r *model.CheckReport, site *url.
 	if desc != "" {
 		r.Description = normalize.Truncate(normalize.PlainText(desc), 240)
 	}
-	r.Language = loc.feed.Language
+	if loc.feed.Language != "" {
+		r.Language = normalize.Language(loc.feed.Language)
+	}
 	if g := normalize.DetectGenerator(loc.feed.Generator); g != model.GeneratorUnknown {
 		r.Generator = g
 	}

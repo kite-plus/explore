@@ -574,7 +574,7 @@ func TestSubmissionFlow(t *testing.T) {
 		t.Errorf("second submission = %d %s", w.Code, w.Body.String())
 	}
 
-	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/approve", admin: true})
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/submissions/" + sub.ID + "/approve", body: `{"language":"zh_cn"}`, admin: true})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("approve = %d %s", w.Code, w.Body.String())
 	}
@@ -582,7 +582,7 @@ func TestSubmissionFlow(t *testing.T) {
 		Host, Name, Generator, Language string
 		Visible                         bool
 	}](t, w)
-	if blog.Host != "localhost" || blog.Name != "Example Hexo Blog" || blog.Generator != "hexo" || blog.Visible {
+	if blog.Host != "localhost" || blog.Name != "Example Hexo Blog" || blog.Generator != "hexo" || blog.Language != "zh-CN" || blog.Visible {
 		t.Errorf("approved blog = %+v (not visible until the worker fetches it)", blog)
 	}
 
@@ -770,7 +770,7 @@ func TestAdminManagesBlogs(t *testing.T) {
 		t.Fatalf("admin check = %d %s", w.Code, w.Body.String())
 	}
 
-	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/blogs", body: `{"site_url":"` + site + `","language":"zh-CN","extra_domains":["CDN.Example.com"]}`, admin: true})
+	w = e.do(req{method: http.MethodPost, path: "/api/v1/admin/blogs", body: `{"site_url":"` + site + `","language":"zh_cn","extra_domains":["CDN.Example.com"]}`, admin: true})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create = %d %s", w.Code, w.Body.String())
 	}
@@ -833,6 +833,28 @@ func TestAdminBlogListCountsEntries(t *testing.T) {
 	}
 	if len(counts) != 2 || counts["busy.example.com"] != 2 || counts["quiet.example.com"] != 0 {
 		t.Errorf("entry counts = %v", counts)
+	}
+}
+
+func TestLanguageFilterFindsRelabeledBlog(t *testing.T) {
+	e := newEnv(t, true)
+	e.seed("relabeled.example.com", "en", post("a", 1, ""))
+	e.seed("en.example.com", "en", post("b", 2, ""))
+
+	w := e.do(req{method: http.MethodPatch, path: "/api/v1/admin/blogs/relabeled.example.com", body: `{"language":"zh_CN"}`, admin: true})
+	if w.Code != http.StatusOK || decode[struct{ Language string }](t, w).Language != "zh-CN" {
+		t.Fatalf("relabel = %d %s", w.Code, w.Body.String())
+	}
+
+	entries := decode[pageOut](t, e.get("/api/v1/entries?lang=zh"))
+	if len(entries.Data) != 1 || entries.Data[0].Blog == nil || entries.Data[0].Blog.Host != "relabeled.example.com" || entries.Data[0].Blog.Language != "zh-CN" {
+		t.Errorf("zh entries = %+v", entries.Data)
+	}
+	blogs := decode[struct {
+		Data []struct{ Host, Language string } `json:"data"`
+	}](t, e.get("/api/v1/blogs?lang=zh"))
+	if len(blogs.Data) != 1 || blogs.Data[0].Host != "relabeled.example.com" || blogs.Data[0].Language != "zh-CN" {
+		t.Errorf("zh blogs = %+v", blogs.Data)
 	}
 }
 

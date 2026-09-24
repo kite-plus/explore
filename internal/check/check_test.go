@@ -116,7 +116,7 @@ func TestHexoFoundByAutodiscovery(t *testing.T) {
 	if !r.Passed {
 		t.Fatalf("report failed: %+v", r.Problems)
 	}
-	if r.DiscoveredBy != "autodiscovery" || r.Format != "atom" || r.Generator != model.GeneratorHexo {
+	if r.DiscoveredBy != "autodiscovery" || r.Format != "atom" || r.Generator != model.GeneratorHexo || r.Language != "" {
 		t.Errorf("report = %+v", r)
 	}
 	if r.FeedURL != s.srv.URL+"/atom.xml" {
@@ -142,6 +142,9 @@ func TestHaloFoundByDefaultPath(t *testing.T) {
 	}
 	if r.FeedURL != s.srv.URL+"/rss.xml" {
 		t.Errorf("feed url = %s", r.FeedURL)
+	}
+	if r.Language != "zh-CN" {
+		t.Errorf("language = %q, want the feed's zh-cn in canonical form", r.Language)
 	}
 }
 

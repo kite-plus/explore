@@ -9,6 +9,7 @@ import (
 
 	"github.com/kite-plus/explore/internal/check"
 	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/normalize"
 	"github.com/kite-plus/explore/internal/policy"
 	"github.com/kite-plus/explore/internal/store"
 )
@@ -90,8 +91,13 @@ func (s *Server) adminApprove(c *gin.Context) {
 	if !s.bindOptional(c, &req) {
 		return
 	}
+	// An empty language leaves the store to fall back to the check report's.
+	language := strings.TrimSpace(req.Language)
+	if language != "" {
+		language = normalize.Language(language)
+	}
 	blog, err := s.Store.ApproveSubmission(c.Request.Context(), c.Param("id"), store.Approval{
-		Reviewer: reviewer(c), Name: strings.TrimSpace(req.Name), Language: strings.TrimSpace(req.Language),
+		Reviewer: reviewer(c), Name: strings.TrimSpace(req.Name), Language: language,
 		FeedURL: strings.TrimSpace(req.FeedURL), ExtraDomains: lowerAll(req.ExtraDomains), ShowExcerpt: req.ShowExcerpt,
 	})
 	if err != nil {
@@ -270,7 +276,7 @@ func (s *Server) adminCreateBlog(c *gin.Context) {
 	blog, err := s.Store.CreateBlog(c.Request.Context(), store.NewBlog{
 		Host: t.host, Reviewer: reviewer(c), SiteURL: t.site, FeedURL: report.FeedURL,
 		Name:         firstNonEmpty(strings.TrimSpace(req.Name), report.Title, t.host),
-		Language:     firstNonEmpty(strings.TrimSpace(req.Language), report.Language, "und"),
+		Language:     normalize.Language(firstNonEmpty(strings.TrimSpace(req.Language), report.Language)),
 		Generator:    report.Generator,
 		ShowExcerpt:  req.ShowExcerpt == nil || *req.ShowExcerpt,
 		ExtraDomains: lowerAll(req.ExtraDomains),
@@ -299,7 +305,10 @@ func (s *Server) adminUpdateBlog(c *gin.Context) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	u := store.BlogUpdate{Name: req.Name, Language: req.Language, ShowExcerpt: req.ShowExcerpt, StatusNote: req.StatusNote}
+	u := store.BlogUpdate{Name: req.Name, ShowExcerpt: req.ShowExcerpt, StatusNote: req.StatusNote}
+	if req.Language != nil {
+		u.Language = new(normalize.Language(*req.Language))
+	}
 	if req.FeedURL != nil {
 		feed, err := check.ParseURL(*req.FeedURL)
 		if err != nil {

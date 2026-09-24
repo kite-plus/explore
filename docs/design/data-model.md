@@ -67,7 +67,7 @@ CREATE INDEX blogs_due ON blogs (next_fetch_at) WHERE status = 'active';
 |---|---|
 | `host` | 站点地址的主机名：小写，国际化域名转成 punycode，不去掉 `www.`。对外用它标识博客（`/blogs/{host}`）。一个主机只能收录一个博客 |
 | `description`、`description_checked_at` | 首页 `meta description`，缺失时取订阅源描述；worker 每 7 天检查一次，最长 240 字；没有可用描述时保留上次值 |
-| `language` | BCP 47 标签（如 `zh-CN`），由提交时声明或取订阅源的 `<language>` |
+| `language` | BCP 47 标签（如 `zh-CN`），由提交时声明或取订阅源的 `<language>`，写入前规范化（`zh_cn` 存为 `zh-CN`），缺失或无法识别时为 `und`。`lang` 筛选按前缀匹配，靠的就是这个形式 |
 | `generator` | 从订阅源识别的博客系统：`wordpress`、`halo`、`hugo`、`hexo`、`typecho`、`jekyll`、`ghost`、`kite`、`other`、`unknown`。用于统计和检查提示，**不影响**抓取与展示（[architecture.md §0.2](architecture.md#0-两个核心判断)） |
 | `status` | 只由维护者改：`active` 正常抓取和展示；`paused` 既不抓取也不展示，原因写在 `status_note` |
 | `show_excerpt` | 作者关闭摘要时为 `false`，此时 `entries.excerpt` 不入库 |

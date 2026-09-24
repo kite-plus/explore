@@ -15,15 +15,28 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 
 	"github.com/kite-plus/explore/internal/model"
 	"github.com/kite-plus/explore/internal/policy"
+	"github.com/kite-plus/explore/migrations"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
 // newTestStore mirrors storetest.New, which this package cannot import.
 func newTestStore(t *testing.T) *Store {
+	t.Helper()
+	s := newUnmigratedStore(t)
+	if err := s.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// newUnmigratedStore is newTestStore before any migration has run.
+func newUnmigratedStore(t *testing.T) *Store {
 	t.Helper()
 	url := os.Getenv("EXPLORE_TEST_DATABASE_URL")
 	if url == "" {
@@ -51,10 +64,21 @@ func newTestStore(t *testing.T) *Store {
 		_, _ = admin.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
 		_ = admin.Close(context.Background())
 	})
-	if err := s.Migrate(ctx); err != nil {
+	return s
+}
+
+// migrateTo applies the migrations up to and including version.
+func (s *Store) migrateTo(t *testing.T, version int64) {
+	t.Helper()
+	db := stdlib.OpenDBFromPool(s.pool)
+	defer func() { _ = db.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return s
+	if _, err := p.UpTo(context.Background(), version); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (s *Store) exec(t *testing.T, sql string, args ...any) {
@@ -188,6 +212,62 @@ func TestMigrateTwice(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Migrate(context.Background()); err != nil {
 		t.Fatalf("second migration run: %v", err)
+	}
+}
+
+// TestCanonicalLanguagesMigration stores tags the way they were stored
+// before migration 10, then runs it.
+func TestCanonicalLanguagesMigration(t *testing.T) {
+	s := newUnmigratedStore(t)
+	ctx := context.Background()
+	s.migrateTo(t, 9)
+
+	cases := []struct{ host, stored, want string }{
+		{"underscore.example.com", "zh_CN", "zh-CN"},
+		{"lower.example.com", "zh-cn", "zh-CN"},
+		{"script.example.com", "zh_hant_tw", "zh-Hant-TW"},
+		{"region.example.com", "en-us", "en-US"},
+		{"canonical.example.com", "zh-Hans", "zh-Hans"},
+		{"digits.example.com", "es-419", "es-419"},
+		{"extension.example.com", "en-US-u-ca-gregory", "en-US-u-ca-gregory"},
+		{"blank.example.com", " ", "und"},
+		{"word.example.com", "English", "english"},
+	}
+	for _, c := range cases {
+		listBlog(t, s, c.host, c.stored)
+	}
+	sub, err := s.CreateSubmission(ctx, model.Submission{
+		Host: "pending.example.com", SiteURL: "https://pending.example.com/", FeedURL: "https://pending.example.com/feed",
+		Report: model.CheckReport{Language: "zh_CN", Passed: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		if b, err := s.Blog(ctx, c.host); err != nil || b.Language != c.want {
+			t.Errorf("%q became %q, want %q (%v)", c.stored, b.Language, c.want, err)
+		}
+	}
+
+	underscore, err := s.Blog(ctx, "underscore.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sync(t, s, underscore.ID, entry("a", at(time.Now().Add(-time.Hour)), true))
+	if page, err := s.Stream(ctx, StreamQuery{Lang: "zh", Limit: 10}); err != nil || len(page) != 1 || page[0].Blog.Host != underscore.Host {
+		t.Errorf("zh stream = %+v, %v", page, err)
+	}
+	if blogs, err := s.Directory(ctx, DirectoryQuery{Lang: "zh", Limit: 10}); err != nil || len(blogs) != 1 || blogs[0].Host != underscore.Host {
+		t.Errorf("zh directory = %+v, %v", blogs, err)
+	}
+
+	blog, err := s.ApproveSubmission(ctx, sub.ID, Approval{Reviewer: "alice"})
+	if err != nil || blog.Language != "zh-CN" {
+		t.Errorf("submission checked before the migration was listed as %q, %v", blog.Language, err)
 	}
 }
 
