@@ -1,0 +1,101 @@
+import { type ColumnDef } from '@tanstack/react-table'
+import { cn, getDisplayNameInitials } from '@/admin/lib/utils'
+import { formatDate, formatDateTime } from '@/admin/lib/format'
+import { Avatar, AvatarFallback } from '@/admin/components/ui/avatar'
+import { Badge } from '@/admin/components/ui/badge'
+import { DataTableColumnHeader } from '@/admin/components/data-table'
+import { LongText } from '@/admin/components/long-text'
+import type { AdminUserRow } from '@/lib/admin-types'
+import { roles, statusStyles } from '../data/data'
+import { DataTableRowActions } from './data-table-row-actions'
+
+export const usersColumns: ColumnDef<AdminUserRow>[] = [
+  {
+    accessorKey: 'display_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='用户' />,
+    cell: ({ row }) => (
+      <div className='flex items-center gap-3'>
+        <Avatar className='size-8'>
+          <AvatarFallback>{getDisplayNameInitials(row.original.display_name)}</AvatarFallback>
+        </Avatar>
+        <LongText className='max-w-40 font-medium'>{row.original.display_name}</LongText>
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+    meta: { title: '用户' },
+  },
+  {
+    accessorKey: 'email',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='邮箱' />,
+    cell: ({ row }) => <div className='w-fit text-nowrap'>{row.original.email}</div>,
+    enableSorting: false,
+    meta: { title: '邮箱' },
+  },
+  {
+    id: 'status',
+    accessorFn: (user) => (user.disabled_at ? 'disabled' : 'active'),
+    header: ({ column }) => <DataTableColumnHeader column={column} title='状态' />,
+    cell: ({ row }) => {
+      const disabled = Boolean(row.original.disabled_at)
+      return (
+        <Badge
+          variant='outline'
+          className={cn(statusStyles[disabled ? 'disabled' : 'active'])}
+          title={disabled ? `停用于 ${formatDateTime(row.original.disabled_at)}` : undefined}
+        >
+          {disabled ? '已停用' : '正常'}
+        </Badge>
+      )
+    },
+    enableSorting: false,
+    enableHiding: false,
+    meta: { title: '状态' },
+  },
+  {
+    id: 'role',
+    accessorFn: (user) => (user.is_admin ? 'admin' : 'reader'),
+    header: ({ column }) => <DataTableColumnHeader column={column} title='角色' />,
+    cell: ({ row }) => {
+      const role = roles.find(({ value }) => value === row.getValue('role'))
+      if (!role) return null
+      return (
+        <div className='flex items-center gap-x-2'>
+          <role.icon size={16} className='text-muted-foreground' />
+          <span className='text-sm'>{role.label}</span>
+        </div>
+      )
+    },
+    enableSorting: false,
+    meta: { title: '角色' },
+  },
+  {
+    accessorKey: 'subscription_count',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='订阅' />,
+    cell: ({ row }) => <span className='tabular-nums'>{row.original.subscription_count}</span>,
+    enableSorting: false,
+    meta: { title: '订阅' },
+  },
+  {
+    accessorKey: 'owned_blog_count',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='认领博客' />,
+    cell: ({ row }) => <span className='tabular-nums'>{row.original.owned_blog_count}</span>,
+    enableSorting: false,
+    meta: { title: '认领博客' },
+  },
+  {
+    accessorKey: 'created_at',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='注册时间' />,
+    cell: ({ row }) => (
+      <span className='text-nowrap text-muted-foreground' title={formatDateTime(row.original.created_at)}>
+        {formatDate(row.original.created_at)}
+      </span>
+    ),
+    enableSorting: false,
+    meta: { title: '注册时间' },
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) => <DataTableRowActions row={row} />,
+  },
+]

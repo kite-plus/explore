@@ -17,6 +17,16 @@
 
 所有后台数据都通过 `/api/v1/admin/*` 同源代理调用 Gin API。页面不内置模拟记录。文章缓存仍只存标题、摘要和链接，不保存正文。
 
+## 界面
+
+后台移植自 [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin)（MIT，许可文本见 `web/src/admin/LICENSE-shadcn-admin.txt`），代码在 `web/src/admin/`，目录结构与原项目一致：`components/ui` 是原项目的 Radix 版 shadcn/ui 组件，`components/layout`、`components/data-table` 是侧边栏布局和数据表格，`features/` 按页面划分。前台的 `web/src/components/ui` 不受影响。
+
+- **路由**：所有 `/admin/*` 路径由 `pages/admin/[...path].astro` 返回同一个只在浏览器渲染的 React 应用，`src/admin/router.tsx` 用 History API 切换页面，代替原项目的 TanStack Router。查询参数和原项目一样以 JSON 表示，列表的筛选、分页和搜索都写进地址。
+- **数据**：TanStack Query 读取 `/api/v1/admin/*`，写操作完成后刷新全部后台查询，侧边栏的待处理数随之更新。博客、投稿、下架申请、抓取任务和排除名单一次取全量，在浏览器里筛选；文章和用户由接口分页和检索。
+- **样式**：后台使用单独的 `styles/admin.css`，只扫描 `src/admin`，读者页面不加载后台样式。配色变量与前台共用（`styles/theme.css`），字体仍是系统字体；深色模式与前台共用 `localStorage` 里的 `theme` 选择。
+- **CSP**：Radix 的滚动锁定、滚动区域和 sonner 会在运行时插入 `<style>` 元素，所以后台页面的 `style-src-elem` 允许 `'unsafe-inline'`；内联脚本和内联 `style` 属性仍被禁止，读者页面的策略不变。
+- **与原项目的差异**：登录页用 `sign-in-2` 的版式但去掉右侧截图，第三方登录按钮改为切换维护者令牌，没有找回密码；界面偏好（侧边栏、布局）存在 `localStorage` 而不是 Cookie；没有移植配置抽屉、字体切换和演示页面。
+
 ## 数据与权限边界
 
 迁移 `00009_admin_operations.sql` 增加账号停用时间、站点设置、文章屏蔽记录和下架申请。文章屏蔽以 `(blog_id, identity)` 为键，抓取器更新或短暂移除文章后，屏蔽决定仍然生效。公开文章流、博客详情、订阅流、图片和链接检查都会排除这些记录。恢复展示会删除屏蔽记录。

@@ -80,6 +80,7 @@ describe("only local scripts, zero third parties", () => {
       const csp = res.headers.get("content-security-policy") ?? "";
       assert.match(csp, /default-src 'self'/);
       assert.match(csp, /frame-ancestors 'none'/);
+      assert.doesNotMatch(csp, /unsafe-inline/, "reader pages allow no inline code");
       assert.ok(csp.includes(themeHash), "the CSP allows the theme script by its hash");
       if (entryPages.has(path)) {
         assert.ok(csp.includes(entryCheckHash), "the CSP allows the link check script by its hash");
@@ -364,15 +365,30 @@ describe("submissions", () => {
 });
 
 describe("admin console", () => {
-  for (const path of ["/admin", "/admin/submissions", "/admin/blogs", "/admin/entries", "/admin/takedowns", "/admin/users", "/admin/queue", "/admin/settings", "/admin/excluded-hosts", "/admin/tools"]) {
+  // Unknown paths get the same shell; the app shows its own 404 page.
+  for (const path of ["/admin", "/admin/submissions", "/admin/blogs", "/admin/entries", "/admin/takedowns", "/admin/users", "/admin/queue", "/admin/settings", "/admin/settings/notice", "/admin/settings/appearance", "/admin/excluded-hosts", "/admin/tools", "/admin/no-such-page"]) {
     test(`${path} serves a private single-island shell`, async () => {
       const { res, html } = await page(path);
       assert.equal(res.status, 200);
       assert.match(html, /name="robots" content="noindex, nofollow"/);
       assert.equal([...html.matchAll(/<astro-island\b/g)].length, 1);
+      assert.match(html, /<astro-island\b[^>]*client="only"/, "the console renders only in the browser");
       assert.doesNotMatch(html, /ok\.example\.com/, "private data is loaded only after authentication");
     });
   }
+
+  test("admin pages allow inline style elements but no inline scripts", async () => {
+    const { res } = await page("/admin/blogs");
+    const directives = Object.fromEntries(
+      (res.headers.get("content-security-policy") ?? "").split(";").map((part) => {
+        const [name, ...sources] = part.trim().split(/\s+/);
+        return [name, sources];
+      }),
+    );
+    assert.deepEqual(directives["style-src-elem"], ["'self'", "'unsafe-inline'"]);
+    assert.ok(!directives["script-src"].includes("'unsafe-inline'"));
+    assert.ok(!directives["style-src"].includes("'unsafe-inline'"), "inline style attributes stay blocked");
+  });
 
   test("the admin proxy forwards the token, session cookie, query and JSON body", async () => {
     const unauthorized = await get("/api/v1/admin/submissions?status=pending");

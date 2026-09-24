@@ -1,0 +1,29 @@
+---
+import "@/styles/admin.css";
+
+import { AdminApp } from "@/admin/app";
+import { adminTitle } from "@/admin/routes";
+import themeScript from "@/scripts/theme.js?raw";
+
+// Radix (scroll locking, scroll areas) and sonner add <style> elements at
+// runtime, so admin pages allow inline style elements. Scripts stay hashed.
+Astro.csp?.insertStyleResource({ resource: "'self'", kind: "element" });
+Astro.csp?.insertStyleResource({ resource: "'unsafe-inline'", kind: "element" });
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <script is:inline set:html={themeScript} />
+    <title>{adminTitle(Astro.url.pathname)}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <AdminApp client:only="react">
+      <div slot="fallback" class="flex h-svh items-center justify-center text-sm text-muted-foreground">正在加载管理后台…</div>
+    </AdminApp>
+  </body>
+</html>

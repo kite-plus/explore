@@ -117,3 +117,76 @@ export interface CreateBlogPayload {
   extra_domains?: string[];
   show_excerpt?: boolean;
 }
+
+export interface Paged<T> {
+  data: T[];
+  total: number;
+}
+
+/** Matches store.AdminStats plus the worker state from adminOverview. */
+export interface AdminOverview {
+  stats: {
+    blogs: number;
+    entries: number;
+    users: number;
+    pending_submissions: number;
+    pending_takedowns: number;
+    failing_blogs: number;
+    due_fetches: number;
+  };
+  worker_online: boolean;
+  worker_count: number;
+  worker_last_seen_at: string | null;
+  crawler_paused: boolean;
+}
+
+/** Matches store.AdminUser. */
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  disabled_at: string | null;
+  created_at: string;
+  subscription_count: number;
+  owned_blog_count: number;
+}
+
+/** Matches store.AdminEntry. */
+export interface AdminEntryRow {
+  id: number;
+  blog_host: string;
+  blog_name: string;
+  identity: string;
+  title: string;
+  url: string;
+  published_at: string | null;
+  synced_at: string;
+  tags: string[] | null;
+  hidden: boolean;
+  hide_reason: string;
+}
+
+/** Matches store.TakedownRequest. */
+export interface Takedown {
+  id: string;
+  target_type: "blog" | "entry";
+  blog_host: string;
+  entry_identity: string | null;
+  entry_title: string;
+  requester: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  review_note: string;
+  reviewed_by: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+/** Matches store.SystemSetting. */
+export interface SystemSetting {
+  key: string;
+  value: string;
+  updated_by: string;
+  updated_at: string;
+}

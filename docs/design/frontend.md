@@ -171,6 +171,7 @@ import SubmitForm from "@/components/submit-form";
 - 没有选择时跟随系统设置。点一下切到另一种；切到的恰好是系统当前的配色时，就忘掉选择，重新跟随系统，所以不需要"跟随系统"这第三个选项。
 - 选择存在浏览器的 `localStorage` 里，不是 Cookie，也不会发给服务器。脚本在 `<head>` 里、首次绘制之前运行，保存过的选择不会闪一下别的配色。
 - 配色用 CSS 的 `light-dark()` 写在同一组变量里，脚本只切换 `<html>` 上的 `data-theme`，由 `color-scheme` 决定用哪一半。不支持 `light-dark()` 的旧浏览器（Safari 17.5 之前）固定用浅色，也不显示按钮。
+- Tailwind 的 `dark:` 变体按同一规则生效（`global.css` 里的 `@custom-variant dark`），shadcn/ui 组件自带的深色样式和配色变量保持一致。
 - 浏览器关了 JavaScript 时按钮不显示，页面照样跟随系统。
 
 ---
@@ -290,11 +291,11 @@ web/
 
 ## 11. 管理后台（E3）
 
-管理后台不需要 SEO，交互多。当前采用 Astro 的整页 React 岛：
+管理后台不需要 SEO，交互多。当前是一个只在浏览器渲染的单页应用，移植自 shadcn-admin。
 
 管理页面挂在 `/admin`，与读者页面一起部署。
 
-当前后台支持具有 `is_admin` 权限的本站账号登录，也保留配置的 Bearer Token 作为运维入口。匿名读者侧仍不设置 Cookie。实现细节见 [admin-frontend.md](admin-frontend.md)。
+当前后台支持具有 `is_admin` 权限的本站账号登录，也保留配置的 Bearer Token 作为运维入口。匿名读者侧仍不设置 Cookie。实现细节见 [admin-operations.md](admin-operations.md#界面)；[admin-frontend.md](admin-frontend.md) 是最初的页面设计，已不反映当前实现。
 
 ---
 
