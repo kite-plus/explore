@@ -1,15 +1,44 @@
-# Explore in production: PostgreSQL, a one-off migration, the API, the worker
-# and the web frontend. Settings come from deploy/.env; copy .env.example.
-# A reverse proxy in front terminates TLS; see
+# Explore in production, from the published images: Caddy for HTTPS,
+# PostgreSQL, a one-off migration, the API, the worker and the web frontend.
+# Put this file, Caddyfile and .env (copied from .env.example) in one
+# directory on the server and run `docker compose up -d`; see
 # docs/design/project-layout.md section 10.
+name: explore
+
+x-backend: &backend
+  image: ghcr.io/kite-plus/explore:${EXPLORE_VERSION:-latest}
+  env_file: .env
+  environment:
+    EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
+    # Caddy and web call the API from this network; trusting it lets the
+    # rate limit see the reader's address rather than theirs.
+    EXPLORE_TRUSTED_PROXIES: ${EXPLORE_TRUSTED_PROXIES:-10.89.0.0/24}
+
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      EXPLORE_PUBLIC_URL: ${EXPLORE_PUBLIC_URL:?set EXPLORE_PUBLIC_URL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - serve
+      - web
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: explore
       POSTGRES_DB: explore
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - explore-db:/var/lib/postgresql/data
     healthcheck:
@@ -19,29 +48,18 @@ services:
       retries: 20
 
   migrate:
-    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    <<: *backend
     command: ["migrate", "up"]
-    env_file: .env
-    environment:
-      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
 
   serve:
-    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
+    <<: *backend
     command: ["serve"]
     restart: unless-stopped
-    env_file: .env
-    environment:
-      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
-      # web calls the API for readers; trusting this network lets the rate
-      # limit see the reader's address rather than web's.
-      EXPLORE_TRUSTED_PROXIES: ${EXPLORE_TRUSTED_PROXIES:-10.89.0.0/24}
+    # Also on the host's loopback, for a reverse proxy other than Caddy.
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -49,24 +67,19 @@ services:
         condition: service_completed_successfully
 
   worker:
-    image: ${EXPLORE_IMAGE:-kiteplus/explore:latest}
+    <<: *backend
     command: ["worker"]
     restart: unless-stopped
-    env_file: .env
-    environment:
-      EXPLORE_DATABASE_URL: postgres://explore:${POSTGRES_PASSWORD}@postgres:5432/explore?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
 
   web:
-    image: ${EXPLORE_WEB_IMAGE:-kiteplus/explore-web:latest}
-    build:
-      context: ../web
+    image: ghcr.io/kite-plus/explore-web:${EXPLORE_VERSION:-latest}
     restart: unless-stopped
     environment:
       EXPLORE_API_URL: http://serve:8080
-      EXPLORE_PUBLIC_URL: ${EXPLORE_PUBLIC_URL:-https://explore.kite.plus}
+      EXPLORE_PUBLIC_URL: ${EXPLORE_PUBLIC_URL:?set EXPLORE_PUBLIC_URL in .env}
       EXPLORE_SITE_VERIFICATION_BAIDU: ${EXPLORE_SITE_VERIFICATION_BAIDU:-}
       EXPLORE_SITE_VERIFICATION_GOOGLE: ${EXPLORE_SITE_VERIFICATION_GOOGLE:-}
     ports:
@@ -82,3 +95,5 @@ networks:
 
 volumes:
   explore-db:
+  caddy-data:
+  caddy-config:

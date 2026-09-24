@@ -36,6 +36,10 @@ make build
 
 在本机运行 API 和 worker 的方法见 [docs/design/project-layout.md](docs/design/project-layout.md#9-本地开发)。
 
+## 部署
+
+每个 `v*` 标签都会发布两个镜像：`ghcr.io/kite-plus/explore` 和 `ghcr.io/kite-plus/explore-web`。服务器上只需要 Docker，以及 `deploy/` 里的 `docker-compose.yaml`、`Caddyfile` 和照 `.env.example` 填好的 `.env`，然后运行 `docker compose up -d`。详见 [docs/design/project-layout.md](docs/design/project-layout.md#10-部署)。
+
 ## 参与其中
 
 对内容发现有想法？欢迎[提交 Issue](https://github.com/kite-plus/explore/issues) 一起讨论。

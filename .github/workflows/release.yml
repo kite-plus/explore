@@ -1,0 +1,80 @@
+# Pushing a tag such as v0.1.0 publishes the two images a server runs:
+# ghcr.io/kite-plus/explore (serve, worker, migrate) and
+# ghcr.io/kite-plus/explore-web. A manual run builds them without publishing.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # A tag is not a promise that the code works, so CI's checks run first.
+  verify:
+    name: Verify
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Image (${{ matrix.name }})
+    needs: verify
+    # Pinned for the same reason as in ci.yml.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: explore
+            context: .
+            file: deploy/Dockerfile
+          - name: explore-web
+            context: web
+            file: web/Dockerfile
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Describe the build
+        run: |
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "DATE=$(git log -1 --format=%cI)" >> "$GITHUB_ENV"
+
+      # arm64 too, as in Kite: small servers are often ARM.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # A prerelease must not become what `:latest` pulls.
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Only the backend image stamps these into its binary.
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ env.COMMIT }}
+            DATE=${{ env.DATE }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

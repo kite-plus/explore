@@ -71,7 +71,7 @@ db-down:
 migrate:
 	EXPLORE_DATABASE_URL='$(DEV_DATABASE_URL)' $(GO) run ./cmd/explore migrate up
 
-IMAGE ?= kiteplus/explore
+IMAGE ?= ghcr.io/kite-plus/explore
 
 docker:
 	docker build -f deploy/Dockerfile \

@@ -36,6 +36,10 @@ make build
 
 Running the API and the worker locally is described in [docs/design/project-layout.md](docs/design/project-layout.md#9-本地开发).
 
+## Deploy
+
+Every `v*` tag publishes two images, `ghcr.io/kite-plus/explore` and `ghcr.io/kite-plus/explore-web`. A server needs only Docker plus, from `deploy/`, `docker-compose.yaml`, `Caddyfile` and a `.env` filled in from `.env.example`; then run `docker compose up -d`. See [docs/design/project-layout.md](docs/design/project-layout.md#10-部署).
+
 ## Get involved
 
 Have an idea about how discovery should work? [Open an issue](https://github.com/kite-plus/explore/issues) to start the conversation.

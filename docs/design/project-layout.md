@@ -29,7 +29,7 @@ explore/
 │   ├── feeds/          fixture feeds per blog system
 │   └── schema/         column list golden file
 ├── scripts/            check-imports.sh
-├── deploy/             Dockerfile, docker-compose.yaml
+├── deploy/             Dockerfile, docker-compose.yaml, Caddyfile
 ├── docs/design/
 ├── .golangci.yml       same linters as Kite
 ├── Makefile
@@ -208,13 +208,24 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 | 服务 | 镜像与命令 | 说明 |
 |---|---|---|
+| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP |
 | `postgres` | `postgres:16-alpine` | 数据卷持久化；备份时排除 `entries` 的数据（[data-model.md §5](data-model.md#5-数据保留)） |
-| `migrate` | `explore migrate up` | 每次发布先跑一次，跑完退出 |
-| `serve` | `explore serve` | API；可以多实例 |
-| `worker` | `explore worker` | 抓取；V1 一个实例 |
-| `web` | 前端镜像（`web/Dockerfile`），Node 服务 | 只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)）。compose 给网络固定了 `10.89.0.0/24`，`serve` 默认信任它，限流才能拿到读者的地址 |
+| `migrate` | `ghcr.io/kite-plus/explore`，`explore migrate up` | 每次 `up` 先跑一次，跑完退出 |
+| `serve` | 同一镜像，`explore serve` | API；可以多实例 |
+| `worker` | 同一镜像，`explore worker` | 抓取；V1 一个实例 |
+| `web` | `ghcr.io/kite-plus/explore-web` | Node 服务，只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)）。compose 给网络固定了 `10.89.0.0/24`，`serve` 默认信任它，限流才能拿到读者的地址 |
 
-后端的四个服务用同一个镜像（`deploy/Dockerfile`）、不同的命令，编排在 `deploy/docker-compose.yaml`，配置从 `deploy/.env` 读取（照 `deploy/.env.example` 填写，不进版本库）；`web` 是单独的镜像。反向代理（Caddy 或 Nginx）为 explore.kite.plus 终止 TLS：`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。反向代理的访问日志同样不记录客户端 IP。
+**发版**：推送 `v*` 标签（例如 `v0.1.0`）后，`.github/workflows/release.yml` 先跑一遍 CI 的全部检查，再为 amd64 和 arm64 构建两个镜像，推送到 GitHub Container Registry：后端的 `ghcr.io/kite-plus/explore`（`deploy/Dockerfile`，serve、worker 和 migrate 共用）和前端的 `ghcr.io/kite-plus/explore-web`（`web/Dockerfile`）。镜像标签是 `0.1.0`、`0.1` 和 `latest`；带 `-` 的预发布版本不更新 `latest`。手动运行这个工作流只构建、不发布。GitHub 上新建的包默认私有，第一次发版后要在组织的 Packages 设置里把两个包改为公开，服务器才能不登录直接拉取。
+
+**服务器部署**：服务器上只需要 Docker 和三个文件，不需要源码：`deploy/docker-compose.yaml`、`deploy/Caddyfile`，以及照 `deploy/.env.example` 填好的 `.env`（不进版本库）。三个文件放在同一个目录里运行：
+
+```bash
+docker compose up -d
+```
+
+`EXPLORE_PUBLIC_URL` 的域名要先解析到服务器，Caddy 才能拿到证书。`EXPLORE_VERSION` 固定运行的版本；升级时改掉它，再运行 `docker compose pull && docker compose up -d`，`migrate` 会先把数据库迁移到新版本。服务器上已经有别的反向代理时，去掉 `caddy` 服务，按上表的路径把请求转给 `127.0.0.1:8080`（serve）和 `127.0.0.1:4321`（web）。页面自带 `Cache-Control`，前面再加 CDN 时可以直接按它缓存。
+
+本地从源码构建同名镜像用 `make docker docker-web`，compose 会优先使用本地已有的镜像。
 
 CI（`.github/workflows/ci.yml`）用 GitHub Actions 运行格式检查、`vet`、依赖守护、`check-tidy`、lint 和带 `-race` 的测试，附带一个 PostgreSQL 服务容器并设置 `EXPLORE_TEST_DATABASE_URL`，让集成测试和不变量测试都能跑。
 

@@ -1,0 +1,14 @@
+# Caddy in front of Explore: HTTPS for EXPLORE_PUBLIC_URL, the API and feed
+# paths to serve and everything else to web. There is no log directive, so
+# readers' addresses stay out of access logs.
+{$EXPLORE_PUBLIC_URL} {
+	encode zstd gzip
+
+	@api path /api/* /feed.xml /blogs.opml /healthz /readyz
+	handle @api {
+		reverse_proxy serve:8080
+	}
+	handle {
+		reverse_proxy web:4321
+	}
+}
