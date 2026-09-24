@@ -91,3 +91,81 @@
     animation: none;
   }
 }
+
+/* Toasts, after mq-studio's: the icon alone carries the state, and a one-line
+   toast hugs its text rather than spanning sonner's full width. sonner adds
+   its own unlayered stylesheet at runtime, so these rules stay out of every
+   layer and carry .admin-toaster to win on specificity. */
+.admin-toaster [data-sonner-toast][data-styled="true"] {
+  padding: 12px 14px;
+  gap: 10px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.14);
+  width: fit-content;
+  min-width: 220px;
+  max-width: 340px;
+}
+/* sonner only pins left- and right-docked toasts; a narrower centered one
+   would otherwise sit at the left of the toaster. */
+.admin-toaster [data-sonner-toast][data-x-position="center"] {
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+}
+/* On phones sonner sets the toaster to 100% width on top of its side offsets,
+   which only its own full-width toasts allow for. */
+@media (max-width: 600px) {
+  .admin-toaster[data-sonner-toaster] {
+    width: auto;
+  }
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-title] {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-description] {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-content] {
+  gap: 3px;
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-icon] {
+  width: 16px;
+  height: 16px;
+  color: var(--foreground);
+}
+.admin-toaster [data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--success);
+}
+.admin-toaster [data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--warning);
+}
+.admin-toaster [data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--destructive);
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-button] {
+  height: auto;
+  padding: 4.5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--foreground);
+  background: var(--background);
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-button]:hover {
+  background: var(--accent);
+}
+.admin-toaster [data-sonner-toast][data-styled="true"] [data-close-button] {
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  border-color: var(--border);
+}
+.admin-toaster [data-sonner-toast][data-styled="true"]:hover [data-close-button]:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
