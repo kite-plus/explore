@@ -276,7 +276,7 @@ export function BlogsMutateDrawer({ open, onOpenChange, blog }: BlogsMutateDrawe
             )}
           </form>
         </Form>
-        <SheetFooter className='gap-2'>
+        <SheetFooter>
           <SheetClose asChild>
             <Button variant='outline'>关闭</Button>
           </SheetClose>

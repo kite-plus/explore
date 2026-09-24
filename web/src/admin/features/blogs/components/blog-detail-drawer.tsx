@@ -155,7 +155,7 @@ export function BlogDetailDrawer({ open, onOpenChange, onEdit, blog }: BlogDetai
             </Link>
           </section>
         </div>
-        <SheetFooter className='gap-2 sm:flex-row sm:justify-end'>
+        <SheetFooter>
           <Button variant='outline' asChild>
             <a href={blog.site_url} target='_blank' rel='noopener'>
               <ExternalLink />
