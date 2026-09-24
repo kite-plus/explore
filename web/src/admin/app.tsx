@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@/admin/components/error-boundary'
 import { AppHeader } from '@/admin/components/layout/app-header'
 import { AuthenticatedLayout } from '@/admin/components/layout/authenticated-layout'
 import { Toaster } from '@/admin/components/ui/sonner'
+import { Setup } from '@/admin/features/auth/setup'
 import { SignIn } from '@/admin/features/auth/sign-in'
 import { GeneralError } from '@/admin/features/errors/general-error'
 import { NotFoundError } from '@/admin/features/errors/not-found-error'
@@ -62,14 +63,14 @@ export function AdminApp() {
 }
 
 function AdminRoot() {
-  const { token, checking } = useAuth()
+  const { status } = useAuth()
   const { pathname } = useLocation()
 
   useEffect(() => {
-    document.title = adminTitle(pathname)
-  }, [pathname])
+    document.title = status === 'setup' ? '安装 · Explore 管理后台' : adminTitle(pathname)
+  }, [status, pathname])
 
-  if (checking) {
+  if (status === 'checking') {
     return (
       <div className='flex h-svh items-center justify-center gap-2 text-sm text-muted-foreground'>
         <Loader2 className='size-4 animate-spin' />
@@ -77,7 +78,8 @@ function AdminRoot() {
       </div>
     )
   }
-  if (token === null) return <SignIn />
+  if (status === 'setup') return <Setup />
+  if (status === 'signed-out') return <SignIn />
 
   const Page = PAGES[pathname] ?? NotFoundError
   return (

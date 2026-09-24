@@ -63,6 +63,9 @@ sessions.created_at timestamp with time zone
 sessions.expires_at timestamp with time zone
 sessions.token_hash bytea
 sessions.user_id uuid
+setup_code.code text
+setup_code.created_at timestamp with time zone
+setup_code.singleton boolean
 submissions.blog_id bigint
 submissions.check_report jsonb
 submissions.created_at timestamp with time zone

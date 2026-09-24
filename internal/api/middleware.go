@@ -1,13 +1,11 @@
 package api
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -50,26 +48,10 @@ func (s *Server) limit(l *limiter) gin.HandlerFunc {
 	}
 }
 
-// requireAdmin accepts a bearer token whose SHA-256 matches a configured
-// maintainer. Every configured hash is compared, in constant time, so the
-// timing does not reveal which one came close.
+// requireAdmin accepts the session of an account with admin access; writes
+// also need the session's CSRF token.
 func (s *Server) requireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if ok && token != "" {
-			sum := sha256.Sum256([]byte(token))
-			name := ""
-			for _, a := range s.Admins {
-				if subtle.ConstantTimeCompare(sum[:], a.Hash[:]) == 1 {
-					name = a.Name
-				}
-			}
-			if name != "" {
-				c.Set("admin", name)
-				c.Next()
-				return
-			}
-		}
 		u, session, err := s.sessionUser(c)
 		if err != nil || !u.IsAdmin {
 			s.fail(c, http.StatusUnauthorized, codeUnauthorized)

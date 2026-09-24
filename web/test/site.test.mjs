@@ -396,26 +396,56 @@ describe("admin console", () => {
     assert.ok(!directives["style-src"].includes("'unsafe-inline'"), "inline style attributes stay blocked");
   });
 
-  test("the admin proxy forwards the token, session cookie, query and JSON body", async () => {
+  test("the admin proxy forwards the session, CSRF token, query and JSON body, and no Authorization header", async () => {
+    const admin = { Cookie: "explore_session=admin-session" };
     const unauthorized = await get("/api/v1/admin/submissions?status=pending");
     assert.equal(unauthorized.status, 401);
     const authorized = await get("/api/v1/admin/submissions?status=pending", {
-      headers: { Authorization: "Bearer test-admin-token", Cookie: "unrelated=secret" },
+      headers: { ...admin, Authorization: "Bearer leftover-token" },
     });
     assert.equal(authorized.status, 200);
     assert.equal(authorized.headers.get("cache-control"), "no-store");
     const checked = await get("/api/v1/admin/check", {
       method: "POST",
-      headers: { Authorization: "Bearer test-admin-token", "Content-Type": "application/json", Origin: base },
+      headers: { ...admin, "X-CSRF-Token": "admin-csrf", "Content-Type": "application/json", Origin: base },
       body: JSON.stringify({ url: "https://ok.example.com/" }),
     });
     assert.equal(checked.status, 200);
     assert.equal((await checked.json()).passed, true);
     const [list, check] = stub.state.adminRequests.slice(-2);
     assert.equal(list.query, "?status=pending");
-    assert.equal(list.cookie, "unrelated=secret");
+    assert.equal(list.cookie, "explore_session=admin-session");
+    assert.equal(list.authorization, undefined, "tokens no longer reach the API");
     assert.equal(check.method, "POST");
+    assert.equal(check.csrf, "admin-csrf");
     assert.deepEqual(JSON.parse(check.body), { url: "https://ok.example.com/" });
+  });
+
+  test("the setup proxy reaches the API and passes its session cookie back", async () => {
+    const state = await get("/api/v1/setup");
+    assert.equal(state.status, 200);
+    assert.equal((await state.json()).required, true);
+    const wrong = await get("/api/v1/setup/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ code: "WRONG-CODE-0000" }),
+    });
+    assert.equal(wrong.status, 403);
+    const right = await get("/api/v1/setup/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ code: "GOOD-CODE-1234" }),
+    });
+    assert.equal(right.status, 204);
+    const done = await get("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: base },
+      body: JSON.stringify({ code: "GOOD-CODE-1234", email: "owner@example.com", password: "long enough password", display_name: "Owner" }),
+    });
+    assert.equal(done.status, 200);
+    assert.match(done.headers.get("set-cookie") ?? "", /^explore_session=admin-session;/);
+    assert.equal(done.headers.get("cache-control"), "private, no-store");
+    assert.ok(stub.state.setupRequests.at(-1).forwardedFor, "the rate limit sees the visitor's address");
   });
 
   test("the tag proxy exposes backend slugs for blog editing", async () => {
@@ -425,7 +455,7 @@ describe("admin console", () => {
   });
 
   test("new management and public configuration proxies return backend values", async () => {
-    const overview = await get("/api/v1/admin/overview", { headers: { Authorization: "Bearer test-admin-token" } });
+    const overview = await get("/api/v1/admin/overview", { headers: { Cookie: "explore_session=admin-session" } });
     assert.equal(overview.status, 200);
     assert.equal((await overview.json()).stats.blogs, 2);
     const directory = await get("/api/v1/blogs?limit=3");

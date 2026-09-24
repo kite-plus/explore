@@ -3,7 +3,9 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"image"
 	"image/png"
@@ -16,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,7 +33,8 @@ import (
 	"github.com/kite-plus/explore/internal/store/storetest"
 )
 
-const adminToken = "maintainer-secret"
+// adminEmail is the account behind admin: true requests; reviews record it.
+const adminEmail = "alice@example.com"
 
 func init() { gin.SetMode(gin.TestMode) }
 
@@ -40,6 +44,8 @@ type env struct {
 	srv  *api.Server
 	h    http.Handler
 	logs *bytes.Buffer
+	// The admin account's session, sent by requests marked admin.
+	adminCookie, adminCSRF string
 }
 
 func newEnv(t *testing.T, admins bool) *env {
@@ -58,14 +64,44 @@ func newEnvWithPrivate(t *testing.T, admins, allowPrivate bool) *env {
 		AllowPrivate: allowPrivate,
 		Log:          slog.New(slog.NewTextHandler(logs, nil)),
 	}
-	if admins {
-		srv.Admins = []api.AdminToken{{Name: "alice", Hash: sha256.Sum256([]byte(adminToken))}}
-	}
 	h, err := srv.Handler()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &env{t: t, s: st, srv: srv, h: h, logs: logs}
+	e := &env{t: t, s: st, srv: srv, h: h, logs: logs}
+	if admins {
+		e.adminCookie, e.adminCSRF = e.session(adminEmail, true)
+	}
+	return e
+}
+
+// session creates an account and signs it in the way login does, returning
+// the cookie and the CSRF token its writes need.
+func (e *env) session(email string, admin bool) (cookie, csrf string) {
+	e.t.Helper()
+	ctx := context.Background()
+	u, err := e.s.CreateUser(ctx, email, "no password", "Alice")
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if admin {
+		if err := e.s.SetUserAdmin(ctx, email, true); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		e.t.Fatal(err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw[:])
+	if err := e.s.CreateSession(ctx, u.ID, sha256.Sum256([]byte(token)), time.Now().Add(time.Hour)); err != nil {
+		e.t.Fatal(err)
+	}
+	cookie = "explore_session=" + token
+	me := decode[struct {
+		CSRFToken string `json:"csrf_token"`
+	}](e.t, e.do(req{method: http.MethodGet, path: "/api/v1/me", header: map[string]string{"Cookie": cookie}}))
+	return cookie, me.CSRFToken
 }
 
 type req struct {
@@ -88,7 +124,8 @@ func (e *env) do(r req) *httptest.ResponseRecorder {
 		hr.Header.Set(k, v)
 	}
 	if r.admin {
-		hr.Header.Set("Authorization", "Bearer "+adminToken)
+		hr.Header.Set("Cookie", e.adminCookie)
+		hr.Header.Set("X-CSRF-Token", e.adminCSRF)
 	}
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, hr)
@@ -624,7 +661,7 @@ func TestDirectListingRemovesPendingSubmission(t *testing.T) {
 		t.Errorf("submission status after direct listing = %q", got.Status)
 	}
 	stored, err := e.s.Submission(context.Background(), sub.ID)
-	if err != nil || stored.ReviewedBy != "alice" || stored.BlogID == nil {
+	if err != nil || stored.ReviewedBy != adminEmail || stored.BlogID == nil {
 		t.Errorf("stored review after direct listing = %+v, %v", stored, err)
 	}
 }
@@ -745,19 +782,124 @@ func TestExcludedHostIsRefused(t *testing.T) {
 func TestAdminAuth(t *testing.T) {
 	e := newEnv(t, true)
 	if w := e.get("/api/v1/admin/blogs"); w.Code != http.StatusUnauthorized {
-		t.Errorf("no token = %d", w.Code)
+		t.Errorf("no session = %d", w.Code)
 	}
-	w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", header: map[string]string{"Authorization": "Bearer wrong"}})
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("wrong token = %d", w.Code)
+	bearer := map[string]string{"Authorization": "Bearer anything"}
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", header: bearer}); w.Code != http.StatusUnauthorized {
+		t.Errorf("a bearer token = %d; only admin accounts get in", w.Code)
+	}
+	reader, _ := e.session("reader@example.com", false)
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", header: map[string]string{"Cookie": reader}}); w.Code != http.StatusUnauthorized {
+		t.Errorf("a reader's session = %d", w.Code)
 	}
 	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusOK {
-		t.Errorf("right token = %d", w.Code)
+		t.Errorf("an admin's session = %d", w.Code)
+	}
+	noCSRF := map[string]string{"Cookie": e.adminCookie}
+	if w := e.do(req{method: http.MethodPatch, path: "/api/v1/admin/settings/site_notice", body: `{"value":"x"}`, header: noCSRF}); w.Code != http.StatusForbidden {
+		t.Errorf("an admin's write without the CSRF token = %d", w.Code)
+	}
+}
+
+func TestSetup(t *testing.T) {
+	e := newEnv(t, false)
+	ctx := context.Background()
+	required := func() bool {
+		return decode[struct {
+			Required bool `json:"required"`
+		}](t, e.get("/api/v1/setup")).Required
+	}
+	if !required() {
+		t.Fatal("a fresh install needs setup")
+	}
+	code, err := e.s.SetupCode(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := e.s.SetupCode(ctx); err != nil || again != code {
+		t.Errorf("the code changed between starts: %q, then %q (%v)", code, again, err)
 	}
 
-	closed := newEnv(t, false)
-	if w := closed.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true}); w.Code != http.StatusUnauthorized {
-		t.Errorf("without a maintainer credential the admin API must reject access: %d", w.Code)
+	verify := func(c string) int {
+		return e.do(req{method: http.MethodPost, path: "/api/v1/setup/verify", body: `{"code":"` + c + `"}`}).Code
+	}
+	if got := verify("AAAA-AAAA-AAAA"); got != http.StatusForbidden {
+		t.Errorf("a wrong code = %d", got)
+	}
+	if got := verify(strings.ToLower(strings.ReplaceAll(code, "-", " "))); got != http.StatusNoContent {
+		t.Errorf("the code typed in lower case with spaces = %d", got)
+	}
+
+	setup := func(c, email, password string) *httptest.ResponseRecorder {
+		return e.do(req{method: http.MethodPost, path: "/api/v1/setup",
+			body: `{"code":"` + c + `","email":"` + email + `","password":"` + password + `","display_name":"Owner","registration_enabled":false}`})
+	}
+	if w := setup(code, "owner@example.com", "short"); w.Code != http.StatusBadRequest {
+		t.Errorf("a short password = %d", w.Code)
+	}
+	if w := setup("AAAA-AAAA-AAAA", "owner@example.com", "long enough password"); w.Code != http.StatusForbidden {
+		t.Errorf("a wrong code = %d", w.Code)
+	}
+	w := setup(code, "Owner@Example.com", "long enough password")
+	if w.Code != http.StatusOK {
+		t.Fatalf("setup = %d %s", w.Code, w.Body.String())
+	}
+	owner := decode[struct {
+		Email   string `json:"email"`
+		IsAdmin bool   `json:"is_admin"`
+	}](t, w)
+	if owner.Email != "owner@example.com" || !owner.IsAdmin {
+		t.Errorf("owner = %+v", owner)
+	}
+	cookie := strings.Split(w.Header().Get("Set-Cookie"), ";")[0]
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/session", header: map[string]string{"Cookie": cookie}}); w.Code != http.StatusNoContent {
+		t.Errorf("setup signs the owner in: %d", w.Code)
+	}
+	if v, _ := e.s.Setting(ctx, "registration_enabled"); v != "false" {
+		t.Errorf("registration_enabled = %q", v)
+	}
+	if v, _ := e.s.Setting(ctx, "submissions_enabled"); v != "true" {
+		t.Errorf("a setting setup left alone changed: submissions_enabled = %q", v)
+	}
+
+	if required() {
+		t.Error("setup is still required once an admin exists")
+	}
+	if w := setup(code, "second@example.com", "long enough password"); w.Code != http.StatusConflict {
+		t.Errorf("a second setup = %d", w.Code)
+	}
+	if got := verify(code); got != http.StatusConflict {
+		t.Errorf("verify after setup = %d", got)
+	}
+}
+
+func TestSetupHasOneWinner(t *testing.T) {
+	e := newEnv(t, false)
+	code, err := e.s.SetupCode(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := make([]int, 4)
+	var wg sync.WaitGroup
+	for i := range codes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes[i] = e.do(req{method: http.MethodPost, path: "/api/v1/setup",
+				body: `{"code":"` + code + `","email":"owner` + strconv.Itoa(i) + `@example.com","password":"long enough password","display_name":"Owner"}`}).Code
+		}()
+	}
+	wg.Wait()
+	won := 0
+	for _, c := range codes {
+		if c == http.StatusOK {
+			won++
+		} else if c != http.StatusConflict {
+			t.Errorf("a losing setup = %d, want 409", c)
+		}
+	}
+	if won != 1 {
+		t.Errorf("%d setups succeeded: %v", won, codes)
 	}
 }
 
@@ -874,7 +1016,7 @@ func TestRejection(t *testing.T) {
 		t.Errorf("rejected submission = %+v", got)
 	}
 	queue := e.do(req{method: http.MethodGet, path: "/api/v1/admin/submissions?status=rejected", admin: true})
-	if !strings.Contains(queue.Body.String(), `"reviewed_by":"alice"`) {
+	if !strings.Contains(queue.Body.String(), `"reviewed_by":"`+adminEmail+`"`) {
 		t.Errorf("maintainers see who reviewed: %s", queue.Body.String())
 	}
 	if w := e.get("/api/v1/submissions/not-a-uuid"); w.Code != http.StatusNotFound {

@@ -98,7 +98,6 @@ explore/
 | `EXPLORE_HTTP_ADDR` | `127.0.0.1:8080` | API 监听地址 |
 | `EXPLORE_PUBLIC_URL` | `https://explore.kite.plus` | 对外地址：User-Agent 里的说明页、`/feed.xml` 里的链接 |
 | `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用提交接口（[frontend.md §6](frontend.md#6-提交流程)） |
-| `EXPLORE_ADMIN_TOKENS` | 空 | 可选的维护者令牌，`名字:SHA-256` 逗号分隔；为空时仍可由管理员账号访问后台 |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
 | `EXPLORE_TAGGER_MODEL` | 空 | 打标签用的模型，例如 `claude-opus-5`；和下一项一起设置才会打标签（[accounts.md §5.3](accounts.md#53-模型与费用-待定)） |
 | `EXPLORE_ANTHROPIC_API_KEY` | 空 | Claude API 的密钥；只能和上一项一起设置 |
@@ -107,12 +106,6 @@ explore/
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 
 **抓取与展示规则的阈值不做成配置**。它们是产品规则，写在 architecture.md §6，代码里定义在 `internal/policy`，改动走文档和 code review，而不是改一个环境变量。
-
-生成维护者令牌的哈希：
-
-```bash
-printf %s "$TOKEN" | shasum -a 256
-```
 
 ---
 
@@ -144,7 +137,7 @@ printf %s "$TOKEN" | shasum -a 256
 - Recovery 中间件返回 `internal` 错误（[api.md §5](api.md#5-错误码)），堆栈只写日志。
 - 处理函数保持薄：解析参数，调用 `store` 或 `check`，把结果映射成响应。错误到错误码的映射集中在一处。
 - `http.Server` 设置 `ReadHeaderTimeout` 等超时；提交接口单独给 30 秒的上下文超时。
-- 不设 Cookie，不用 Session；管理接口只认 Bearer 令牌。
+- 匿名读者不设 Cookie。账号登录后才有会话 Cookie；管理接口只认具有后台权限的账号会话，写操作还要带 CSRF 令牌（[accounts.md](accounts.md)）。
 
 ---
 
@@ -224,6 +217,14 @@ docker compose up -d
 ```
 
 `EXPLORE_PUBLIC_URL` 的域名要先解析到服务器，Caddy 才能拿到证书。`EXPLORE_VERSION` 固定运行的版本；升级时改掉它，再运行 `docker compose pull && docker compose up -d`，`migrate` 会先把数据库迁移到新版本。服务器上已经有别的反向代理时，去掉 `caddy` 服务，按上表的路径把请求转给 `127.0.0.1:8080`（serve）和 `127.0.0.1:4321`（web）。页面自带 `Cache-Control`，前面再加 CDN 时可以直接按它缓存。
+
+**首次安装**：还没有管理员账号时，`serve` 每次启动都在日志里打印一次性安装码 `setup_code`。打开 `/admin` 进入安装向导：输入安装码，创建第一个管理员账号，再选择是否开放注册和投稿。安装码确认操作者能读到服务器日志，新站点就不会被第一个打开 `/admin` 的人占用。查看安装码：
+
+```bash
+docker compose logs serve | grep setup_code
+```
+
+安装完成后安装码随即删除。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
 
 本地从源码构建同名镜像用 `make docker docker-web`，compose 会优先使用本地已有的镜像。
 

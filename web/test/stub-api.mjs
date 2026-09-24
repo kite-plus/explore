@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [] };
+  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -82,11 +82,35 @@ export function startStub() {
       return send(201, {});
     }
 
-    if (url.pathname.startsWith("/api/v1/admin/")) {
-      if (req.headers.authorization !== "Bearer test-admin-token") return error(401, "unauthorized");
+    if (url.pathname === "/api/v1/setup" || url.pathname.startsWith("/api/v1/setup/")) {
       let body = "";
       for await (const chunk of req) body += chunk;
-      state.adminRequests.push({ path: url.pathname, query: url.search, method: req.method, body, cookie: req.headers.cookie });
+      state.setupRequests.push({ path: url.pathname, method: req.method, body, forwardedFor: req.headers["x-forwarded-for"] });
+      if (url.pathname === "/api/v1/setup" && req.method === "GET") return send(200, { required: true, min_password_length: 12 });
+      if (url.pathname === "/api/v1/setup/verify" && req.method === "POST") {
+        if (JSON.parse(body).code !== "GOOD-CODE-1234") return error(403, "invalid_setup_code");
+        res.writeHead(204);
+        return res.end();
+      }
+      if (url.pathname === "/api/v1/setup" && req.method === "POST") {
+        res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=admin-session; Path=/; HttpOnly; SameSite=Lax" });
+        return res.end(JSON.stringify({ id: "owner", email: "owner@example.com", display_name: "Owner", is_admin: true, csrf_token: "admin-csrf" }));
+      }
+      return error(404, "not_found");
+    }
+
+    if (url.pathname.startsWith("/api/v1/admin/")) {
+      // Admin requests carry the admin's session, and writes its CSRF token.
+      const write = !["GET", "HEAD"].includes(req.method);
+      if (req.headers.cookie !== "explore_session=admin-session" || (write && req.headers["x-csrf-token"] !== "admin-csrf")) {
+        return error(401, "unauthorized");
+      }
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      state.adminRequests.push({
+        path: url.pathname, query: url.search, method: req.method, body,
+        cookie: req.headers.cookie, csrf: req.headers["x-csrf-token"], authorization: req.headers.authorization,
+      });
       if (url.pathname === "/api/v1/admin/check" && req.method === "POST") return send(200, report(true, []));
       if (url.pathname === "/api/v1/admin/submissions" && req.method === "GET") return send(200, { data: [] });
       if (url.pathname === "/api/v1/admin/overview" && req.method === "GET") return send(200, { stats: { blogs: 2, entries: 3, users: 1 } });

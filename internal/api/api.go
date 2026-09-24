@@ -5,7 +5,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -18,13 +17,6 @@ import (
 	"github.com/kite-plus/explore/internal/store"
 )
 
-// AdminToken is a maintainer credential: a name and the SHA-256 of the
-// token.
-type AdminToken struct {
-	Name string
-	Hash [sha256.Size]byte
-}
-
 // Server holds what the handlers need.
 type Server struct {
 	Store      *store.Store
@@ -32,7 +24,6 @@ type Server struct {
 	ImageFetch *fetch.Client
 	LinkFetch  *fetch.Client
 	PublicURL  string
-	Admins     []AdminToken
 	LookupTXT  func(context.Context, string) ([]string, error)
 	// TrustedProxies may set X-Forwarded-For; see
 	// docs/design/project-layout.md section 6.
@@ -107,6 +98,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)
 	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
 	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
+	v1.GET("/setup", s.limit(s.readLimit), s.setupState)
+	v1.POST("/setup/verify", s.limit(s.loginLimit), s.verifySetupCode)
+	v1.POST("/setup", s.limit(s.loginLimit), s.completeSetup)
 	account := v1.Group("/", func(c *gin.Context) { c.Header("Cache-Control", "private, no-store"); c.Next() }, s.requireUser())
 	account.GET("/me", s.me)
 	account.PATCH("/me", s.updateMe)

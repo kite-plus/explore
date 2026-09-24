@@ -29,6 +29,10 @@
 
 `GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`，维护者 Bearer Token 仍可使用。
 
+### 安装
+
+新安装还没有管理员账号时，`GET /api/v1/setup` 返回 `{"required": true}`，后台据此显示安装向导；`serve` 启动时把一次性安装码（`setup_code`）打印到日志。`POST /api/v1/setup/verify` 只校验 `code`，返回 `204` 或 `403 invalid_setup_code`。`POST /api/v1/setup` 接收 `code`、`email`、`password`、`display_name`，以及可选的 `registration_enabled`、`submissions_enabled`，在一个事务里创建管理员、写入设置并删除安装码；成功后和登录一样设置会话 Cookie，返回用户资料。已有管理员时两个接口都返回 `409 already_set_up`。两个 POST 与登录共用限流。
+
 ### 2.1 `GET /api/v1/entries`
 
 首页时间流。规则见 [architecture.md §6.6](architecture.md#6-抓取与展示规则)，查询见 [data-model.md §4.1](data-model.md#41-首页时间流)。
@@ -240,7 +244,7 @@
 
 ## 4. 管理接口
 
-**认证**：`Authorization: Bearer <token>`。令牌配置在 `EXPLORE_ADMIN_TOKENS` 里，格式是 `名字:令牌的 SHA-256`，多个用逗号分隔（[project-layout.md §4](project-layout.md#4-配置)）。服务端对收到的令牌求哈希后做常量时间比较；名字记为审核人。没有配置任何令牌时，管理接口整体不注册，访问返回 `404`。
+**认证**：管理员账号的会话 Cookie。账号需要后台权限（`is_admin`），写操作和账号接口一样要带 `X-CSRF-Token`；其他情况返回 `401`。审核人记为管理员的邮箱。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -275,6 +279,8 @@
 | `not_pending` | 409 | 审核一条已经审核过的提交 |
 | `check_failed` | 422 | 检查不通过，响应里带 `check_report` |
 | `rate_limited` | 429 | 超出限流，带 `Retry-After` |
+| `already_set_up` | 409 | 已经有管理员账号，安装已经完成 |
+| `invalid_setup_code` | 403 | 安装码不正确 |
 | `internal` | 500 | 服务端错误，细节只写日志 |
 
 ---

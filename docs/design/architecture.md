@@ -338,7 +338,7 @@ Kite 还在开发，接入排在主流系统之后（E4）。按 §0.2，Explore
 | `submissions` | 收录流程：提交与审核 |
 | `excluded_hosts` | 已退出或被屏蔽的主机名，保证退出之后不会被重新收录 |
 
-读者账号、会话和订阅的表见 [accounts.md §6](accounts.md#6-数据模型)；维护者目前用配置里的访问令牌。每次抓取成功后，在一个事务里用订阅源的最新快照替换该博客的条目。表结构、同步事务、查询和 schema 守护见 [data-model.md](data-model.md)。
+读者账号、会话和订阅的表见 [accounts.md §6](accounts.md#6-数据模型)；维护者用具有后台权限的账号登录，见 [admin-operations.md](admin-operations.md)。每次抓取成功后，在一个事务里用订阅源的最新快照替换该博客的条目。表结构、同步事务、查询和 schema 守护见 [data-model.md](data-model.md)。
 
 ### 7.3 API
 

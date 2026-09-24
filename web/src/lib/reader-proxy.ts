@@ -5,7 +5,8 @@ import { apiURL } from "@/lib/config";
 export const readerProxy: APIRoute = async ({ request, params, clientAddress }) => {
   const url = new URL(request.url);
   const path = params.path ?? "";
-  const group = url.pathname.startsWith("/api/v1/auth/") ? "auth" : url.pathname === "/api/v1/reports" ? "reports" : "me";
+  // The route file's own group: auth, me, reports or setup.
+  const group = url.pathname.split("/")[3];
   const target = `${apiURL()}/api/v1/${group}${path ? `/${path}` : ""}${url.search}`;
   const headers = new Headers();
   for (const name of ["cookie", "content-type", "accept-language", "x-csrf-token"]) {
@@ -18,7 +19,7 @@ export const readerProxy: APIRoute = async ({ request, params, clientAddress }) 
       method: request.method,
       headers,
       body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-      // @ts-expect-error Node 支持流式请求体。
+      // @ts-expect-error Node's fetch needs duplex to stream a request body.
       duplex: "half",
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),

@@ -4,7 +4,7 @@
 >
 > 阅读本文档的读者应已了解 admin.md 中的产品定位与 API 契约。
 
-> 2026-09-24 更新：后台现支持本站管理员账号登录，使用 `HttpOnly` 会话 Cookie 和 CSRF 请求头。本文后续关于 Token 输入与浏览器存储的描述适用于保留的维护者 Token 备用入口；账号、订阅和认领的最新模型见 [accounts.md](accounts.md)。
+> 2026-09-25 更新：后台只接受本站管理员账号登录，使用 `HttpOnly` 会话 Cookie 和 CSRF 请求头；维护者 Token 已经移除，新安装由安装向导创建第一个管理员。本文关于 Token 输入与浏览器存储的描述已不适用，当前实现见 [admin-operations.md](admin-operations.md)。
 
 ---
 

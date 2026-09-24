@@ -33,15 +33,15 @@ export function toastError(cause: unknown, fallback?: string) {
   if (message) toast.error(message)
 }
 
-/** Admin requests with the current credentials. */
+/** Admin requests with the signed-in account's session. */
 export function useAdminRequest() {
-  const { token, onUnauthorized } = useAuth()
+  const { status, onUnauthorized } = useAuth()
   return useCallback(
     <T>(path: string, init: RequestInit = {}): Promise<T> => {
-      if (!token) return Promise.reject(new AdminUnauthorizedError())
-      return adminRequest<T>(path, token, onUnauthorized, init)
+      if (status !== 'signed-in') return Promise.reject(new AdminUnauthorizedError())
+      return adminRequest<T>(path, onUnauthorized, init)
     },
-    [token, onUnauthorized]
+    [status, onUnauthorized]
   )
 }
 

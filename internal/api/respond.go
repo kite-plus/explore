@@ -37,13 +37,15 @@ const (
 	codeVerificationFailed = "verification_failed"
 	codeBadCredentials     = "bad_credentials"
 	codeFeatureDisabled    = "feature_disabled"
+	codeSetupDone          = "already_set_up"
+	codeSetupCode          = "invalid_setup_code"
 )
 
 var messages = map[string]struct{ en, zh string }{
 	codeInvalidRequest:     {"The request is malformed.", "请求格式不正确。"},
 	codeInvalidURL:         {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
 	codeInvalidCursor:      {"The cursor is not valid.", "游标无效。"},
-	codeUnauthorized:       {"Sign in or provide a valid maintainer token.", "请先登录或提供有效维护者令牌。"},
+	codeUnauthorized:       {"Sign in first.", "请先登录。"},
 	codeExcluded:           {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
 	codeNotFound:           {"Not found.", "没有找到。"},
 	codeAlreadyListed:      {"This blog is already listed.", "这个博客已经收录了。"},
@@ -56,6 +58,8 @@ var messages = map[string]struct{ en, zh string }{
 	codeVerificationFailed: {"The domain verification record was not found.", "未找到匹配的域名验证记录。"},
 	codeBadCredentials:     {"The email or password is incorrect.", "邮箱或密码不正确。"},
 	codeFeatureDisabled:    {"This feature is currently disabled.", "这项功能当前已关闭。"},
+	codeSetupDone:          {"This server is already set up; sign in instead.", "已经完成安装，请直接登录。"},
+	codeSetupCode:          {"The setup code is wrong; the serve log shows it.", "安装码不正确，请到 serve 的日志里查看。"},
 }
 
 type errorBody struct {

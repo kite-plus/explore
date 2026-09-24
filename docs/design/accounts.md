@@ -16,7 +16,7 @@
 - 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或密码重置，部署时应说明这个限制。接入统一身份后隐藏账号密码入口，并迁移已有账号的登录方式。
 - OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。数据库只存会话令牌哈希。退出 Explore 删除本站会话；全局退出需单独的 OIDC logout 机制。
 - 登录回调只建立会话，不直接做订阅等数据变更。登录后跳回本站相对路径，再由读者确认订阅。
-- 管理员是显式授予 `is_admin` 的本站账号，命令 `explore users promote-admin EMAIL` 由服务器操作者执行。旧的 `EXPLORE_ADMIN_TOKENS` 保留为运维入口；普通账号不能访问管理接口。
+- 管理员是具有 `is_admin` 的本站账号。第一个管理员由安装向导创建（[project-layout.md §10](project-layout.md#10-部署)），之后由已有管理员在后台授予，或由服务器操作者运行 `explore users promote-admin EMAIL`。普通账号不能访问管理接口。
 - 删除 Explore 资料会删除本站订阅和会话。删除统一身份账号后的跨服务数据清理须有独立流程。
 
 ## 2. 订阅

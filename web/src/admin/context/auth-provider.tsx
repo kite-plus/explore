@@ -5,18 +5,19 @@ import {
   useEffect,
   useState,
 } from 'react'
-import { ACCOUNT_ADMIN } from '@/lib/admin-api'
-import { currentReader, readerRequest } from '@/lib/reader-api'
+import { currentReader, readerRequest, type ReaderUser } from '@/lib/reader-api'
 
 type AdminUser = { name: string; email: string }
 
+/** A fresh install shows the setup wizard until its first admin exists. */
+export type AuthStatus = 'checking' | 'setup' | 'signed-out' | 'signed-in'
+
 type AuthContextType = {
-  /** A maintainer token, ACCOUNT_ADMIN for a signed-in account, or null. */
-  token: string | null
-  checking: boolean
+  status: AuthStatus
   user: AdminUser | null
   error: string | null
-  login: (token: string, remember: boolean) => void
+  /** Takes the account that just signed in or finished setup. */
+  signedIn: (account: ReaderUser) => void
   logout: () => void
   /** Called by admin requests that get a 401. */
   onUnauthorized: () => void
@@ -24,98 +25,54 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const STORAGE_KEY = 'explore_admin_token'
-const TOKEN_USER: AdminUser = { name: '维护者', email: '令牌登录' }
-
-function readToken() {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(STORAGE_KEY)
-  } catch {
-    return null
+async function initialStatus(): Promise<{ status: AuthStatus; account: ReaderUser | null }> {
+  const session = await fetch('/api/v1/admin/session', { credentials: 'same-origin' })
+  if (session.ok) {
+    const account = await currentReader()
+    if (account) return { status: 'signed-in', account }
   }
-}
-
-function clearToken() {
-  try {
-    sessionStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // Nothing was saved when storage is blocked.
-  }
+  const setup = await fetch('/api/v1/setup')
+  const state: { required?: boolean } | null = setup.ok ? await setup.json() : null
+  return { status: state?.required ? 'setup' : 'signed-out', account: null }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null)
-  const [checking, setChecking] = useState(true)
+  const [status, setStatus] = useState<AuthStatus>('checking')
   const [user, setUser] = useState<AdminUser | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const stored = readToken()
-    if (stored) {
-      setToken(stored)
-      setChecking(false)
-      return
-    }
-    // An admin account signs in with the reader session cookie.
-    void fetch('/api/v1/admin/session', { credentials: 'same-origin' })
-      .then((response) => {
-        if (response.ok) setToken(ACCOUNT_ADMIN)
+    initialStatus()
+      .then(({ status, account }) => {
+        if (account) setUser({ name: account.display_name, email: account.email })
+        setStatus(status)
       })
-      .catch(() => {})
-      .finally(() => setChecking(false))
+      .catch(() => setStatus('signed-out'))
   }, [])
 
-  useEffect(() => {
-    if (token === null) {
-      setUser(null)
-      return
-    }
-    if (token !== ACCOUNT_ADMIN) {
-      setUser(TOKEN_USER)
-      return
-    }
-    void currentReader().then(
-      (reader) => reader && setUser({ name: reader.display_name, email: reader.email })
-    )
-  }, [token])
-
-  const login = useCallback((next: string, remember: boolean) => {
-    clearToken()
-    if (next !== ACCOUNT_ADMIN) {
-      try {
-        ;(remember ? localStorage : sessionStorage).setItem(STORAGE_KEY, next)
-      } catch {
-        // The token then lasts for this page only.
-      }
-    }
-    setToken(next)
+  const signedIn = useCallback((account: ReaderUser) => {
+    setUser({ name: account.display_name, email: account.email })
+    setStatus('signed-in')
     setError(null)
   }, [])
 
   const logout = useCallback(() => {
-    if (token === ACCOUNT_ADMIN) {
-      void currentReader().then(
-        (reader) =>
-          reader &&
-          readerRequest('auth/logout', { method: 'POST' }, reader.csrf_token)
-      )
-    }
-    clearToken()
-    setToken(null)
+    void currentReader().then(
+      (account) => account && readerRequest('auth/logout', { method: 'POST' }, account.csrf_token)
+    )
+    setUser(null)
+    setStatus('signed-out')
     setError(null)
-  }, [token])
+  }, [])
 
   const onUnauthorized = useCallback(() => {
-    clearToken()
-    setToken(null)
+    setUser(null)
+    setStatus('signed-out')
     setError('登录已失效，请重新登录。')
   }, [])
 
   return (
-    <AuthContext
-      value={{ token, checking, user, error, login, logout, onUnauthorized }}
-    >
+    <AuthContext value={{ status, user, error, signedIn, logout, onUnauthorized }}>
       {children}
     </AuthContext>
   )

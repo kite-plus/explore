@@ -84,6 +84,24 @@ func validEmail(raw string) string {
 	return email
 }
 
+// Passwords are bounded in bytes; bcrypt reads no more than 72.
+const (
+	minPasswordLength = 12
+	maxPasswordLength = 72
+)
+
+// validAccount checks the fields register and setup share, returning the
+// normalized email and name.
+func validAccount(rawEmail, rawName, password string) (email, name string, ok bool) {
+	email = validEmail(rawEmail)
+	name = strings.TrimSpace(rawName)
+	runes := len([]rune(name))
+	if email == "" || runes < 1 || runes > 80 || len(password) < minPasswordLength || len(password) > maxPasswordLength {
+		return "", "", false
+	}
+	return email, name, true
+}
+
 func (s *Server) register(c *gin.Context) {
 	enabled, err := s.Store.Setting(c.Request.Context(), "registration_enabled")
 	if err != nil {
@@ -107,9 +125,8 @@ func (s *Server) register(c *gin.Context) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	email := validEmail(body.Email)
-	name := strings.TrimSpace(body.DisplayName)
-	if email == "" || len([]rune(name)) < 1 || len([]rune(name)) > 80 || len(body.Password) < 12 || len(body.Password) > 72 {
+	email, name, ok := validAccount(body.Email, body.DisplayName, body.Password)
+	if !ok {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}

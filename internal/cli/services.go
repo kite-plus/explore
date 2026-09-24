@@ -58,17 +58,12 @@ func newServeCmd() *cobra.Command {
 			}
 			defer st.Close()
 
-			admins := make([]api.AdminToken, 0, len(cfg.AdminTokens))
-			for _, t := range cfg.AdminTokens {
-				admins = append(admins, api.AdminToken{Name: t.Name, Hash: t.Hash})
-			}
 			srv := &api.Server{
 				Store:          st,
 				Checker:        &check.Checker{Fetch: newFetcher(cfg)},
 				ImageFetch:     fetch.New(fetch.Options{UserAgent: fetch.UserAgent(buildinfo.Version, cfg.PublicURL), AllowPrivate: cfg.AllowPrivateNetworks, Timeout: 8 * time.Second}),
 				LinkFetch:      newFetcher(cfg),
 				PublicURL:      cfg.PublicURL,
-				Admins:         admins,
 				TrustedProxies: cfg.TrustedProxies,
 				AllowPrivate:   cfg.AllowPrivateNetworks,
 				Log:            log,
@@ -87,9 +82,24 @@ func newServeCmd() *cobra.Command {
 				WriteTimeout:      60 * time.Second,
 				IdleTimeout:       120 * time.Second,
 			}
+			pending, err := st.SetupPending(ctx)
+			if err != nil {
+				return err
+			}
+			if pending {
+				code, err := st.SetupCode(ctx)
+				if err != nil {
+					return err
+				}
+				// Every start logs it until setup is done, so a fresh log
+				// always has the code.
+				log.Warn("waiting for setup: open the admin and enter the setup code",
+					"admin", cfg.PublicURL+"/admin", "setup_code", code)
+			}
+
 			errc := make(chan error, 1)
 			go func() { errc <- hs.ListenAndServe() }()
-			log.Info("serving", "addr", cfg.HTTPAddr, "admin_api", len(admins) > 0, "version", buildinfo.Version)
+			log.Info("serving", "addr", cfg.HTTPAddr, "version", buildinfo.Version)
 
 			select {
 			case err := <-errc:

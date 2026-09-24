@@ -2,6 +2,8 @@
 
 本文档定义 Explore 管理后台（Admin Dashboard）的产品定位、功能模块、技术架构、API 映射及交互规范。
 
+> 2026-09-25 更新：鉴权已改为本站管理员账号登录，本文关于 Bearer Token 和 `EXPLORE_ADMIN_TOKENS` 的描述已不适用；当前实现见 [admin-operations.md](admin-operations.md)。
+
 ---
 
 ## 1. 产品定位与原则

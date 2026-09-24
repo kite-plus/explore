@@ -154,7 +154,7 @@ CREATE UNIQUE INDEX submissions_one_pending_per_host ON submissions (host) WHERE
 - 只保存检查**通过**的提交；检查不通过时接口直接返回报告，什么也不写（[api.md §2.4](api.md#24-post-apiv1submissions)）。
 - 不收集提交者的联系方式。作者凭提交时拿到的 ID 查询进度。
 - `check_report` 只存代码和计数，不存提示文字；提示在接口返回时按请求的语言生成（[worker.md §6.3](worker.md#63-报告格式)）。
-- `reviewed_by` 是维护者令牌的名字（[project-layout.md §4](project-layout.md#4-配置)）。
+- `reviewed_by` 是审核它的管理员账号的邮箱。
 
 ### 2.4 `excluded_hosts`
 

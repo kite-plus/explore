@@ -4,8 +4,6 @@
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,7 +18,6 @@ type Config struct {
 	HTTPAddr             string
 	PublicURL            string
 	TrustedProxies       []string
-	AdminTokens          []AdminToken
 	WorkerConcurrency    int
 	AllowPrivateNetworks bool
 	LogLevel             slog.Level
@@ -38,13 +35,6 @@ type Tagger struct {
 
 // Enabled reports whether entries get tagged.
 func (t Tagger) Enabled() bool { return t.Model != "" && t.APIKey != "" }
-
-// AdminToken is a maintainer credential. Only the SHA-256 of the token is
-// configured, so the environment never holds the secret itself.
-type AdminToken struct {
-	Name string
-	Hash [sha256.Size]byte
-}
 
 // ErrNoDatabase is returned by RequireDatabase.
 var ErrNoDatabase = errors.New("EXPLORE_DATABASE_URL is not set")
@@ -82,12 +72,6 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("EXPLORE_LOG_LEVEL: %q is not debug, info, warn or error", v)
 		}
 	}
-	tokens, err := parseTokens(getenv("EXPLORE_ADMIN_TOKENS"))
-	if err != nil {
-		return Config{}, err
-	}
-	c.AdminTokens = tokens
-
 	c.Tagger = Tagger{
 		Model:  strings.TrimSpace(getenv("EXPLORE_TAGGER_MODEL")),
 		APIKey: strings.TrimSpace(getenv("EXPLORE_ANTHROPIC_API_KEY")),
@@ -110,35 +94,6 @@ func (c Config) RequireDatabase() error {
 		return ErrNoDatabase
 	}
 	return nil
-}
-
-func parseTokens(v string) ([]AdminToken, error) {
-	var out []AdminToken
-	seen := make(map[string]bool)
-	for _, item := range list(v) {
-		name, sum, ok := strings.Cut(item, ":")
-		name = strings.TrimSpace(name)
-		raw, err := hex.DecodeString(strings.TrimSpace(sum))
-		if !ok || name == "" || err != nil || len(raw) != sha256.Size {
-			return nil, fmt.Errorf("EXPLORE_ADMIN_TOKENS: each entry must be name:sha256-hex, got %q", redact(item))
-		}
-		if seen[name] {
-			return nil, fmt.Errorf("EXPLORE_ADMIN_TOKENS: name %q appears twice", name)
-		}
-		seen[name] = true
-		var t AdminToken
-		t.Name = name
-		copy(t.Hash[:], raw)
-		out = append(out, t)
-	}
-	return out, nil
-}
-
-// redact keeps a malformed entry recognizable without echoing a secret
-// someone pasted by mistake.
-func redact(item string) string {
-	name, _, _ := strings.Cut(item, ":")
-	return strings.TrimSpace(name) + ":…"
 }
 
 func list(v string) []string {

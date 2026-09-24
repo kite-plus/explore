@@ -3,17 +3,15 @@ import type { APIRoute } from "astro";
 import { apiURL } from "@/lib/config";
 
 /**
- * 通配符代理：将所有 /api/v1/admin/* 请求转发至后端 Gin 服务
- * - Authorization 头原样透传（前端负责携带 Bearer Token）
- * - query string 原样透传（用于 ?status= ?health= ?exclude= 等参数）
- * - 支持所有 HTTP 方法：GET / POST / PATCH / DELETE
+ * Forwards /api/v1/admin/* to the Gin API with the query string, the admin's
+ * session cookie and its CSRF token, for every method.
  */
 export const ALL: APIRoute = async ({ request, params }) => {
   const path = params.path ?? "";
   const url = new URL(request.url);
   const target = `${apiURL()}/api/v1/admin/${path}${url.search}`;
   const headers = new Headers();
-  for (const name of ["authorization", "content-type", "accept-language", "cookie", "x-csrf-token"]) {
+  for (const name of ["content-type", "accept-language", "cookie", "x-csrf-token"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
@@ -24,8 +22,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       method: request.method,
       headers,
       body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-      // Node fetch 的 duplex 选项，支持流式请求体
-      // @ts-expect-error Node 特有选项
+      // @ts-expect-error Node's fetch needs duplex to stream a request body.
       duplex: "half",
       signal: AbortSignal.timeout(35_000),
     });
@@ -36,7 +33,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     });
   }
 
-  // 透传 Content-Type，其他响应头不透传（避免双重 CORS 等问题）
+  // Only the content type passes through; the API's other headers stay behind.
   const responseHeaders = new Headers({
     "Content-Type": response.headers.get("Content-Type") ?? "application/json",
     "Cache-Control": "no-store",

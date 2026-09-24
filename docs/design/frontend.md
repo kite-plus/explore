@@ -295,7 +295,7 @@ web/
 
 管理页面挂在 `/admin`，与读者页面一起部署。
 
-当前后台支持具有 `is_admin` 权限的本站账号登录，也保留配置的 Bearer Token 作为运维入口。匿名读者侧仍不设置 Cookie。实现细节见 [admin-operations.md](admin-operations.md#界面)；[admin-frontend.md](admin-frontend.md) 是最初的页面设计，已不反映当前实现。
+后台只接受具有 `is_admin` 权限的本站账号登录；新安装由安装向导创建第一个管理员。匿名读者侧仍不设置 Cookie。实现细节见 [admin-operations.md](admin-operations.md#界面)；[admin-frontend.md](admin-frontend.md) 是最初的页面设计，已不反映当前实现。
 
 ---
 
