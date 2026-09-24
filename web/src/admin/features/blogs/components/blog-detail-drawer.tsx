@@ -1,5 +1,6 @@
 import { ExternalLink, Pencil, RefreshCw, TriangleAlert } from 'lucide-react'
 import { formatDateTime, formatInterval } from '@/admin/lib/format'
+import { languageKey, languageLabel } from '@/admin/lib/language'
 import { cn } from '@/admin/lib/utils'
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert'
 import { Badge } from '@/admin/components/ui/badge'
@@ -88,7 +89,10 @@ export function BlogDetailDrawer({ open, onOpenChange, onEdit, blog }: BlogDetai
                 <GeneratorLabel value={blog.generator} />
               </dd>
               <dt className='text-muted-foreground'>语言</dt>
-              <dd>{blog.language || '—'}</dd>
+              <dd>
+                {languageLabel(languageKey(blog.language))}
+                {blog.language && <span className='ms-2 text-muted-foreground'>{blog.language}</span>}
+              </dd>
               <dt className='text-muted-foreground'>文章摘要</dt>
               <dd>{blog.show_excerpt ? '展示' : '不展示'}</dd>
               <dt className='text-muted-foreground'>额外域名</dt>

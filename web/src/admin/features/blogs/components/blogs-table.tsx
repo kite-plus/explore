@@ -11,6 +11,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { cn } from '@/admin/lib/utils'
+import { languageKey, languageLabel } from '@/admin/lib/language'
 import { useTableUrlState } from '@/admin/hooks/use-table-url-state'
 import { useNavigate, useSearch } from '@/admin/router'
 import { DataTablePagination, DataTableToolbar, DataTableView } from '@/admin/components/data-table'
@@ -101,7 +102,14 @@ export function BlogsTable({ data, loading }: BlogsTableProps) {
       }),
     [data]
   )
-  const languages = useMemo(() => facetOptions(data.map((blog) => blog.language)), [data])
+  const languages = useMemo(
+    () =>
+      facetOptions(data.map((blog) => languageKey(blog.language))).map(({ value }) => ({
+        label: languageLabel(value),
+        value,
+      })),
+    [data]
+  )
 
   return (
     <div

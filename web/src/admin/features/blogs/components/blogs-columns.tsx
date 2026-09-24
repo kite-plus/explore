@@ -1,6 +1,7 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { cn } from '@/admin/lib/utils'
 import { formatDate, formatDateTime } from '@/admin/lib/format'
+import { languageKey, languageLabel } from '@/admin/lib/language'
 import { Checkbox } from '@/admin/components/ui/checkbox'
 import { BlogAvatar } from '@/admin/components/blog-avatar'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
@@ -94,10 +95,10 @@ export const blogsColumns: ColumnDef<AdminBlog>[] = [
   },
   {
     id: 'language',
-    accessorFn: (blog) => blog.language,
+    accessorFn: (blog) => languageKey(blog.language),
     header: ({ column }) => <DataTableColumnHeader column={column} title='语言' />,
     cell: ({ row }) => (
-      <span className='text-muted-foreground'>{row.original.language || '—'}</span>
+      <span className='text-muted-foreground'>{languageLabel(row.getValue('language'))}</span>
     ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
     meta: { title: '语言' },
