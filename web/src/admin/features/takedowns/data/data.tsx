@@ -1,9 +1,9 @@
 import { BookOpen, CircleCheck, CircleX, Clock, FileText } from 'lucide-react'
 
 export const takedownStatuses = [
-  { label: '待处理', value: 'pending' as const, icon: Clock },
-  { label: '已下架', value: 'approved' as const, icon: CircleCheck },
-  { label: '已驳回', value: 'rejected' as const, icon: CircleX },
+  { label: '待处理', value: 'pending' as const, icon: Clock, className: 'text-warning' },
+  { label: '已下架', value: 'approved' as const, icon: CircleCheck, className: 'text-success' },
+  { label: '已驳回', value: 'rejected' as const, icon: CircleX, className: 'text-destructive' },
 ]
 
 export const targetTypes = [

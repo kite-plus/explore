@@ -50,7 +50,7 @@ export function SubmissionDetailDrawer({
           </div>
           <div className='flex flex-wrap gap-2 pt-2'>
             {status && (
-              <Badge variant='outline'>
+              <Badge variant='outline' className={status.className}>
                 <status.icon />
                 {status.label}
               </Badge>
@@ -130,7 +130,7 @@ export function SubmissionDetailDrawer({
             <CheckProblems problems={report?.problems} />
           </section>
         </div>
-        <SheetFooter className='gap-2 sm:flex-row sm:justify-end'>
+        <SheetFooter>
           <Button variant='outline' asChild>
             <a href={submission.site_url} target='_blank' rel='noopener'>
               <ExternalLink />

@@ -1,15 +1,13 @@
-import { Shield, User } from 'lucide-react'
+import { Shield, User, UserCheck, UserX } from 'lucide-react'
 
 export const roles = [
   { label: '管理员', value: 'admin', icon: Shield },
   { label: '读者', value: 'reader', icon: User },
 ] as const
 
-// Status badge colors, as in shadcn-admin's users table.
-export const statusStyles = {
-  active: 'bg-teal-100/30 text-teal-900 dark:text-teal-200 border-teal-200',
-  disabled:
-    'bg-destructive/10 dark:bg-destructive/50 text-destructive dark:text-primary border-destructive/10',
+export const userStatuses = {
+  active: { label: '正常', icon: UserCheck, className: 'text-success' },
+  disabled: { label: '已停用', icon: UserX, className: 'text-destructive' },
 } as const
 
 export type UserChange = { field: 'disabled' | 'is_admin'; value: boolean }

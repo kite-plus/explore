@@ -92,8 +92,8 @@ export const entriesColumns: ColumnDef<AdminEntryRow>[] = [
           <span className='text-nowrap'>已隐藏</span>
         </div>
       ) : (
-        <div className='flex items-center gap-2'>
-          <Eye className='size-4 text-muted-foreground' />
+        <div className='flex items-center gap-2 text-success'>
+          <Eye className='size-4' />
           <span>公开</span>
         </div>
       ),

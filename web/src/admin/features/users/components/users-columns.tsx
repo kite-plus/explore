@@ -2,11 +2,10 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { cn, getDisplayNameInitials } from '@/admin/lib/utils'
 import { formatDate, formatDateTime } from '@/admin/lib/format'
 import { Avatar, AvatarFallback } from '@/admin/components/ui/avatar'
-import { Badge } from '@/admin/components/ui/badge'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { LongText } from '@/admin/components/long-text'
 import type { AdminUserRow } from '@/lib/admin-types'
-import { roles, statusStyles } from '../data/data'
+import { roles, userStatuses } from '../data/data'
 import { DataTableRowActions } from './data-table-row-actions'
 
 export const usersColumns: ColumnDef<AdminUserRow>[] = [
@@ -38,14 +37,15 @@ export const usersColumns: ColumnDef<AdminUserRow>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title='状态' />,
     cell: ({ row }) => {
       const disabled = Boolean(row.original.disabled_at)
+      const status = userStatuses[disabled ? 'disabled' : 'active']
       return (
-        <Badge
-          variant='outline'
-          className={cn(statusStyles[disabled ? 'disabled' : 'active'])}
+        <div
+          className={cn('flex items-center gap-2', status.className)}
           title={disabled ? `停用于 ${formatDateTime(row.original.disabled_at)}` : undefined}
         >
-          {disabled ? '已停用' : '正常'}
-        </Badge>
+          <status.icon className='size-4' />
+          <span className='text-nowrap'>{status.label}</span>
+        </div>
       )
     },
     enableSorting: false,

@@ -1,14 +1,14 @@
 import { CircleCheck, CircleX, Clock, ShieldCheck, ShieldX } from 'lucide-react'
 
 export const submissionStatuses = [
-  { label: '待审核', value: 'pending' as const, icon: Clock },
-  { label: '已通过', value: 'approved' as const, icon: CircleCheck },
-  { label: '已驳回', value: 'rejected' as const, icon: CircleX },
+  { label: '待审核', value: 'pending' as const, icon: Clock, className: 'text-warning' },
+  { label: '已通过', value: 'approved' as const, icon: CircleCheck, className: 'text-success' },
+  { label: '已驳回', value: 'rejected' as const, icon: CircleX, className: 'text-destructive' },
 ]
 
 export const checkResults = [
-  { label: '检查通过', value: 'passed' as const, icon: ShieldCheck },
-  { label: '检查未通过', value: 'failed' as const, icon: ShieldX },
+  { label: '检查通过', value: 'passed' as const, icon: ShieldCheck, className: 'text-success' },
+  { label: '检查未通过', value: 'failed' as const, icon: ShieldX, className: 'text-destructive' },
 ]
 
 export const statusOrder = { pending: 0, approved: 1, rejected: 2 } as const

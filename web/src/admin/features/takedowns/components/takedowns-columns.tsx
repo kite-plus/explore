@@ -1,4 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table'
+import { cn } from '@/admin/lib/utils'
 import { Button } from '@/admin/components/ui/button'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { LongText } from '@/admin/components/long-text'
@@ -83,8 +84,8 @@ export const takedownsColumns: ColumnDef<Takedown>[] = [
       const status = takedownStatuses.find((item) => item.value === row.getValue('status'))
       if (!status) return null
       return (
-        <div className='flex w-20 items-center gap-2'>
-          <status.icon className='size-4 text-muted-foreground' />
+        <div className={cn('flex w-20 items-center gap-2', status.className)}>
+          <status.icon className='size-4' />
           <span>{status.label}</span>
         </div>
       )

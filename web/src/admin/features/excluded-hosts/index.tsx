@@ -14,6 +14,7 @@ import { Ban, LogOut, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastError, useAdminMutation, useAdminQuery } from '@/admin/lib/api'
 import { formatDate, formatDateTime } from '@/admin/lib/format'
+import { cn } from '@/admin/lib/utils'
 import { useTableUrlState } from '@/admin/hooks/use-table-url-state'
 import { useNavigate, useSearch } from '@/admin/router'
 import { Button } from '@/admin/components/ui/button'
@@ -32,8 +33,8 @@ import { QueryError } from '@/admin/components/query-error'
 import type { ExcludedHost } from '@/lib/admin-types'
 
 const reasons = [
-  { label: '申请退出', value: 'opt_out' as const, icon: LogOut },
-  { label: '永久封禁', value: 'blocked' as const, icon: Ban },
+  { label: '申请退出', value: 'opt_out' as const, icon: LogOut, className: 'text-info' },
+  { label: '永久封禁', value: 'blocked' as const, icon: Ban, className: 'text-destructive' },
 ]
 
 export function ExcludedHosts() {
@@ -70,8 +71,8 @@ export function ExcludedHosts() {
         const reason = reasons.find((item) => item.value === row.getValue('reason'))
         if (!reason) return null
         return (
-          <div className='flex items-center gap-2'>
-            <reason.icon className='size-4 text-muted-foreground' />
+          <div className={cn('flex items-center gap-2', reason.className)}>
+            <reason.icon className='size-4' />
             <span>{reason.label}</span>
           </div>
         )

@@ -79,10 +79,9 @@ export const queueColumns: ColumnDef<FetchQueueItem>[] = [
     cell: ({ row }) => {
       const status = queueStatuses.find((item) => item.value === row.getValue('status'))
       if (!status) return null
-      const bad = status.value === 'retry' || status.value === 'stalled'
       return (
-        <div className='flex w-24 items-center gap-2'>
-          <status.icon className={cn('size-4 text-muted-foreground', bad && 'text-destructive')} />
+        <div className={cn('flex w-24 items-center gap-2', status.className)}>
+          <status.icon className='size-4' />
           <span>{status.label}</span>
         </div>
       )

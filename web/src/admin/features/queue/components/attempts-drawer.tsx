@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/admin/lib/utils'
 import { useAdminQuery } from '@/admin/lib/api'
 import { formatDateTime } from '@/admin/lib/format'
 import { Badge } from '@/admin/components/ui/badge'
@@ -49,9 +50,9 @@ export function AttemptsDrawer({ open, onOpenChange, item }: AttemptsDrawerProps
                 const outcome = outcomes[attempt.outcome]
                 return (
                   <li key={attempt.id} className='relative'>
-                    <span className='absolute -start-[1.84rem] top-1.5 size-2.5 rounded-full border-2 border-background bg-muted-foreground' />
+                    <span className={cn('absolute -start-[1.84rem] top-1.5 size-2.5 rounded-full border-2 border-background', outcome.dot)} />
                     <div className='flex flex-wrap items-center gap-2 text-sm'>
-                      <Badge variant={outcome.variant}>{outcome.label}</Badge>
+                      <Badge variant='outline' className={outcome.className}>{outcome.label}</Badge>
                       <TimeAgo iso={attempt.started_at} className='text-muted-foreground' />
                     </div>
                     <p className='mt-1 text-xs text-muted-foreground'>

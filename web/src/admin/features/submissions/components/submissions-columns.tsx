@@ -50,10 +50,8 @@ export const submissionsColumns: ColumnDef<AdminSubmission>[] = [
       if (!result) return null
       const { errors, warnings } = problemCounts(report?.problems)
       return (
-        <div className='flex items-center gap-2'>
-          <result.icon
-            className={cn('size-4', result.value === 'failed' ? 'text-destructive' : 'text-muted-foreground')}
-          />
+        <div className={cn('flex items-center gap-2', result.className)}>
+          <result.icon className='size-4' />
           <span className='text-nowrap'>
             {result.label}
             {(errors > 0 || warnings > 0) && (
@@ -82,8 +80,8 @@ export const submissionsColumns: ColumnDef<AdminSubmission>[] = [
       const status = submissionStatuses.find((item) => item.value === row.getValue('status'))
       if (!status) return null
       return (
-        <div className='flex w-24 items-center gap-2'>
-          <status.icon className='size-4 text-muted-foreground' />
+        <div className={cn('flex w-24 items-center gap-2', status.className)}>
+          <status.icon className='size-4' />
           <span>{status.label}</span>
         </div>
       )
