@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"testing"
 	"time"
 )
@@ -60,7 +61,7 @@ func TestDisabledUserLosesSessions(t *testing.T) {
 	if err != nil || !loaded.Disabled {
 		t.Fatalf("disabled account: %+v, %v", loaded, err)
 	}
-	if _, err := s.UserBySession(ctx, token); err != ErrNotFound {
+	if _, err := s.UserBySession(ctx, token); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("session survived disable: %v", err)
 	}
 	if err := s.SetUserDisabled(ctx, user.ID, false); err != nil {
@@ -86,10 +87,10 @@ func TestAdminRoleKeepsLastActiveAdministrator(t *testing.T) {
 	if err := s.SetUserAdminByID(ctx, first.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserDisabled(ctx, first.ID, true); err != ErrConflict {
+	if err := s.SetUserDisabled(ctx, first.ID, true); !errors.Is(err, ErrConflict) {
 		t.Fatalf("last administrator disabled: %v", err)
 	}
-	if err := s.SetUserAdminByID(ctx, first.ID, false); err != ErrConflict {
+	if err := s.SetUserAdminByID(ctx, first.ID, false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("last administrator demoted: %v", err)
 	}
 	if err := s.SetUserAdminByID(ctx, second.ID, true); err != nil {
@@ -114,7 +115,7 @@ func TestTakedownAndCrawlerSettings(t *testing.T) {
 	if err := s.ReviewTakedown(ctx, requests[0].ID, "approved", "已核实", "operator"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.VisibleBlog(ctx, blog.Host); err != ErrNotFound {
+	if _, _, err := s.VisibleBlog(ctx, blog.Host); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("paused blog should not be visible: %v", err)
 	}
 	if err := s.SetSetting(ctx, "crawler_paused", "true", "operator"); err != nil {

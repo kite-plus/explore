@@ -178,7 +178,8 @@ func (s *Store) ConfirmBlogClaim(ctx context.Context, userID, host string, token
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	// After Commit this only reports the closed transaction.
+	defer func() { _ = tx.Rollback(ctx) }()
 	var blogID int64
 	err = tx.QueryRow(ctx, `SELECT c.blog_id FROM blog_claim_challenges c JOIN blogs b ON b.id = c.blog_id
 		WHERE c.user_id = $1 AND b.host = $2 AND c.token_hash = $3 AND c.expires_at > now() FOR UPDATE OF c`, userID, host, tokenHash[:]).Scan(&blogID)

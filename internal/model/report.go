@@ -37,19 +37,19 @@ const (
 // CheckReport is what a check found. It is stored without hints; hints are
 // added per language when the report is shown.
 type CheckReport struct {
-	InputURL     string      `json:"input_url"`
-	FeedURL      string      `json:"feed_url,omitempty"`
-	DiscoveredBy string      `json:"discovered_by,omitempty"`
-	Format       string      `json:"format,omitempty"`
-	Generator    Generator   `json:"generator,omitempty"`
+	InputURL         string      `json:"input_url"`
+	FeedURL          string      `json:"feed_url,omitempty"`
+	DiscoveredBy     string      `json:"discovered_by,omitempty"`
+	Format           string      `json:"format,omitempty"`
+	Generator        Generator   `json:"generator,omitempty"`
 	Title            string      `json:"title,omitempty"`
 	Description      string      `json:"description,omitempty"`
 	LatestEntryTitle string      `json:"latest_entry_title,omitempty"`
 	Language         string      `json:"language,omitempty"`
-	HTTP         *CheckHTTP  `json:"http,omitempty"`
-	Items        *CheckItems `json:"items,omitempty"`
-	Problems     []Problem   `json:"problems"`
-	Passed       bool        `json:"passed"`
+	HTTP             *CheckHTTP  `json:"http,omitempty"`
+	Items            *CheckItems `json:"items,omitempty"`
+	Problems         []Problem   `json:"problems"`
+	Passed           bool        `json:"passed"`
 }
 
 // CheckHTTP describes the response that carried the feed.
