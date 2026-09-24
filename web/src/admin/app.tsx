@@ -6,9 +6,12 @@ import { AuthProvider, useAuth } from '@/admin/context/auth-provider'
 import { ThemeProvider } from '@/admin/context/theme-provider'
 import { RouterProvider, useLocation } from '@/admin/router'
 import { adminTitle } from '@/admin/routes'
+import { ErrorBoundary } from '@/admin/components/error-boundary'
+import { AppHeader } from '@/admin/components/layout/app-header'
 import { AuthenticatedLayout } from '@/admin/components/layout/authenticated-layout'
 import { Toaster } from '@/admin/components/ui/sonner'
 import { SignIn } from '@/admin/features/auth/sign-in'
+import { GeneralError } from '@/admin/features/errors/general-error'
 import { NotFoundError } from '@/admin/features/errors/not-found-error'
 
 // Each page is its own chunk, as in shadcn-admin's route-based splitting, so
@@ -48,7 +51,9 @@ export function AdminApp() {
           <RouterProvider>
             {/* Mounted before the pages so toasts from their first effects are not missed. */}
             <Toaster duration={5000} />
-            <AdminRoot />
+            <ErrorBoundary fallback={<GeneralError />}>
+              <AdminRoot />
+            </ErrorBoundary>
           </RouterProvider>
         </AuthProvider>
       </ThemeProvider>
@@ -77,16 +82,31 @@ function AdminRoot() {
   const Page = PAGES[pathname] ?? NotFoundError
   return (
     <AuthenticatedLayout>
-      <Suspense
-        fallback={
-          <div className='flex flex-1 items-center justify-center gap-2 py-24 text-sm text-muted-foreground'>
-            <Loader2 className='size-4 animate-spin' />
-            正在加载…
-          </div>
-        }
-      >
-        <Page />
-      </Suspense>
+      {/* Keyed by path so the sidebar can still open other pages after one fails. */}
+      <ErrorBoundary key={pathname} fallback={<PageError />}>
+        <Suspense
+          fallback={
+            <div className='flex flex-1 items-center justify-center gap-2 py-24 text-sm text-muted-foreground'>
+              <Loader2 className='size-4 animate-spin' />
+              正在加载…
+            </div>
+          }
+        >
+          <Page />
+        </Suspense>
+      </ErrorBoundary>
     </AuthenticatedLayout>
+  )
+}
+
+// shadcn-admin's in-layout error route: the header stays, the error fills the rest.
+function PageError() {
+  return (
+    <>
+      <AppHeader />
+      <div className='flex-1 [&>div]:h-full'>
+        <GeneralError />
+      </div>
+    </>
   )
 }
