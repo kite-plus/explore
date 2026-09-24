@@ -14,6 +14,7 @@ import { cn } from '@/admin/lib/utils'
 import { useTableUrlState } from '@/admin/hooks/use-table-url-state'
 import { useNavigate, useSearch } from '@/admin/router'
 import { DataTablePagination, DataTableToolbar, DataTableView } from '@/admin/components/data-table'
+import { generatorInfo } from '@/admin/components/generator-label'
 import type { AdminBlog } from '@/lib/admin-types'
 import { blogStates, facetOptions } from '../data/data'
 import { blogsColumns as columns } from './blogs-columns'
@@ -92,7 +93,14 @@ export function BlogsTable({ data, loading }: BlogsTableProps) {
     if (!loading) ensurePageInRange(pageCount)
   }, [loading, pageCount, ensurePageInRange])
 
-  const generators = useMemo(() => facetOptions(data.map((blog) => blog.generator)), [data])
+  const generators = useMemo(
+    () =>
+      facetOptions(data.map((blog) => blog.generator)).map(({ value }) => {
+        const { label, icon } = generatorInfo(value)
+        return { label, value, icon }
+      }),
+    [data]
+  )
   const languages = useMemo(() => facetOptions(data.map((blog) => blog.language)), [data])
 
   return (

@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from '@/admin/components/ui/sheet'
 import { BlogAvatar } from '@/admin/components/blog-avatar'
+import { GeneratorLabel } from '@/admin/components/generator-label'
 import { TimeAgo } from '@/admin/components/time-ago'
 import { Link } from '@/admin/router'
 import type { AdminBlog } from '@/lib/admin-types'
@@ -82,10 +83,12 @@ export function BlogDetailDrawer({ open, onOpenChange, onEdit, blog }: BlogDetai
                   {blog.feed_url}
                 </a>
               </dd>
-              <dt className='text-muted-foreground'>程序 / 语言</dt>
+              <dt className='text-muted-foreground'>程序</dt>
               <dd>
-                {blog.generator || '—'} / {blog.language || '—'}
+                <GeneratorLabel value={blog.generator} />
               </dd>
+              <dt className='text-muted-foreground'>语言</dt>
+              <dd>{blog.language || '—'}</dd>
               <dt className='text-muted-foreground'>文章摘要</dt>
               <dd>{blog.show_excerpt ? '展示' : '不展示'}</dd>
               <dt className='text-muted-foreground'>额外域名</dt>

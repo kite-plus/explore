@@ -4,6 +4,7 @@ import { formatDate, formatDateTime } from '@/admin/lib/format'
 import { Checkbox } from '@/admin/components/ui/checkbox'
 import { BlogAvatar } from '@/admin/components/blog-avatar'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
+import { GeneratorLabel } from '@/admin/components/generator-label'
 import { TimeAgo } from '@/admin/components/time-ago'
 import type { AdminBlog } from '@/lib/admin-types'
 import { blogState, blogStates } from '../data/data'
@@ -87,9 +88,7 @@ export const blogsColumns: ColumnDef<AdminBlog>[] = [
     id: 'generator',
     accessorFn: (blog) => blog.generator,
     header: ({ column }) => <DataTableColumnHeader column={column} title='程序' />,
-    cell: ({ row }) => (
-      <span className='text-muted-foreground'>{row.original.generator || '—'}</span>
-    ),
+    cell: ({ row }) => <GeneratorLabel value={row.original.generator} />,
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
     meta: { title: '程序' },
   },
