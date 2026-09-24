@@ -1,49 +1,30 @@
-import { Check, Moon, Sun } from 'lucide-react'
-import { cn } from '@/admin/lib/utils'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from '@/admin/context/theme-provider'
 import { Button } from '@/admin/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/admin/components/ui/dropdown-menu'
 
+// The reader site's toggle: the same order, icons and wording.
+const MODES = {
+  system: { icon: Monitor, label: '自动模式', next: 'dark' },
+  dark: { icon: Moon, label: '深色模式', next: 'light' },
+  light: { icon: Sun, label: '浅色模式', next: 'system' },
+} as const
+
+/** Cycles automatic, dark and light mode, showing the current one. */
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme()
+  const { icon: Icon, label, next } = MODES[theme]
+  const hint = `${label} · 点击切换至${MODES[next].label}`
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button variant='ghost' size='icon' className='scale-95 rounded-full'>
-          <Sun className='size-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90' />
-          <Moon className='absolute size-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0' />
-          <span className='sr-only'>切换主题</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align='end'>
-        <DropdownMenuItem onClick={() => setTheme('light')}>
-          浅色{' '}
-          <Check
-            size={14}
-            className={cn('ms-auto', theme !== 'light' && 'hidden')}
-          />
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
-          深色
-          <Check
-            size={14}
-            className={cn('ms-auto', theme !== 'dark' && 'hidden')}
-          />
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
-          跟随系统
-          <Check
-            size={14}
-            className={cn('ms-auto', theme !== 'system' && 'hidden')}
-          />
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant='ghost'
+      size='icon'
+      className='scale-95 rounded-full'
+      aria-label={hint}
+      title={hint}
+      onClick={() => setTheme(next)}
+    >
+      <Icon className='size-[1.2rem]' />
+    </Button>
   )
 }
