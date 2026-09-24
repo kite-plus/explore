@@ -12,9 +12,57 @@ Explore keeps no post content. It stores the list of blogs; titles, dates and sh
 
 Explore is the discovery side of [Kite Plus](https://github.com/kite-plus).
 
+## Features
+
+- **Reading**: the latest posts from every listed blog in one stream, filtered by language or topic; a directory with a page for each blog; the stream as RSS at `/feed.xml` and the whole blog list as OPML at `/blogs.opml`. The interface is in Chinese and English.
+- **Accounts, optional**: follow blogs for a stream of your own, claim your blog, report a problem. Reading needs no account.
+- **Joining**: authors submit a blog and its feed is checked on the spot, with what to fix if it fails. `explore check <url>` runs the same check from a terminal.
+- **Crawling**: follows robots.txt, makes conditional requests and respects Retry-After; posts that link outside the blog's own site are dropped.
+- **Admin console**: review submissions, manage blogs and posts, handle takedowns and users, watch the crawl queue, and switch registration, submissions and crawling on or off.
+
 ## Status
 
-The feed checker, the backend (API, worker and PostgreSQL) and the bilingual web frontend are built; explore.kite.plus is not live yet. The design lives in [docs/design](docs/design/README.md), written in Chinese.
+0.1.0 is the first release. Until 1.0, a new release may still change configuration or behavior. The design lives in [docs/design](docs/design/README.md), written in Chinese.
+
+## Deploy
+
+Every release publishes two images for amd64 and arm64: `ghcr.io/kite-plus/explore` (the API, the crawler and database migrations) and `ghcr.io/kite-plus/explore-web` (the site). A server needs Docker with Compose, ports 80 and 443 open, and a domain whose DNS record points at it; Caddy gets the HTTPS certificate. No source code is needed.
+
+1. Download the deployment files into an empty directory:
+
+   ```bash
+   mkdir explore && cd explore
+   base=https://raw.githubusercontent.com/kite-plus/explore/v0.1.0/deploy
+   curl -fsSLO "$base/docker-compose.yaml"
+   curl -fsSLO "$base/Caddyfile"
+   curl -fsSL "$base/.env.example" -o .env
+   ```
+
+2. Edit `.env`: set `EXPLORE_VERSION=0.1.0`, a `POSTGRES_PASSWORD` (for example from `openssl rand -hex 24`) and `EXPLORE_PUBLIC_URL`. The file explains the optional settings.
+
+3. Start it:
+
+   ```bash
+   docker compose up -d
+   ```
+
+4. Open `/admin` on your domain. Until the first admin account exists, it shows a setup wizard that asks for a one-time code, which proves you can read the server's logs:
+
+   ```bash
+   docker compose logs serve | grep setup_code
+   ```
+
+   Enter the code, create the admin account, and choose whether to open registration and submissions.
+
+**Upgrading**: set `EXPLORE_VERSION` to the new release, then run `docker compose pull && docker compose up -d`. The database is migrated before the new version starts.
+
+**Backups**: everything Explore keeps is in PostgreSQL. The post cache can be left out, since the crawler refills it:
+
+```bash
+docker compose exec -T postgres pg_dump -U explore --exclude-table-data=entries explore > explore.sql
+```
+
+To put a reverse proxy you already run in place of Caddy, see [docs/design/project-layout.md](docs/design/project-layout.md#10-部署).
 
 ## Development
 
@@ -35,10 +83,6 @@ make build
 ```
 
 Running the API and the worker locally is described in [docs/design/project-layout.md](docs/design/project-layout.md#9-本地开发).
-
-## Deploy
-
-Every `v*` tag publishes two images, `ghcr.io/kite-plus/explore` and `ghcr.io/kite-plus/explore-web`. A server needs only Docker plus, from `deploy/`, `docker-compose.yaml`, `Caddyfile` and a `.env` filled in from `.env.example`; then run `docker compose up -d`, open `/admin` and finish setup with the code from `docker compose logs serve | grep setup_code`. See [docs/design/project-layout.md](docs/design/project-layout.md#10-部署).
 
 ## Get involved
 

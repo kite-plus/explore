@@ -44,7 +44,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | api.md | E1 与标签接口已实现；OpenAPI 与发布即出现待定 | 2026-09-23 |
 | frontend.md | E2 的读者页面和标签筛选已实现；账号相关页面见 accounts.md | 2026-09-23 |
 | project-layout.md | 已按本文搭建 | 2026-09-23 |
-| accounts.md | 文章标签已实现；账号与订阅待实现，部分细节标 `[待定]` | 2026-09-23 |
+| accounts.md | 本站账号、订阅流和域名认领已实现；OIDC 待接入 | 2026-09-24 |
 | admin.md | 初始后台设计；当前实现状态见 admin-operations.md | 2026-09-24 |
 | admin-frontend.md | 初始页面设计；当前页面与接口见 admin-operations.md | 2026-09-24 |
 | admin-operations.md | 完整后台页面、真实接口与内容治理流程已实现 | 2026-09-24 |
