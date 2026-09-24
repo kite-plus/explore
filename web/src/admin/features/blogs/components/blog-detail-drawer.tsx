@@ -1,5 +1,6 @@
 import { ExternalLink, Pencil, RefreshCw, TriangleAlert } from 'lucide-react'
 import { formatDateTime, formatInterval } from '@/admin/lib/format'
+import { cn } from '@/admin/lib/utils'
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert'
 import { Badge } from '@/admin/components/ui/badge'
 import { Button } from '@/admin/components/ui/button'
@@ -59,8 +60,8 @@ export function BlogDetailDrawer({ open, onOpenChange, onEdit, blog }: BlogDetai
             <h3 className='text-sm font-medium'>概况</h3>
             <dl className='grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2.5 text-sm'>
               <dt className='text-muted-foreground'>状态</dt>
-              <dd className='flex items-center gap-2'>
-                {state && <state.icon className='size-4 text-muted-foreground' />}
+              <dd className={cn('flex items-center gap-2', state?.className)}>
+                {state && <state.icon className='size-4' />}
                 {state?.label}
               </dd>
               {blog.status === 'paused' && blog.status_note && (

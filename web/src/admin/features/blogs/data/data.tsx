@@ -4,9 +4,9 @@ import type { AdminBlog } from '@/lib/admin-types'
 export type BlogState = 'active' | 'unhealthy' | 'paused'
 
 export const blogStates = [
-  { label: '运行中', value: 'active' as const, icon: CircleCheck },
-  { label: '抓取异常', value: 'unhealthy' as const, icon: TriangleAlert },
-  { label: '已暂停', value: 'paused' as const, icon: CirclePause },
+  { label: '运行中', value: 'active' as const, icon: CircleCheck, className: 'text-success' },
+  { label: '抓取异常', value: 'unhealthy' as const, icon: TriangleAlert, className: 'text-destructive' },
+  { label: '已暂停', value: 'paused' as const, icon: CirclePause, className: 'text-muted-foreground' },
 ]
 
 export function blogState(blog: AdminBlog): BlogState {

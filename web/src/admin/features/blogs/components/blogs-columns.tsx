@@ -74,13 +74,8 @@ export const blogsColumns: ColumnDef<AdminBlog>[] = [
       const state = blogStates.find((item) => item.value === row.getValue('status'))
       if (!state) return null
       return (
-        <div className='flex w-24 items-center gap-2'>
-          <state.icon
-            className={cn(
-              'size-4 text-muted-foreground',
-              state.value === 'unhealthy' && 'text-destructive'
-            )}
-          />
+        <div className={cn('flex w-24 items-center gap-2', state.className)}>
+          <state.icon className='size-4' />
           <span>{state.label}</span>
         </div>
       )
