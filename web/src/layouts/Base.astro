@@ -72,11 +72,18 @@ const verification = {
       <slot />
     </main>
     <SiteFooter lang={lang} />
-    <script is:inline>
-      fetch('/api/v1/site-config').then(response => response.ok ? response.json() : null).then(config => {
-        const notice = document.getElementById('site-notice');
-        if (notice && config?.notice) { notice.textContent = config.notice; notice.hidden = false; }
-      }).catch(() => {});
+    <!-- Bundled rather than inline, so Astro adds it to the CSP. -->
+    <script>
+      fetch("/api/v1/site-config")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((config) => {
+          const notice = document.getElementById("site-notice");
+          if (notice && config?.notice) {
+            notice.textContent = config.notice;
+            notice.hidden = false;
+          }
+        })
+        .catch(() => {});
     </script>
     {entryChecks && <script is:inline set:html={entryCheckScript} />}
     {entryChecks && <script is:inline set:html={entryStreamScript} />}

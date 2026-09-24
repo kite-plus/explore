@@ -86,6 +86,12 @@ describe("only local scripts, zero third parties", () => {
         assert.ok(csp.includes(entryCheckHash), "the CSP allows the link check script by its hash");
         assert.ok(csp.includes(entryStreamHash), "the CSP allows the stream script by its hash");
       }
+      // The browser skips any inline script the CSP does not name, silently.
+      for (const [, attrs, body] of scripts) {
+        if (/\ssrc=/.test(attrs) || /\stype="(?!module"|text\/javascript")/.test(attrs)) continue;
+        const hash = `'sha256-${createHash("sha256").update(body).digest("base64")}'`;
+        assert.ok(csp.includes(hash), `the CSP blocks an inline script on ${path}: ${body.trim().slice(0, 60)}`);
+      }
       // Resources may only come from the site itself; links to posts are fine.
       for (const [, url] of html.matchAll(/<(?:script|img|iframe|source|link)\b[^>]*\s(?:src|href)="([^"]+)"/gi)) {
         if (/^https?:\/\//.test(url)) {
