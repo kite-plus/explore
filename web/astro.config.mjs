@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "astro/config";
+import { defineConfig, passthroughImageService } from "astro/config";
 
 // The theme script runs inline before the first paint. Astro hashes only the
 // scripts it bundles, so the CSP gets this one's hash from here.
@@ -35,18 +35,33 @@ const devDepsCache = {
   },
 };
 
+// The image runs dist without node_modules, so the server build takes in
+// the packages it would otherwise import at run time.
+/** @type {import("astro").AstroIntegration} */
+const bundleServerDeps = {
+  name: "explore:bundle-server-deps",
+  hooks: {
+    "astro:config:setup": ({ command, updateConfig }) => {
+      if (command === "build") updateConfig({ vite: { ssr: { noExternal: true } } });
+    },
+  },
+};
+
 // See docs/design/frontend.md: pages render on the server. Entry lists also
 // ship the link-check and entry-stream scripts; Chinese is at the root and
 // English under /en.
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
-  integrations: [react(), devDepsCache],
+  integrations: [react(), devDepsCache, bundleServerDeps],
   i18n: {
     defaultLocale: "zh",
     locales: ["zh", "en"],
     routing: { prefixDefaultLocale: false },
   },
+  // No page uses astro:assets; the default service would bundle sharp, whose
+  // native binary the image does not carry.
+  image: { service: passthroughImageService() },
   markdown: {
     // Shiki colors code with inline style attributes, which the CSP would
     // have to allow.

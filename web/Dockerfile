@@ -11,7 +11,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm build && pnpm prune --prod
+RUN pnpm build
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -20,8 +20,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4321
 
-COPY --from=build /src/package.json ./
-COPY --from=build /src/node_modules ./node_modules
+# The server build bundles its dependencies (astro.config.mjs), so dist is
+# all it runs.
 COPY --from=build /src/dist ./dist
 
 USER node
