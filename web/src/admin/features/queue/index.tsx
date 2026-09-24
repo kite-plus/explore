@@ -33,6 +33,7 @@ function QueueContent() {
   if (error) return <QueryError message={error.message} onRetry={() => void refetch()} />
   const items = data?.data ?? []
   const count = (status: string) => items.filter((item) => item.queue_status === status).length
+  const failing = items.filter((item) => item.consecutive_failures > 0).length
 
   return (
     <>
@@ -54,7 +55,7 @@ function QueueContent() {
           <AlertDescription>待执行和等待重试的任务暂不会运行。请检查 worker 进程和日志。</AlertDescription>
         </Alert>
       )}
-      <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+      <div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
         <StatCard
           title='抓取进程'
           value={data ? (data.worker_online ? `${data.worker_count} 个在线` : '离线') : undefined}
@@ -68,14 +69,28 @@ function QueueContent() {
             )
           }
           icon={Server}
+          tone={!data?.worker_online ? 'error' : data.crawler_paused ? 'warning' : 'success'}
         />
-        <StatCard title='待执行' value={data ? count('queued') + count('stalled') : undefined} hint='已到调度时间' icon={Clock} />
-        <StatCard title='抓取中' value={data ? count('running') : undefined} hint='已被进程领取' icon={Activity} />
+        <StatCard
+          title='待执行'
+          value={data ? count('queued') + count('stalled') : undefined}
+          hint='已到调度时间'
+          icon={Clock}
+          tone='neutral'
+        />
+        <StatCard
+          title='抓取中'
+          value={data ? count('running') : undefined}
+          hint='已被进程领取'
+          icon={Activity}
+          tone={count('running') > 0 ? 'success' : 'neutral'}
+        />
         <StatCard
           title='连续失败'
-          value={data ? items.filter((item) => item.consecutive_failures > 0).length : undefined}
+          value={data ? failing : undefined}
           hint={data ? `其中 ${count('retry')} 个等待重试` : ''}
           icon={TriangleAlert}
+          tone={failing > 0 ? 'error' : 'success'}
         />
       </div>
       <QueueTable data={items} loading={isPending} />

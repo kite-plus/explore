@@ -8,24 +8,22 @@ export function RecentBlogs({ blogs }: { blogs: AdminBlog[] }) {
     return <p className='text-sm text-muted-foreground'>还没有收录博客。</p>
   }
   return (
-    <div className='space-y-8'>
+    <ul className='flex flex-col gap-1'>
       {blogs.map((blog) => (
-        <div key={blog.host} className='flex items-center gap-4'>
-          <BlogAvatar host={blog.host} name={blog.name} className='h-9 w-9' />
-          <div className='flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-2'>
-            <div className='min-w-0 space-y-1'>
-              <Link
-                to={`/admin/blogs?filter=${encodeURIComponent(blog.host)}`}
-                className='block truncate text-sm leading-none font-medium hover:underline'
-              >
-                {blog.name || blog.host}
-              </Link>
-              <p className='truncate font-mono text-sm text-muted-foreground'>{blog.host}</p>
+        <li key={blog.host}>
+          <Link
+            to={`/admin/blogs?filter=${encodeURIComponent(blog.host)}`}
+            className='-mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-accent/50'
+          >
+            <BlogAvatar host={blog.host} name={blog.name} />
+            <div className='min-w-0 flex-1'>
+              <p className='truncate text-sm font-medium'>{blog.name || blog.host}</p>
+              <p className='truncate font-mono text-xs text-muted-foreground'>{blog.host}</p>
             </div>
-            <TimeAgo iso={blog.created_at} className='text-sm font-medium' />
-          </div>
-        </div>
+            <TimeAgo iso={blog.created_at} className='shrink-0 text-xs text-muted-foreground' />
+          </Link>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
