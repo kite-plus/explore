@@ -7,6 +7,7 @@ import { BlogAvatar } from '@/admin/components/blog-avatar'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { GeneratorLabel } from '@/admin/components/generator-label'
 import { TimeAgo } from '@/admin/components/time-ago'
+import { Link } from '@/admin/router'
 import type { AdminBlog } from '@/lib/admin-types'
 import { blogState, blogStates } from '../data/data'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -102,6 +103,24 @@ export const blogsColumns: ColumnDef<AdminBlog>[] = [
     ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
     meta: { title: '语言' },
+  },
+  {
+    id: 'entries',
+    accessorFn: (blog) => blog.entry_count ?? 0,
+    header: ({ column }) => <DataTableColumnHeader column={column} title='收录文章' />,
+    cell: ({ row }) => {
+      const count = row.original.entry_count ?? 0
+      if (count === 0) return <span className='text-muted-foreground tabular-nums'>0</span>
+      return (
+        <Link
+          to={`/admin/entries?filter=${encodeURIComponent(row.original.host)}`}
+          className='text-muted-foreground tabular-nums hover:text-foreground hover:underline'
+        >
+          {count}
+        </Link>
+      )
+    },
+    meta: { title: '收录文章' },
   },
   {
     id: 'last_succeeded_at',

@@ -47,6 +47,8 @@ export interface AdminBlog {
   last_error: string;
   gone_since: string | null;
   created_at: string;
+  /** Entries cached now, at most 20; only the blog list returns it. */
+  entry_count?: number;
 }
 
 export interface FetchAttempt {

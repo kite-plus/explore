@@ -812,6 +812,30 @@ func TestAdminManagesBlogs(t *testing.T) {
 	}
 }
 
+func TestAdminBlogListCountsEntries(t *testing.T) {
+	e := newEnv(t, true)
+	e.seed("busy.example.com", "en", post("a", 1, ""), post("b", 2, ""))
+	e.seed("quiet.example.com", "en")
+
+	w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/blogs", admin: true})
+	list := decode[struct {
+		Data []struct {
+			Host       string `json:"host"`
+			EntryCount *int64 `json:"entry_count"`
+		} `json:"data"`
+	}](t, w)
+	counts := map[string]int64{}
+	for _, b := range list.Data {
+		if b.EntryCount == nil {
+			t.Fatalf("%s has no entry_count: %s", b.Host, w.Body.String())
+		}
+		counts[b.Host] = *b.EntryCount
+	}
+	if len(counts) != 2 || counts["busy.example.com"] != 2 || counts["quiet.example.com"] != 0 {
+		t.Errorf("entry counts = %v", counts)
+	}
+}
+
 func TestRejection(t *testing.T) {
 	e := newEnv(t, true)
 	site := blogSite(t, true)

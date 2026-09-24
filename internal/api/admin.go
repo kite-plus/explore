@@ -116,15 +116,28 @@ func (s *Server) adminReject(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// adminBlogRowJSON is a blog in the maintainer list. EntryCount is what is
+// cached now, at most policy.EntriesPerBlog, not what the blog has published.
+type adminBlogRowJSON struct {
+	adminBlogJSON
+	EntryCount int64 `json:"entry_count"`
+}
+
 func (s *Server) adminBlogs(c *gin.Context) {
-	blogs, err := s.Store.Blogs(c.Request.Context(), c.Query("health") == "unhealthy", 1000)
+	ctx := c.Request.Context()
+	blogs, err := s.Store.Blogs(ctx, c.Query("health") == "unhealthy", 1000)
 	if err != nil {
 		s.storeError(c, err)
 		return
 	}
-	out := make([]adminBlogJSON, 0, len(blogs))
+	counts, err := s.Store.EntryCounts(ctx)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	out := make([]adminBlogRowJSON, 0, len(blogs))
 	for _, b := range blogs {
-		out = append(out, s.toAdminBlog(b))
+		out = append(out, adminBlogRowJSON{adminBlogJSON: s.toAdminBlog(b), EntryCount: counts[b.ID]})
 	}
 	writeJSON(c, http.StatusOK, gin.H{"data": out})
 }

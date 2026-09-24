@@ -90,6 +90,22 @@ func (s *Store) Blogs(ctx context.Context, unhealthy bool, limit int) ([]model.B
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (model.Blog, error) { return scanBlog(row) })
 }
 
+// EntryCounts returns how many entries each blog has cached, by blog ID.
+// Blogs without entries are left out.
+func (s *Store) EntryCounts(ctx context.Context) (map[int64]int64, error) {
+	rows, err := s.pool.Query(ctx, `SELECT blog_id, count(*) FROM entries GROUP BY blog_id`)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int64]int64)
+	var blogID, count int64
+	_, err = pgx.ForEachRow(rows, []any{&blogID, &count}, func() error {
+		counts[blogID] = count
+		return nil
+	})
+	return counts, err
+}
+
 // Blog returns one blog with its fetch state.
 func (s *Store) Blog(ctx context.Context, host string) (model.Blog, error) {
 	return scanBlog(s.pool.QueryRow(ctx, `SELECT `+blogColumns+` FROM blogs WHERE host = $1`, host))
