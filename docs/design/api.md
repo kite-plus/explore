@@ -25,7 +25,7 @@
 
 `POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；`POST /api/v1/auth/login` 接收邮箱和密码。成功后都设置本站会话 Cookie 并返回用户资料与 `csrf_token`。`POST /api/v1/auth/logout` 撤销当前会话。
 
-`GET /api/v1/me` 返回当前用户；`PATCH /api/v1/me` 修改显示名称，`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
+`GET /api/v1/me` 返回当前用户；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
 
 `GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`，维护者 Bearer Token 仍可使用。
 
@@ -282,6 +282,7 @@
 | `already_set_up` | 409 | 已经有管理员账号，安装已经完成 |
 | `invalid_setup_code` | 403 | 安装码不正确 |
 | `last_admin` | 409 | 唯一可用的管理员不能删除自己的账号 |
+| `wrong_password` | 403 | 修改密码时当前密码不正确 |
 | `internal` | 500 | 服务端错误，细节只写日志 |
 
 ---

@@ -105,6 +105,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	account.GET("/me", s.me)
 	account.PATCH("/me", s.updateMe)
 	account.DELETE("/me", s.deleteMe)
+	account.PUT("/me/password", s.limit(s.loginLimit), s.changePassword)
 	account.POST("/auth/logout", s.logout)
 	account.GET("/me/subscriptions", s.subscriptions)
 	account.PUT("/me/subscriptions/:host", s.addSubscription)

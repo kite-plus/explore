@@ -65,6 +65,23 @@ func (s *Store) UpdateUserName(ctx context.Context, userID, displayName string) 
 	return err
 }
 
+// SetPassword replaces an account's password hash and ends every session of
+// it but the one with the token hash keep, so a changed password locks out
+// whoever else was signed in with the old one.
+func (s *Store) SetPassword(ctx context.Context, userID, passwordHash string, keep [sha256.Size]byte) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id::text = $1`, userID, passwordHash)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id::text = $1 AND token_hash <> $2`, userID, keep[:])
+		return err
+	})
+}
+
 // DeleteUser deletes an account with its sessions, follows and claims; its
 // reports stay, with no requester. The last active admin gets ErrConflict,
 // since the site would be left with no admin.

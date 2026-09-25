@@ -230,6 +230,38 @@ func (s *Server) updateMe(c *gin.Context) {
 	writeJSON(c, http.StatusOK, userJSON(u, c.GetString("session_token")))
 }
 
+// changePassword sets a new password once the current one checks out, and
+// signs out every other session of the account.
+func (s *Server) changePassword(c *gin.Context) {
+	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
+		s.fail(c, http.StatusUnsupportedMediaType, codeInvalidRequest)
+		return
+	}
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if c.ShouldBindJSON(&body) != nil || len(body.NewPassword) < minPasswordLength || len(body.NewPassword) > maxPasswordLength {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
+	u := currentUser(c)
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.CurrentPassword)) != nil {
+		s.fail(c, http.StatusForbidden, codeWrongPassword)
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	if err := s.Store.SetPassword(c.Request.Context(), u.ID, string(hash), sha256.Sum256([]byte(c.GetString("session_token")))); err != nil {
+		s.storeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (s *Server) deleteMe(c *gin.Context) {
 	if err := s.Store.DeleteUser(c.Request.Context(), currentUser(c).ID); err != nil {
 		if errors.Is(err, store.ErrConflict) {
