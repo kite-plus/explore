@@ -184,6 +184,11 @@ describe("content", () => {
     }
   });
 
+  test("the footer links the source code with GitHub's mark", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<a href="https:\/\/github\.com\/kite-plus\/explore"[^>]*>\s*<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"/);
+  });
+
   test("the recommended page says it is coming and links the latest posts", async () => {
     const { res, html } = await page("/recommended");
     assert.equal(res.status, 200);
