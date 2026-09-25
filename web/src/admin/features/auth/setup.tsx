@@ -11,7 +11,7 @@ import { PasswordInput } from '@/admin/components/password-input'
 import type { ReaderUser } from '@/lib/reader-api'
 import { AuthLayout } from './auth-layout'
 
-const STEPS = ['安装码', '管理员账号', '站点设置']
+const STEPS = ['管理员账号', '站点设置']
 const MIN_PASSWORD = 12
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,21 +31,20 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', 'Accept-Language': 'zh-CN' },
     body: JSON.stringify(body),
   })
-  if (response.ok) return (response.status === 204 ? undefined : await response.json()) as T
+  if (response.ok) return (await response.json()) as T
   const data = await response.json().catch(() => null)
   throw new SetupError(data?.error?.code ?? 'internal', data?.error?.message ?? `请求失败（HTTP ${response.status}）。`)
 }
 
-type Errors = Partial<Record<'code' | 'name' | 'email' | 'password' | 'confirm', string>>
+type Errors = Partial<Record<'name' | 'email' | 'password' | 'confirm', string>>
 
 /**
- * The first run of a fresh install: prove access to the server with the code
- * serve logs, create the first admin account, then choose the site switches.
+ * The first run of a fresh install: create the first admin account, then
+ * choose the site switches.
  */
 export function Setup() {
   const { signedIn } = useAuth()
   const [step, setStep] = useState(0)
-  const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,8 +59,7 @@ export function Setup() {
 
   function validate(at: number): Errors {
     const found: Errors = {}
-    if (at === 0 && code.replace(/[^a-z0-9]/gi, '').length !== 12) found.code = '安装码是 12 位字母和数字。'
-    if (at === 1) {
+    if (at === 0) {
       if (!name.trim()) found.name = '请输入名称。'
       if (!EMAIL.test(email.trim())) found.email = '请输入有效的邮箱。'
       if (password.length < MIN_PASSWORD) found.password = `密码至少 ${MIN_PASSWORD} 位。`
@@ -84,12 +82,8 @@ export function Setup() {
         // Someone finished setup already; the sign-in page takes over.
         window.location.reload()
         return
-      case 'invalid_setup_code':
-        setStep(0)
-        setServerErrors({ code: cause.message })
-        return
       case 'conflict':
-        setStep(1)
+        setStep(0)
         setServerErrors({ email: '这个邮箱已经注册过了，请换一个。' })
         return
       default:
@@ -101,25 +95,12 @@ export function Setup() {
     setChecked((current) => [...new Set([...current, step])])
     if (busy || Object.keys(validate(step)).length > 0 || Object.values(serverErrors).some(Boolean)) return
     if (step === 0) {
-      setBusy(true)
-      try {
-        await post('setup/verify', { code })
-        setStep(1)
-      } catch (cause) {
-        failed(cause)
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
-    if (step === 1) {
-      setStep(2)
+      setStep(1)
       return
     }
     setBusy(true)
     try {
       const account = await post<ReaderUser>('setup', {
-        code,
         email: email.trim(),
         password,
         display_name: name.trim(),
@@ -144,7 +125,7 @@ export function Setup() {
     <AuthLayout wide>
       <div className='flex flex-col space-y-2 text-start'>
         <h2 className='text-lg font-semibold tracking-tight'>安装 Explore</h2>
-        <p className='text-sm text-muted-foreground'>三步完成安装，创建的账号就是这个站点的管理员。</p>
+        <p className='text-sm text-muted-foreground'>两步完成安装，创建的账号就是这个站点的管理员。</p>
       </div>
 
       <ol className='flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'>
@@ -168,32 +149,6 @@ export function Setup() {
 
       <form onSubmit={onSubmit} noValidate className='grid gap-4'>
         {step === 0 && (
-          <>
-            <p className='text-sm text-muted-foreground'>
-              为了确认你是这台服务器的部署者，请输入安装码。安装码打印在 serve 服务的日志里：
-            </p>
-            <pre className='rounded-md bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap'>
-              docker compose logs serve | grep setup_code
-            </pre>
-            <Field id='setup-code' label='安装码' error={errors.code}>
-              <Input
-                id='setup-code'
-                autoComplete='off'
-                spellCheck={false}
-                placeholder='XXXX-XXXX-XXXX'
-                className='font-mono uppercase'
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value)
-                  edited('code')
-                }}
-                aria-invalid={Boolean(errors.code)}
-              />
-            </Field>
-          </>
-        )}
-
-        {step === 1 && (
           <>
             <Field id='setup-name' label='名称' error={errors.name}>
               <Input
@@ -240,7 +195,7 @@ export function Setup() {
           </>
         )}
 
-        {step === 2 && (
+        {step === 1 && (
           <>
             <SwitchRow
               id='setup-registration'

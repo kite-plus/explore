@@ -31,7 +31,7 @@
 
 ### 安装
 
-新安装还没有管理员账号时，`GET /api/v1/setup` 返回 `{"required": true}`，后台据此显示安装向导；`serve` 启动时把一次性安装码（`setup_code`）打印到日志。`POST /api/v1/setup/verify` 只校验 `code`，返回 `204` 或 `403 invalid_setup_code`。`POST /api/v1/setup` 接收 `code`、`email`、`password`、`display_name`，以及可选的 `registration_enabled`、`submissions_enabled`，在一个事务里创建管理员、写入设置并删除安装码；成功后和登录一样设置会话 Cookie，返回用户资料。已有管理员时两个接口都返回 `409 already_set_up`。两个 POST 与登录共用限流。
+新安装还没有管理员账号时，`GET /api/v1/setup` 返回 `{"required": true}`，后台据此显示安装向导。`POST /api/v1/setup` 接收 `email`、`password`、`display_name`，以及可选的 `registration_enabled`、`submissions_enabled`，在一个事务里创建管理员并写入设置；成功后和登录一样设置会话 Cookie，返回用户资料。在此之前任何人都能调用它，第一个完成的人成为管理员，所以部署后要马上完成安装。已有管理员时返回 `409 already_set_up`。与登录共用限流。
 
 ### 2.1 `GET /api/v1/entries`
 
@@ -280,7 +280,6 @@
 | `check_failed` | 422 | 检查不通过，响应里带 `check_report` |
 | `rate_limited` | 429 | 超出限流，带 `Retry-After` |
 | `already_set_up` | 409 | 已经有管理员账号，安装已经完成 |
-| `invalid_setup_code` | 403 | 安装码不正确 |
 | `last_admin` | 409 | 唯一可用的管理员不能删除自己的账号 |
 | `wrong_password` | 403 | 修改密码时当前密码不正确 |
 | `internal` | 500 | 服务端错误，细节只写日志 |

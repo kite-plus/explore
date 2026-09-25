@@ -95,11 +95,6 @@ export function startStub() {
       for await (const chunk of req) body += chunk;
       state.setupRequests.push({ path: url.pathname, method: req.method, body, forwardedFor: req.headers["x-forwarded-for"] });
       if (url.pathname === "/api/v1/setup" && req.method === "GET") return send(200, { required: true, min_password_length: 12 });
-      if (url.pathname === "/api/v1/setup/verify" && req.method === "POST") {
-        if (JSON.parse(body).code !== "GOOD-CODE-1234") return error(403, "invalid_setup_code");
-        res.writeHead(204);
-        return res.end();
-      }
       if (url.pathname === "/api/v1/setup" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=admin-session; Path=/; HttpOnly; SameSite=Lax" });
         return res.end(JSON.stringify({ id: "owner", email: "owner@example.com", display_name: "Owner", is_admin: true, csrf_token: "admin-csrf" }));

@@ -46,13 +46,7 @@ Explore 是 [Kite Plus](https://github.com/kite-plus) 负责「发现」的部�
    docker compose up -d
    ```
 
-4. 打开域名下的 `/admin`。还没有管理员账号时，这里显示安装向导，需要输入一次性安装码，用来证明你能读到服务器的日志：
-
-   ```bash
-   docker compose logs serve | grep setup_code
-   ```
-
-   输入安装码，创建管理员账号，再选择是否开放注册和投稿。
+4. 马上打开域名下的 `/admin`。还没有管理员账号时，这里显示安装向导：创建管理员账号，再选择是否开放注册和投稿。第一个完成安装的人就是管理员，所以站点启动后请立即完成这一步。
 
 **升级**：把 `EXPLORE_VERSION` 改成新版本，再运行 `docker compose pull && docker compose up -d`。新版本启动前会先迁移数据库。
 

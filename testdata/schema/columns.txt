@@ -69,9 +69,6 @@ sessions.created_at timestamp with time zone
 sessions.expires_at timestamp with time zone
 sessions.token_hash bytea
 sessions.user_id uuid
-setup_code.code text
-setup_code.created_at timestamp with time zone
-setup_code.singleton boolean
 sitemap_urls.blog_id bigint
 sitemap_urls.lastmod timestamp with time zone
 sitemap_urls.next_check_at timestamp with time zone

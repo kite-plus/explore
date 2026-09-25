@@ -24,31 +24,15 @@ func (s *Server) setupState(c *gin.Context) {
 	writeJSON(c, http.StatusOK, gin.H{"required": pending, "min_password_length": minPasswordLength})
 }
 
-// verifySetupCode lets the wizard check the code before it asks for the
-// account; completeSetup checks it again.
-func (s *Server) verifySetupCode(c *gin.Context) {
-	var body struct {
-		Code string `json:"code"`
-	}
-	if c.ShouldBindJSON(&body) != nil {
-		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-		return
-	}
-	if err := s.Store.CheckSetupCode(c.Request.Context(), body.Code); err != nil {
-		s.setupError(c, err)
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
-// completeSetup creates the first admin account and signs it in.
+// completeSetup creates the first admin account and signs it in. Until
+// then anyone who reaches it may, so a fresh install wants setting up
+// right after it is deployed.
 func (s *Server) completeSetup(c *gin.Context) {
 	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
 		s.fail(c, http.StatusUnsupportedMediaType, codeInvalidRequest)
 		return
 	}
 	var body struct {
-		Code                string `json:"code"`
 		Email               string `json:"email"`
 		Password            string `json:"password"`
 		DisplayName         string `json:"display_name"`
@@ -76,24 +60,18 @@ func (s *Server) completeSetup(c *gin.Context) {
 	if body.SubmissionsEnabled != nil {
 		settings["submissions_enabled"] = strconv.FormatBool(*body.SubmissionsEnabled)
 	}
-	u, err := s.Store.CompleteSetup(c.Request.Context(), body.Code, email, string(hash), name, settings)
-	if err != nil {
-		s.setupError(c, err)
+	u, err := s.Store.CompleteSetup(c.Request.Context(), email, string(hash), name, settings)
+	switch {
+	case errors.Is(err, store.ErrSetupDone):
+		s.fail(c, http.StatusConflict, codeSetupDone)
+		return
+	case errors.Is(err, store.ErrConflict):
+		s.fail(c, http.StatusConflict, codeConflict)
+		return
+	case err != nil:
+		s.storeError(c, err)
 		return
 	}
 	s.Log.Info("setup complete")
 	s.startSession(c, u)
-}
-
-func (s *Server) setupError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, store.ErrSetupDone):
-		s.fail(c, http.StatusConflict, codeSetupDone)
-	case errors.Is(err, store.ErrSetupCode):
-		s.fail(c, http.StatusForbidden, codeSetupCode)
-	case errors.Is(err, store.ErrConflict):
-		s.fail(c, http.StatusConflict, codeConflict)
-	default:
-		s.storeError(c, err)
-	}
 }

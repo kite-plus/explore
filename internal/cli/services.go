@@ -87,14 +87,8 @@ func newServeCmd() *cobra.Command {
 				return err
 			}
 			if pending {
-				code, err := st.SetupCode(ctx)
-				if err != nil {
-					return err
-				}
-				// Every start logs it until setup is done, so a fresh log
-				// always has the code.
-				log.Warn("waiting for setup: open the admin and enter the setup code",
-					"admin", cfg.PublicURL+"/admin", "setup_code", code)
+				log.Warn("waiting for setup: the first account created in the admin becomes its admin",
+					"admin", cfg.PublicURL+"/admin")
 			}
 
 			errc := make(chan error, 1)

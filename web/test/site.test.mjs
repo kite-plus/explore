@@ -469,22 +469,10 @@ describe("admin console", () => {
     const state = await get("/api/v1/setup");
     assert.equal(state.status, 200);
     assert.equal((await state.json()).required, true);
-    const wrong = await get("/api/v1/setup/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: base },
-      body: JSON.stringify({ code: "WRONG-CODE-0000" }),
-    });
-    assert.equal(wrong.status, 403);
-    const right = await get("/api/v1/setup/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: base },
-      body: JSON.stringify({ code: "GOOD-CODE-1234" }),
-    });
-    assert.equal(right.status, 204);
     const done = await get("/api/v1/setup", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: base },
-      body: JSON.stringify({ code: "GOOD-CODE-1234", email: "owner@example.com", password: "long enough password", display_name: "Owner" }),
+      body: JSON.stringify({ email: "owner@example.com", password: "long enough password", display_name: "Owner" }),
     });
     assert.equal(done.status, 200);
     assert.match(done.headers.get("set-cookie") ?? "", /^explore_session=admin-session;/);

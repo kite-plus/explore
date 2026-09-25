@@ -38,7 +38,6 @@ const (
 	codeBadCredentials     = "bad_credentials"
 	codeFeatureDisabled    = "feature_disabled"
 	codeSetupDone          = "already_set_up"
-	codeSetupCode          = "invalid_setup_code"
 	codeLastAdmin          = "last_admin"
 	codeWrongPassword      = "wrong_password"
 )
@@ -63,7 +62,6 @@ var messages = map[string]struct{ en, zh string }{
 	codeWrongPassword:      {"The current password is incorrect.", "当前密码不正确。"},
 	codeLastAdmin:          {"You are the only admin. Give admin access to another account before deleting yours.", "你是唯一的管理员。删除账号前，请先把后台权限交给另一个账号。"},
 	codeSetupDone:          {"This server is already set up; sign in instead.", "已经完成安装，请直接登录。"},
-	codeSetupCode:          {"The setup code is wrong; the serve log shows it.", "安装码不正确，请到 serve 的日志里查看。"},
 }
 
 type errorBody struct {

@@ -812,35 +812,15 @@ func TestSetup(t *testing.T) {
 	if !required() {
 		t.Fatal("a fresh install needs setup")
 	}
-	code, err := e.s.SetupCode(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again, err := e.s.SetupCode(ctx); err != nil || again != code {
-		t.Errorf("the code changed between starts: %q, then %q (%v)", code, again, err)
-	}
 
-	verify := func(c string) int {
-		return e.do(req{method: http.MethodPost, path: "/api/v1/setup/verify", body: `{"code":"` + c + `"}`}).Code
-	}
-	if got := verify("AAAA-AAAA-AAAA"); got != http.StatusForbidden {
-		t.Errorf("a wrong code = %d", got)
-	}
-	if got := verify(strings.ToLower(strings.ReplaceAll(code, "-", " "))); got != http.StatusNoContent {
-		t.Errorf("the code typed in lower case with spaces = %d", got)
-	}
-
-	setup := func(c, email, password string) *httptest.ResponseRecorder {
+	setup := func(email, password string) *httptest.ResponseRecorder {
 		return e.do(req{method: http.MethodPost, path: "/api/v1/setup",
-			body: `{"code":"` + c + `","email":"` + email + `","password":"` + password + `","display_name":"Owner","registration_enabled":false}`})
+			body: `{"email":"` + email + `","password":"` + password + `","display_name":"Owner","registration_enabled":false}`})
 	}
-	if w := setup(code, "owner@example.com", "short"); w.Code != http.StatusBadRequest {
+	if w := setup("owner@example.com", "short"); w.Code != http.StatusBadRequest {
 		t.Errorf("a short password = %d", w.Code)
 	}
-	if w := setup("AAAA-AAAA-AAAA", "owner@example.com", "long enough password"); w.Code != http.StatusForbidden {
-		t.Errorf("a wrong code = %d", w.Code)
-	}
-	w := setup(code, "Owner@Example.com", "long enough password")
+	w := setup("Owner@Example.com", "long enough password")
 	if w.Code != http.StatusOK {
 		t.Fatalf("setup = %d %s", w.Code, w.Body.String())
 	}
@@ -865,20 +845,13 @@ func TestSetup(t *testing.T) {
 	if required() {
 		t.Error("setup is still required once an admin exists")
 	}
-	if w := setup(code, "second@example.com", "long enough password"); w.Code != http.StatusConflict {
+	if w := setup("second@example.com", "long enough password"); w.Code != http.StatusConflict {
 		t.Errorf("a second setup = %d", w.Code)
-	}
-	if got := verify(code); got != http.StatusConflict {
-		t.Errorf("verify after setup = %d", got)
 	}
 }
 
 func TestSetupHasOneWinner(t *testing.T) {
 	e := newEnv(t, false)
-	code, err := e.s.SetupCode(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
 	codes := make([]int, 4)
 	var wg sync.WaitGroup
 	for i := range codes {
@@ -886,7 +859,7 @@ func TestSetupHasOneWinner(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			codes[i] = e.do(req{method: http.MethodPost, path: "/api/v1/setup",
-				body: `{"code":"` + code + `","email":"owner` + strconv.Itoa(i) + `@example.com","password":"long enough password","display_name":"Owner"}`}).Code
+				body: `{"email":"owner` + strconv.Itoa(i) + `@example.com","password":"long enough password","display_name":"Owner"}`}).Code
 		}()
 	}
 	wg.Wait()

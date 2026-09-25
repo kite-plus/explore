@@ -33,7 +33,7 @@
 
 迁移 `00009_admin_operations.sql` 增加账号停用时间、站点设置、文章屏蔽记录和下架申请。文章屏蔽以 `(blog_id, identity)` 为键，抓取器更新或短暂移除文章后，屏蔽决定仍然生效。公开文章流、博客详情、订阅流、图片和链接检查都会排除这些记录。恢复展示会删除屏蔽记录。
 
-迁移 `00011_setup_code.sql` 增加只有一行的 `setup_code` 表，保存首次安装的安装码，安装完成后删除。完成安装和调整后台权限用同一把事务锁判断现有管理员，两个安装请求不会同时成功。
+安装向导不要求安装码：还没有管理员时，第一个完成安装的人就成为管理员。迁移 `00011_setup_code.sql` 曾增加保存安装码的 `setup_code` 表，`00014_drop_setup_code.sql` 已将它删除。完成安装和调整后台权限用同一把事务锁判断现有管理员，两个安装请求不会同时成功。
 
 博客下架审批通过后将博客设为 `paused` 并保留原因；文章下架审批通过后写入屏蔽记录。审批和状态变更在同一数据库事务中提交。被停用的用户无法登录，现有会话会被撤销。撤销后台权限时会清除该账号的会话。停用或降级最后一名可用管理员会返回冲突错误，账号管理员不能修改自己的状态或角色。
 
@@ -49,7 +49,7 @@
 | `GET/POST /api/v1/admin/takedowns`、`POST /api/v1/admin/takedowns/:id/review` | 下架申请及审批 |
 | `GET /api/v1/admin/settings`、`PATCH /api/v1/admin/settings/:key` | 持久化站点设置 |
 | `GET /api/v1/site-config` | 公开的站点公告与注册状态 |
-| `GET /api/v1/setup`、`POST /api/v1/setup/verify`、`POST /api/v1/setup` | 安装状态、校验安装码、创建第一个管理员 |
+| `GET /api/v1/setup`、`POST /api/v1/setup` | 安装状态、创建第一个管理员 |
 | `PATCH /api/v1/me`、`PUT /api/v1/me/password` | 个人资料页修改名称和密码，与前台共用账号接口 |
 
 `users` 与 `entries` 使用 `limit`、`offset` 和 `q` 查询参数，每页最多 100 条。下架申请按 `pending`、`approved`、`rejected` 查询。

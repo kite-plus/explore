@@ -99,7 +99,6 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
 	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
 	v1.GET("/setup", s.limit(s.readLimit), s.setupState)
-	v1.POST("/setup/verify", s.limit(s.loginLimit), s.verifySetupCode)
 	v1.POST("/setup", s.limit(s.loginLimit), s.completeSetup)
 	account := v1.Group("/", func(c *gin.Context) { c.Header("Cache-Control", "private, no-store"); c.Next() }, s.requireUser())
 	account.GET("/me", s.me)

@@ -218,13 +218,7 @@ docker compose up -d
 
 `EXPLORE_PUBLIC_URL` 的域名要先解析到服务器，Caddy 才能拿到证书。`EXPLORE_VERSION` 固定运行的版本；升级时改掉它，再运行 `docker compose pull && docker compose up -d`，`migrate` 会先把数据库迁移到新版本。服务器上已经有别的反向代理时，去掉 `caddy` 服务，按上表的路径把请求转给 `127.0.0.1:8080`（serve）和 `127.0.0.1:4321`（web）。页面自带 `Cache-Control`，前面再加 CDN 时可以直接按它缓存。
 
-**首次安装**：还没有管理员账号时，`serve` 每次启动都在日志里打印一次性安装码 `setup_code`。打开 `/admin` 进入安装向导：输入安装码，创建第一个管理员账号，再选择是否开放注册和投稿。安装码确认操作者能读到服务器日志，新站点就不会被第一个打开 `/admin` 的人占用。查看安装码：
-
-```bash
-docker compose logs serve | grep setup_code
-```
-
-安装完成后安装码随即删除。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
+**首次安装**：还没有管理员账号时，打开 `/admin` 进入安装向导：创建第一个管理员账号，再选择是否开放注册和投稿。向导不要求安装码，第一个完成安装的人就成为管理员，所以 `docker compose up -d` 之后要马上完成这一步；安装完成前，`serve` 每次启动都会在日志里提醒。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
 
 本地从源码构建同名镜像用 `make docker docker-web`，compose 会优先使用本地已有的镜像。
 

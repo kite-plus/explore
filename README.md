@@ -46,13 +46,7 @@ Every release publishes two images for amd64 and arm64: `ghcr.io/kite-plus/explo
    docker compose up -d
    ```
 
-4. Open `/admin` on your domain. Until the first admin account exists, it shows a setup wizard that asks for a one-time code, which proves you can read the server's logs:
-
-   ```bash
-   docker compose logs serve | grep setup_code
-   ```
-
-   Enter the code, create the admin account, and choose whether to open registration and submissions.
+4. Open `/admin` on your domain right away. Until the first admin account exists, it shows a setup wizard: create the admin account, then choose whether to open registration and submissions. Whoever finishes the wizard first becomes the admin, so do it as soon as the site is up.
 
 **Upgrading**: set `EXPLORE_VERSION` to the new release, then run `docker compose pull && docker compose up -d`. The database is migrated before the new version starts.
 
