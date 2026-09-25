@@ -150,7 +150,7 @@ import SubmitForm from "@/components/submit-form";
 4. 每个岛是独立的 React 实例，彼此不共享 Context。依赖 Provider 的组件（Toast、主题等）要和用它的组件放在同一个岛里；跨岛共享状态用 nanostores。
 5. 不引入 CSS-in-JS 组件库（§1.2）。
 6. 不加载外部字体：用系统字体栈。中文网络字体动辄几 MB，还会产生第三方请求。
-7. 博客目录和博客页的大头像通过本站 `/api/v1/blogs/{host}/favicon` 加载源站 favicon；缺失时显示博客名首字和由主机名算出的颜色。文章列表的小头像仍使用首字。浏览器不向源站发图片请求。
+7. 博客头像，包括博客目录、博客页的大头像和文章列表里的小头像，都通过本站 `/api/v1/blogs/{host}/favicon` 加载源站 favicon；缺失时显示博客名首字和由主机名算出的颜色。同一个博客的图标地址相同，浏览器缓存 1 小时，一页文章只按博客各请求一次。浏览器不向源站发图片请求。
 8. **离开 Explore 的链接在新标签页打开**（原文、博客首页、订阅源、GitHub），读者看完还能回到信息流。提示要轻：文字后面一个淡色的 ↗，给读屏软件一段隐藏的"在新标签页打开"，首页说明里写一句；不用悬停提示，也不弹窗。组件里用 `ExternalLink.astro`，Markdown 页面的外链由 `ExternalLinks.astro` 统一改写。不加 `noreferrer`，作者的统计里仍能看到来自 Explore 的访问（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）。站内链接照常在本页打开。
 
 | 场景 | 做法 | 浏览器里的 JS |

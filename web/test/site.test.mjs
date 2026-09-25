@@ -302,6 +302,8 @@ describe("status codes", () => {
     const { html } = await page("/blogs");
     assert.match(html, /src="\/api\/v1\/blogs\/zh\.example\.com\/favicon"/);
     assert.match(html, /src="\/api\/v1\/blogs\/en\.example\.com\/favicon"/);
+    const stream = (await page("/")).html;
+    assert.match(stream, /<img src="\/api\/v1\/blogs\/zh\.example\.com\/favicon"[^>]*data-blog-favicon/, "entries show their blog's favicon too");
     const res = await get("/api/v1/blogs/zh.example.com/favicon");
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "image/png");

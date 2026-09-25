@@ -21,16 +21,15 @@ const large = size === "lg";
   )}
 >
   <span class="group-[.has-favicon]/avatar:hidden">{initial(name)}</span>
-  {
-    large && (
-      <img
-        src={`/api/v1/blogs/${encodeURIComponent(host)}/favicon`}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        data-blog-favicon
-        class="absolute inset-0 size-full object-contain p-1 group-[.has-favicon]/avatar:bg-white"
-      />
-    )
-  }
+  <img
+    src={`/api/v1/blogs/${encodeURIComponent(host)}/favicon`}
+    alt=""
+    loading="lazy"
+    decoding="async"
+    data-blog-favicon
+    class={cn(
+      "absolute inset-0 size-full object-contain group-[.has-favicon]/avatar:bg-white",
+      large ? "p-1" : "p-0.5",
+    )}
+  />
 </span>
