@@ -116,7 +116,6 @@ export const en: Dict = {
     feed: "RSS feed",
     opml: "Export the blog list",
     bot: "About the crawler",
-    source: "Source code",
     note: "Explore keeps no post content and does not track readers.",
   },
 };

@@ -114,7 +114,6 @@ export const zh = {
     feed: "RSS 订阅",
     opml: "导出博客清单",
     bot: "关于抓取器",
-    source: "源代码",
     note: "Explore 不保存文章正文，也不追踪读者。",
   },
 };
