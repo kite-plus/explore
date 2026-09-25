@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-25
+
+This release tidies the site's navigation: Latest, Recommended and Following sit under one Discover item, and the footer's source link becomes GitHub with its mark. Releases are complete now too: every version gets a GitHub Release with native builds for Linux, macOS and Windows.
+
+### Added
+
+- Every version is published as a GitHub Release with native builds: the `explore` program behind the API, the crawler and database migrations, for Linux, macOS and Windows on amd64 and arm64, and the site's bundle for Node.js 22, so Explore runs without Docker too. The README has the steps.
+
 ### Changed
 
 - The header merges Latest and Following into one Discover item. The Latest, Recommended and Following tabs sit under it and share the heading Discover, so switching tabs changes only the line under the heading and the posts.
