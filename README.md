@@ -32,13 +32,13 @@ Every release publishes two images for amd64 and arm64: `ghcr.io/kite-plus/explo
 
    ```bash
    mkdir explore && cd explore
-   base=https://raw.githubusercontent.com/kite-plus/explore/v0.1.3/deploy
+   base=https://raw.githubusercontent.com/kite-plus/explore/v0.1.4/deploy
    curl -fsSLO "$base/docker-compose.yaml"
    curl -fsSLO "$base/Caddyfile"
    curl -fsSL "$base/.env.example" -o .env
    ```
 
-2. Edit `.env`: set `EXPLORE_VERSION=0.1.3`, a `POSTGRES_PASSWORD` (for example from `openssl rand -hex 24`) and `EXPLORE_PUBLIC_URL`. The file explains the optional settings.
+2. Edit `.env`: set `EXPLORE_VERSION=0.1.4`, a `POSTGRES_PASSWORD` (for example from `openssl rand -hex 24`) and `EXPLORE_PUBLIC_URL`. The file explains the optional settings.
 
 3. Start it:
 
