@@ -12,6 +12,9 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const zh = lang === "zh";
   const prefix = lang === "en" ? "/en" : "";
 
@@ -53,6 +56,17 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       await load();
     } catch (reason) { setError(String(reason)); }
   }
+  async function deleteAccount() {
+    if (!user) return;
+    setError(""); setDeleting(true);
+    try {
+      await readerRequest("me", { method: "DELETE" }, user.csrf_token);
+      window.location.assign(`${prefix}/`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      setDeleting(false);
+    }
+  }
   async function logout() {
     if (!user) return;
     await readerRequest("auth/logout", { method: "POST" }, user.csrf_token);
@@ -75,6 +89,17 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         <div className="mt-4 flex flex-wrap gap-2"><input aria-label={zh ? "博客域名" : "Blog domain"} className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm" placeholder="blog.example.com" value={host} onChange={e => { setHost(e.target.value); setChallenge(null); }} /><button className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={startClaim} disabled={!host.trim() || !user}>{zh ? "生成验证记录" : "Create verification"}</button></div>
         {challenge && <div className="mt-4 space-y-2 rounded-md bg-muted p-3 text-sm"><p>{zh ? "TXT 主机名" : "TXT name"}: <code className="break-all">{challenge.record}</code></p><p>{zh ? "TXT 内容" : "TXT value"}: <code className="break-all">{challenge.value}</code></p><button className="mt-2 rounded-md border bg-background px-3 py-2 text-sm" onClick={verifyClaim}>{zh ? "验证并认领" : "Verify and claim"}</button></div>}
       </div>
+    </section>
+    <section className="rounded-lg border border-destructive/30 p-4"><h2 className="text-lg font-semibold">{zh ? "删除账号" : "Delete account"}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{zh ? "账号、登录状态、订阅和认领的博客会被永久删除，无法恢复。你提交过的举报会保留，但不再关联到你的账号。" : "Your account, its sign-ins, follows and claimed blogs are deleted for good. Reports you filed stay, no longer linked to you."}</p>
+      {confirming && user ? <div className="mt-4 space-y-3">
+        <label htmlFor="delete-account-email" className="block text-sm">{zh ? <>输入你的邮箱 <span className="font-medium">{user.email}</span> 以确认</> : <>Type your email, <span className="font-medium">{user.email}</span>, to confirm</>}</label>
+        <input id="delete-account-email" type="email" autoComplete="off" className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={confirmEmail} onChange={e => setConfirmEmail(e.target.value)} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="rounded-md border px-3 py-2 text-sm hover:bg-accent" disabled={deleting} onClick={() => { setConfirming(false); setConfirmEmail(""); }}>{zh ? "取消" : "Cancel"}</button>
+          <button type="button" className="rounded-md bg-destructive px-3 py-2 text-sm text-white disabled:opacity-50" disabled={deleting || confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()} onClick={deleteAccount}>{deleting ? (zh ? "正在删除…" : "Deleting…") : (zh ? "永久删除账号" : "Delete my account")}</button>
+        </div>
+      </div> : <button type="button" className="mt-4 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" disabled={!user} onClick={() => setConfirming(true)}>{zh ? "删除账号" : "Delete account"}</button>}
     </section>
   </div>;
 }

@@ -75,3 +75,28 @@ func TestReaderAccountSubscriptionAndClaim(t *testing.T) {
 		t.Fatalf("after logout = %d", w.Code)
 	}
 }
+
+func TestReaderDeletesTheirAccount(t *testing.T) {
+	e := newEnv(t, false)
+	cookie, csrf := e.session("leaver@example.com", false)
+	auth := map[string]string{"Cookie": cookie, "X-CSRF-Token": csrf}
+	if w := e.do(req{method: http.MethodDelete, path: "/api/v1/me", header: map[string]string{"Cookie": cookie}}); w.Code != http.StatusForbidden {
+		t.Fatalf("delete without the CSRF token = %d", w.Code)
+	}
+	w := e.do(req{method: http.MethodDelete, path: "/api/v1/me", header: auth})
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("delete = %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Set-Cookie"); !strings.Contains(got, "explore_session=;") || !strings.Contains(got, "Max-Age=0") {
+		t.Errorf("session cookie not cleared: %q", got)
+	}
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/me", header: auth}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("after delete = %d", w.Code)
+	}
+
+	owner, ownerCSRF := e.session("owner@example.com", true)
+	w = e.do(req{method: http.MethodDelete, path: "/api/v1/me", header: map[string]string{"Cookie": owner, "X-CSRF-Token": ownerCSRF}})
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"last_admin"`) {
+		t.Fatalf("only admin delete = %d: %s", w.Code, w.Body.String())
+	}
+}

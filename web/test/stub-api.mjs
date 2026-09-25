@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [] };
+  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -66,6 +66,14 @@ export function startStub() {
     if (url.pathname === "/api/v1/me" && req.method === "GET") {
       if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");
       return send(200, { id: "reader", email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" });
+    }
+    if (url.pathname === "/api/v1/me" && req.method === "DELETE") {
+      if (req.headers.cookie !== "explore_session=test-session" || req.headers["x-csrf-token"] !== "test-csrf") {
+        return error(403, "unauthorized");
+      }
+      state.deletedAccounts++;
+      res.writeHead(204, { "Set-Cookie": "explore_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" });
+      return res.end();
     }
     if (url.pathname === "/api/v1/me/entries" && req.method === "GET") {
       if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");

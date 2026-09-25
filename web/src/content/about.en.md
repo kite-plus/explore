@@ -30,6 +30,8 @@ The server logs only the kind of request and its outcome, such as “someone ope
 
 With an account, we keep your email, your name and a hash of your password (never the password itself), plus the blogs you follow and claim; a report you file is kept with its reason and your account so maintainers can act on it. Signing in sets one cookie, used only to keep you signed in, which ends after 30 days or when you sign out. We do not record which posts you view, click or read, and recommendations will not use personal behavior.
 
+You can delete your account at any time on your [account page](/en/account): the account, its sign-ins, follows and claimed blogs go with it, and reports you filed stay, no longer linked to you.
+
 ## Take everything with you
 
 The feeds of all listed blogs can be [exported as OPML](/blogs.opml) into any feed reader, and the home page itself has a [feed](/feed.xml) you can subscribe to.

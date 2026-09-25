@@ -65,9 +65,34 @@ func (s *Store) UpdateUserName(ctx context.Context, userID, displayName string) 
 	return err
 }
 
+// DeleteUser deletes an account with its sessions, follows and claims; its
+// reports stay, with no requester. The last active admin gets ErrConflict,
+// since the site would be left with no admin.
 func (s *Store) DeleteUser(ctx context.Context, userID string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
-	return err
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1517, 1)`); err != nil {
+			return err
+		}
+		var isAdmin, disabled bool
+		err := tx.QueryRow(ctx, `SELECT is_admin, disabled_at IS NOT NULL FROM users WHERE id::text = $1 FOR UPDATE`, userID).Scan(&isAdmin, &disabled)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if isAdmin && !disabled {
+			var activeAdmins int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE is_admin AND disabled_at IS NULL`).Scan(&activeAdmins); err != nil {
+				return err
+			}
+			if activeAdmins <= 1 {
+				return ErrConflict
+			}
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM users WHERE id::text = $1`, userID)
+		return err
+	})
 }
 
 func (s *Store) SetUserAdmin(ctx context.Context, email string, admin bool) error {

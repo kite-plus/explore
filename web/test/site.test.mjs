@@ -449,6 +449,16 @@ describe("admin console", () => {
     assert.deepEqual(JSON.parse(check.body), { url: "https://ok.example.com/" });
   });
 
+  test("deleting an account goes through the proxy and clears the session cookie", async () => {
+    const session = { Cookie: "explore_session=test-session" };
+    const refused = await get("/api/v1/me", { method: "DELETE", headers: { ...session, Origin: base } });
+    assert.equal(refused.status, 403, "a delete without the CSRF token is refused");
+    const deleted = await get("/api/v1/me", { method: "DELETE", headers: { ...session, "X-CSRF-Token": "test-csrf", Origin: base } });
+    assert.equal(deleted.status, 204);
+    assert.match(deleted.headers.get("set-cookie") ?? "", /^explore_session=;.*Max-Age=0/);
+    assert.equal(stub.state.deletedAccounts, 1);
+  });
+
   test("the setup proxy reaches the API and passes its session cookie back", async () => {
     const state = await get("/api/v1/setup");
     assert.equal(state.status, 200);

@@ -232,6 +232,10 @@ func (s *Server) updateMe(c *gin.Context) {
 
 func (s *Server) deleteMe(c *gin.Context) {
 	if err := s.Store.DeleteUser(c.Request.Context(), currentUser(c).ID); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			s.fail(c, http.StatusConflict, codeLastAdmin)
+			return
+		}
 		s.storeError(c, err)
 		return
 	}

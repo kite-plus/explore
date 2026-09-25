@@ -76,7 +76,7 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | POST | `/api/v1/auth/register` | 创建本站账号并建立会话 |
 | POST | `/api/v1/auth/login` | 邮箱密码登录 |
 | POST | `/api/v1/auth/logout` | 删除 Explore 会话 |
-| GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除本站数据 |
+| GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除账号（唯一可用的管理员除外） |
 | GET | `/api/v1/me/entries` | 订阅流 |
 | GET | `/api/v1/me/subscriptions` | 订阅列表与 OPML 导出 |
 | PUT、DELETE | `/api/v1/me/subscriptions/{host}` | 订阅和取消 |

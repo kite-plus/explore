@@ -134,3 +134,63 @@ func TestTakedownAndCrawlerSettings(t *testing.T) {
 		t.Fatalf("resumed crawler: %v, rows=%v", err, claimed)
 	}
 }
+
+func TestDeleteUserKeepsReportsAndTheLastAdmin(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	blog := listBlog(t, s, "followed.example", "en")
+	// A fetch that worked makes the blog visible, so it can be followed.
+	sync(t, s, blog.ID, entry("post", at(time.Now().Add(-time.Hour)), true))
+	reader, err := s.CreateUser(ctx, "leaver@example.com", "unused-hash", "Leaver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := sha256.Sum256([]byte("leaver-session"))
+	if err := s.CreateSession(ctx, reader.ID, token, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddSubscription(ctx, reader.ID, blog.Host); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateTakedownRequest(ctx, "blog", blog.Host, 0, reader.ID, "copied posts"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, reader.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UserByEmail(ctx, reader.Email); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("account survived: %v", err)
+	}
+	if _, err := s.UserBySession(ctx, token); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("session survived: %v", err)
+	}
+	var follows, reports, unlinked int
+	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM subscriptions),
+		(SELECT count(*) FROM takedown_requests), (SELECT count(*) FROM takedown_requests WHERE requester_id IS NULL)`).Scan(&follows, &reports, &unlinked); err != nil {
+		t.Fatal(err)
+	}
+	if follows != 0 || reports != 1 || unlinked != 1 {
+		t.Fatalf("follows=%d reports=%d unlinked=%d; want the report kept without its requester", follows, reports, unlinked)
+	}
+
+	first, err := s.CreateUser(ctx, "first@example.com", "unused-hash", "First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUserAdminByID(ctx, first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, first.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("last admin deleted: %v", err)
+	}
+	second, err := s.CreateUser(ctx, "second@example.com", "unused-hash", "Second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUserAdminByID(ctx, second.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, first.ID); err != nil {
+		t.Fatalf("admin with a successor: %v", err)
+	}
+}
