@@ -12,12 +12,12 @@ const entries = {
   first: {
     data: [
       { id: "2", title: "缓存可以随时删掉", url: "https://zh.example.com/posts/cache/", excerpt: "第一段摘要。", image_url: "/api/v1/entries/2/image", published_at: iso(1), link_status: "available", link_checked_at: iso(2), tags: ["backend", "ops"], blog: zhBlog },
-      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/", excerpt: null, image_url: null, published_at: iso(30), link_status: "unavailable", link_checked_at: iso(3), tags: [], blog: enBlog },
+      { id: "1", title: "Notes on feeds", url: "https://en.example.com/feeds/?p=7#notes", excerpt: null, image_url: null, published_at: iso(30), link_status: "unavailable", link_checked_at: iso(3), tags: [], blog: enBlog },
     ],
     next_cursor: "page-two",
   },
   second: {
-    data: [{ id: "3", title: "Older post", url: "https://en.example.com/older/", excerpt: "Old.", image_url: null, published_at: iso(200), link_status: "unknown", link_checked_at: null, tags: ["life"], blog: enBlog }],
+    data: [{ id: "3", title: "Older post", url: "https://en.example.com/older/?utm_source=rss", excerpt: "Old.", image_url: null, published_at: iso(200), link_status: "unknown", link_checked_at: null, tags: ["life"], blog: enBlog }],
     next_cursor: null,
   },
 };

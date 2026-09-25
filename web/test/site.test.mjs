@@ -187,7 +187,7 @@ describe("content", () => {
     const { html } = await page("/en/");
     assert.match(html, /<article class="[^"]*" lang="zh-CN">/);
     assert.match(html, /<article class="[^"]*" lang="en">/);
-    assert.match(html, /<a href="https:\/\/zh\.example\.com\/posts\/cache\/" target="_blank" rel="noopener"/);
+    assert.match(html, /<a href="https:\/\/zh\.example\.com\/posts\/cache\/\?utm_source=explore\.example\.org" target="_blank" rel="noopener"/);
     assert.match(html, /缓存可以随时删掉/, "titles are never translated");
   });
 
@@ -218,6 +218,17 @@ describe("content", () => {
     assert.match(html, /<a href="\/\?tag=ops" class="[^"]*">运维与云<\/a>/);
     const en = (await page("/en/blogs/zh.example.com")).html;
     assert.match(en, /<a href="\/en\/\?tag=backend" class="[^"]*">Backend<\/a>/);
+  });
+
+  test("links to blogs name Explore as their source, feed links stay clean", async () => {
+    const { html } = await page("/");
+    assert.match(html, /href="https:\/\/zh\.example\.com\/posts\/cache\/\?utm_source=explore\.example\.org"/);
+    assert.match(html, /href="https:\/\/en\.example\.com\/feeds\/\?p=7&amp;utm_source=explore\.example\.org#notes"/, "after the query, before the fragment");
+    const older = (await page("/?cursor=page-two")).html;
+    assert.match(older, /href="https:\/\/en\.example\.com\/older\/\?utm_source=rss"/, "the author's own utm_source stays");
+    const blog = (await page("/blogs/zh.example.com")).html;
+    assert.match(blog, /href="https:\/\/zh\.example\.com\/\?utm_source=explore\.example\.org"/);
+    assert.match(blog, /href="https:\/\/zh\.example\.com\/rss\.xml"/);
   });
 
   test("entry thumbnails use the local image endpoint", async () => {

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
+import { withSource } from "@/lib/config";
 import type { BlogView, Loaded } from "@/lib/loaders";
 import { tagNames } from "@/lib/tags";
 import { withQuery } from "@/lib/utils";
@@ -46,7 +47,7 @@ const description = data
         </header>
         {data.blog.description && <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground" lang={data.blog.language}>{data.blog.description}</p>}
         <div class="mt-4 flex flex-wrap items-center gap-2">
-          <ExternalLink lang={lang} href={data.blog.site_url} class={buttonVariants({ size: "sm" })}>
+          <ExternalLink lang={lang} href={withSource(data.blog.site_url)} class={buttonVariants({ size: "sm" })}>
             {t.blog.visit}
           </ExternalLink>
           <ExternalLink lang={lang} href={data.blog.feed_url} class={buttonVariants({ size: "sm", variant: "outline" })}>

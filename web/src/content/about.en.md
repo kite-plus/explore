@@ -2,7 +2,7 @@ Explore gathers the public feeds of independent blogs and shows their latest pos
 
 ## What we show
 
-Each post shows its title, its publish date, an excerpt of at most 140 characters and, when its feed has one, a thumbnail. Clicking a title takes you straight to the author's own site: the link is the original address, with no redirect page in between and no tracking parameters added.
+Each post shows its title, its publish date, an excerpt of at most 140 characters and, when its feed has one, a thumbnail. Clicking a title takes you straight to the author's own site: the link is the original address, with no redirect page in between. It only adds `utm_source=explore.kite.plus` so the author's analytics can tell the visit came from Explore; nothing in it identifies you.
 
 The status beside a post comes from a link check. Click “Awaiting check” to check a post immediately. “Possibly unavailable” means the source returned 404 or 410 to the checker; readers may get a different result, and the original link remains available.
 

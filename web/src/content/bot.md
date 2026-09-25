@@ -22,6 +22,7 @@ User-Agent: KiteExplore/<version> (+https://explore.kite.plus/bot)
 - **站点地图**：每个博客每天读一次，最多 20 个文件；找不到时 7 天后再试。
 - **条件请求**：会带上次的 `Last-Modified`（没有时带 `ETag`），没有变化时你的服务器只需回 `304`。
 - **robots.txt**：遵守 RFC 9309。有针对 `KiteExplore` 的规则组就用它，没有就用 `*` 组。
+- **来自 Explore 的访问**：读者从 Explore 点进你网站的链接带 `utm_source=explore.kite.plus`（已经带了 `utm_source` 的链接不变），统计工具里能看到这些访问来自 Explore。链接里没有任何能识别读者的信息。
 - **退出**：在 robots.txt 里写上 `User-agent: KiteExplore` 和 `Disallow: /`，或者对抓取器返回 `410 Gone`，或者[提交一个 Issue](https://github.com/kite-plus/explore/issues)。你的博客会从 Explore 移除，之后也不会再被收录。
 
 **English** · KiteExplore is the crawler of [Explore](/en/). It reads the public feeds (RSS, Atom or JSON Feed) and sitemaps of blogs whose authors submitted them and that passed review. It uses them to show each post's title, publish date, short excerpt and thumbnail, and readers click through to your site to read. It does not persist post content or image files.
@@ -42,4 +43,5 @@ To tag posts, we send their feed titles, short excerpts, categories and blog lan
 - **Sitemaps**: read once a day per blog, at most 20 files; when there is none, it tries again after 7 days.
 - **Conditional requests**: it sends the last `Last-Modified`, or the `ETag` when there is none, so your server can answer `304` when nothing changed.
 - **robots.txt**: follows RFC 9309, using a group for `KiteExplore` when there is one and the `*` group otherwise.
+- **Visits from Explore**: links readers follow from Explore to your site carry `utm_source=explore.kite.plus` (links that already set `utm_source` stay as they are), so your analytics can tell these visits came from Explore. Nothing in the link identifies the reader.
 - **Leaving**: add `User-agent: KiteExplore` with `Disallow: /` to robots.txt, answer the crawler with `410 Gone`, or [open an issue](https://github.com/kite-plus/explore/issues). Your blog is removed from Explore and will not be listed again.

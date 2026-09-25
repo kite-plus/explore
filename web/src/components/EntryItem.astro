@@ -3,6 +3,7 @@ import BlogAvatar from "@/components/BlogAvatar.astro";
 import { CircleCheck, CircleHelp, CircleX } from "lucide-react";
 import ExternalLink from "@/components/ExternalLink.astro";
 import { dict, localePath, type Lang } from "@/i18n";
+import { withSource } from "@/lib/config";
 import { relativeTime } from "@/lib/format";
 import type { Entry } from "@/lib/types";
 import { withQuery } from "@/lib/utils";
@@ -40,7 +41,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
 <article class="flex gap-4 py-5" lang={contentLang}>
   <div class="min-w-0 flex-1">
     <h2 class="text-base leading-snug font-medium">
-      <ExternalLink lang={lang} href={entry.url} class="hover:underline">{entry.title}</ExternalLink>
+      <ExternalLink lang={lang} href={withSource(entry.url)} class="hover:underline">{entry.title}</ExternalLink>
     </h2>
     {entry.excerpt && <p class="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{entry.excerpt}</p>}
     <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" lang={t.htmlLang}>
