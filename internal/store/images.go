@@ -18,7 +18,7 @@ func (s *Store) VisibleImageURL(ctx context.Context, entryID int64) (string, err
 		FROM entries e JOIN blogs b ON b.id = e.blog_id
 		WHERE e.id = @entry_id AND `+shownImage+` IS NOT NULL
 		  AND `+visible+`
-		  AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+		  AND `+notSuppressed+`
 		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))`,
 		pgx.NamedArgs{"entry_id": entryID, "unhealthy_after": seconds(policy.UnhealthyAfter),
 			"future_tolerance": seconds(policy.FutureTolerance)}).Scan(&source)

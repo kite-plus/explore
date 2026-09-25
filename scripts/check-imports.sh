@@ -23,7 +23,7 @@ reaches() {
 }
 
 # 1. Pure packages do no I/O: no outer layers, no web framework, no driver.
-for pure in internal/policy internal/model internal/i18n internal/feed internal/normalize internal/publicfeed; do
+for pure in internal/policy internal/model internal/i18n internal/feed internal/normalize internal/publicfeed internal/sitemap; do
     [ -d "$pure" ] || continue
     d=$(deps "$pure")
     for bad in fetch check store worker api cli config; do

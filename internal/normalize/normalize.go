@@ -181,12 +181,18 @@ func registrable(host string) (string, bool) {
 // normalized so trivial differences do not create duplicates.
 func identity(id string, link *url.URL) string {
 	if id != "" {
-		if len(id) > policy.IdentityMaxBytes {
-			sum := sha256.Sum256([]byte(id))
-			return hex.EncodeToString(sum[:])
-		}
-		return id
+		return capIdentity(id)
 	}
+	return capIdentity(normalLink(link))
+}
+
+// SitemapIdentity is the identity of a post found through its blog's
+// sitemap: the normalized link, marked so it never meets a feed's own ID.
+func SitemapIdentity(link *url.URL) string {
+	return capIdentity("sitemap:" + normalLink(link))
+}
+
+func normalLink(link *url.URL) string {
 	u := *link
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
@@ -195,7 +201,11 @@ func identity(id string, link *url.URL) string {
 	}
 	u.Fragment = ""
 	u.RawFragment = ""
-	s := u.String()
+	return u.String()
+}
+
+// capIdentity hashes an identity too long to store.
+func capIdentity(s string) string {
 	if len(s) > policy.IdentityMaxBytes {
 		sum := sha256.Sum256([]byte(s))
 		return hex.EncodeToString(sum[:])

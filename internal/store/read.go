@@ -71,7 +71,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 			FROM entries e
 			JOIN blogs b ON b.id = e.blog_id
 			WHERE `+visible+`
-			  AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+			  AND `+notSuppressed+`
 			  AND e.date_trusted
 			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
@@ -135,7 +135,7 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 			SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 			       (SELECT max(e.published_at) FROM entries e
 			        WHERE e.blog_id = b.id AND e.date_trusted
-			          AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+			          AND `+notSuppressed+`
 			          AND e.published_at <= now() + (@future_tolerance * interval '1 second')) AS last_published_at
 			FROM blogs b
 			WHERE `+visible+`
@@ -193,7 +193,7 @@ func (s *Store) VisibleBlogPage(ctx context.Context, host string, q BlogPageQuer
 		SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 		       (SELECT max(e.published_at) FROM entries e
 		        WHERE e.blog_id = b.id AND e.date_trusted
-		          AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+		          AND `+notSuppressed+`
 		          AND e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		FROM blogs b
 		WHERE b.host = @host AND `+visible, args)
@@ -212,7 +212,7 @@ func (s *Store) VisibleBlogPage(ctx context.Context, host string, q BlogPageQuer
 		SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, ''), coalesce(`+shownImage+`, ''),
 		       e.published_at, e.date_trusted, e.tags, e.link_status, e.link_checked_at
 		FROM entries e
-		WHERE e.blog_id = @id AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+		WHERE e.blog_id = @id AND `+notSuppressed+`
 		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		  AND (NOT @has_cursor OR (coalesce(e.published_at, 'epoch'), e.id) < (@cursor_at, @cursor_id))
 		ORDER BY coalesce(e.published_at, 'epoch') DESC, e.id DESC

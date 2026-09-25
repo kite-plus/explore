@@ -11,6 +11,7 @@ import (
 // PageJob is an entry whose page head is due to be read.
 type PageJob struct {
 	EntryID int64
+	BlogID  int64
 	URL     string
 }
 
@@ -42,7 +43,7 @@ func (s *Store) ClaimPages(ctx context.Context, limit int) ([]PageJob, error) {
 		UPDATE entries e
 		SET page_next_check_at = now() + (@lease * interval '1 second')
 		FROM claimed WHERE e.id = claimed.id
-		RETURNING e.id, e.url`, pgx.NamedArgs{
+		RETURNING e.id, e.blog_id, e.url`, pgx.NamedArgs{
 		"limit": limit, "lease": seconds(policy.PageCheckLease), "unhealthy_after": seconds(policy.UnhealthyAfter),
 	})
 	if err != nil {
@@ -50,7 +51,7 @@ func (s *Store) ClaimPages(ctx context.Context, limit int) ([]PageJob, error) {
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (PageJob, error) {
 		var job PageJob
-		err := row.Scan(&job.EntryID, &job.URL)
+		err := row.Scan(&job.EntryID, &job.BlogID, &job.URL)
 		return job, err
 	})
 }

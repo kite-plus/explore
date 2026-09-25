@@ -135,7 +135,7 @@ func (s *Store) RemoveSubscription(ctx context.Context, userID, host string) err
 func (s *Store) Subscriptions(ctx context.Context, userID string) ([]ListedBlog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted
-		 AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)) AS last_published_at
+		 AND `+notSuppressed+`) AS last_published_at
 		FROM subscriptions s JOIN blogs b ON b.id = s.blog_id
 		WHERE s.user_id = $1 ORDER BY s.created_at DESC, b.id DESC`, userID)
 	if err != nil {
@@ -159,7 +159,7 @@ func (s *Store) FollowingStream(ctx context.Context, userID string, q StreamQuer
 			e.tags, e.link_status, e.link_checked_at, b.host, b.name, b.site_url, b.feed_url, b.language
 		FROM subscriptions sub JOIN blogs b ON b.id = sub.blog_id JOIN entries e ON e.blog_id = b.id
 		WHERE sub.user_id = @user_id AND `+visible+`
-		AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+		AND `+notSuppressed+`
 		AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 		AND (@tag::text = '' OR @tag = ANY(e.tags))
@@ -243,7 +243,7 @@ func (s *Store) BlogClaimHash(ctx context.Context, userID, host string) ([sha256
 func (s *Store) OwnedBlogs(ctx context.Context, userID string) ([]ListedBlog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
 		(SELECT max(e.published_at) FROM entries e WHERE e.blog_id = b.id AND e.date_trusted
-		 AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity))
+		 AND `+notSuppressed+`)
 		FROM blog_owners o JOIN blogs b ON b.id = o.blog_id WHERE o.user_id = $1 ORDER BY b.host`, userID)
 	if err != nil {
 		return nil, err

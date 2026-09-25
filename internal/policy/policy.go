@@ -69,12 +69,29 @@ const (
 	LinkChecksPerMinute = 8
 
 	// An article page is read, head only, where its feed gives no image or
-	// cuts the excerpt short.
-	PageHeadBytes       = 256 << 10
-	PageCheckTimeout    = 12 * time.Second
-	PageCheckLease      = 2 * time.Minute
-	PageRetryInterval   = 6 * time.Hour
-	PageChecksPerMinute = 8
+	// cuts the excerpt short, or to learn a post its sitemap lists. A round
+	// reads at most one page per blog, and up to PageChecksPerRound of each
+	// kind.
+	PageHeadBytes      = 256 << 10
+	PageCheckTimeout   = 12 * time.Second
+	PageCheckLease     = 2 * time.Minute
+	PageRetryInterval  = 6 * time.Hour
+	PageRoundEvery     = 20 * time.Second
+	PageChecksPerRound = 30
+
+	// A blog's sitemap brings in the posts its feed no longer carries.
+	SitemapCheckEvery = 24 * time.Hour
+	SitemapMissRetry  = 7 * 24 * time.Hour
+	SitemapLease      = 10 * time.Minute
+	SitemapsPerMinute = 4
+	SitemapMaxBytes   = 10 << 20 // one sitemap file, after gunzip
+	SitemapMaxFiles   = 20       // files read for one blog
+	SitemapMaxEntries = 50_000   // one file, the protocol's own limit
+	SitemapMaxListed  = 100_000  // addresses read for one blog, all files together
+	SitemapMaxPosts   = 1000     // post addresses kept per blog
+	// A post read from its own page is known to answer, so its link is
+	// checked rarely.
+	SitemapLinkCheckInterval = 30 * 24 * time.Hour
 )
 
 // UserAgentToken is the product token robots.txt rules address.

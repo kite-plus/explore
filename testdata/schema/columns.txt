@@ -28,6 +28,7 @@ blogs.name text
 blogs.next_fetch_at timestamp with time zone
 blogs.show_excerpt boolean
 blogs.site_url text
+blogs.sitemap_next_check_at timestamp with time zone
 blogs.status text
 blogs.status_note text
 blogs.updated_at timestamp with time zone
@@ -45,11 +46,13 @@ entries.page_excerpt text
 entries.page_image_url text
 entries.page_next_check_at timestamp with time zone
 entries.published_at timestamp with time zone
+entries.source text
 entries.synced_at timestamp with time zone
 entries.tagged_at timestamp with time zone
 entries.tags ARRAY
 entries.title text
 entries.url text
+entries.url_key text
 excluded_hosts.created_at timestamp with time zone
 excluded_hosts.host text
 excluded_hosts.note text
@@ -69,6 +72,11 @@ sessions.user_id uuid
 setup_code.code text
 setup_code.created_at timestamp with time zone
 setup_code.singleton boolean
+sitemap_urls.blog_id bigint
+sitemap_urls.lastmod timestamp with time zone
+sitemap_urls.next_check_at timestamp with time zone
+sitemap_urls.url text
+sitemap_urls.url_key text
 submissions.blog_id bigint
 submissions.check_report jsonb
 submissions.created_at timestamp with time zone
@@ -89,6 +97,7 @@ suppressed_entries.created_at timestamp with time zone
 suppressed_entries.identity text
 suppressed_entries.reason text
 suppressed_entries.reviewed_by text
+suppressed_entries.url_key text
 system_settings.key text
 system_settings.updated_at timestamp with time zone
 system_settings.updated_by text

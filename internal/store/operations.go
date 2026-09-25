@@ -155,14 +155,15 @@ type AdminEntry struct {
 func (s *Store) AdminEntries(ctx context.Context, search string, limit, offset int) ([]AdminEntry, int64, error) {
 	search = strings.TrimSpace(search)
 	filter := `FROM entries e JOIN blogs b ON b.id = e.blog_id
-		LEFT JOIN suppressed_entries se ON se.blog_id = e.blog_id AND se.identity = e.identity
+		LEFT JOIN LATERAL (SELECT se.reason FROM suppressed_entries se
+			WHERE se.blog_id = e.blog_id AND (se.identity = e.identity OR se.url_key = e.url_key) LIMIT 1) se ON true
 		WHERE $1 = '' OR e.title ILIKE '%' || $1 || '%' OR b.host ILIKE '%' || $1 || '%'`
 	var total int64
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+filter, search).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := s.pool.Query(ctx, `SELECT e.id, b.host, b.name, e.identity, e.title, e.url, e.published_at, e.synced_at, e.tags,
-		se.blog_id IS NOT NULL, coalesce(se.reason, '') `+filter+`
+		se.reason IS NOT NULL, coalesce(se.reason, '') `+filter+`
 		ORDER BY e.published_at DESC NULLS LAST, e.id DESC LIMIT $2 OFFSET $3`, search, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -178,8 +179,8 @@ func (s *Store) AdminEntries(ctx context.Context, search string, limit, offset i
 
 func (s *Store) SetEntryHidden(ctx context.Context, id int64, hidden bool, reason, reviewer string) error {
 	var blogID int64
-	var identity string
-	err := s.pool.QueryRow(ctx, `SELECT blog_id, identity FROM entries WHERE id = $1`, id).Scan(&blogID, &identity)
+	var identity, urlKey string
+	err := s.pool.QueryRow(ctx, `SELECT blog_id, identity, url_key FROM entries WHERE id = $1`, id).Scan(&blogID, &identity, &urlKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -187,10 +188,11 @@ func (s *Store) SetEntryHidden(ctx context.Context, id int64, hidden bool, reaso
 		return err
 	}
 	if hidden {
-		_, err = s.pool.Exec(ctx, `INSERT INTO suppressed_entries(blog_id, identity, reason, reviewed_by) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (blog_id, identity) DO UPDATE SET reason = excluded.reason, reviewed_by = excluded.reviewed_by`, blogID, identity, reason, reviewer)
+		_, err = s.pool.Exec(ctx, `INSERT INTO suppressed_entries(blog_id, identity, url_key, reason, reviewed_by) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (blog_id, identity) DO UPDATE SET url_key = excluded.url_key, reason = excluded.reason, reviewed_by = excluded.reviewed_by`,
+			blogID, identity, urlKey, reason, reviewer)
 	} else {
-		_, err = s.pool.Exec(ctx, `DELETE FROM suppressed_entries WHERE blog_id = $1 AND identity = $2`, blogID, identity)
+		_, err = s.pool.Exec(ctx, `DELETE FROM suppressed_entries WHERE blog_id = $1 AND (identity = $2 OR url_key = $3)`, blogID, identity, urlKey)
 	}
 	return err
 }
@@ -278,8 +280,10 @@ func (s *Store) ReviewTakedown(ctx context.Context, id, decision, note, reviewer
 			if target == "blog" {
 				_, err = tx.Exec(ctx, `UPDATE blogs SET status = 'paused', status_note = $2, updated_at = now() WHERE id = $1`, blogID, reason)
 			} else {
-				_, err = tx.Exec(ctx, `INSERT INTO suppressed_entries(blog_id, identity, reason, reviewed_by) VALUES ($1, $2, $3, $4)
-					ON CONFLICT (blog_id, identity) DO UPDATE SET reason = excluded.reason, reviewed_by = excluded.reviewed_by`, blogID, *identity, reason, reviewer)
+				_, err = tx.Exec(ctx, `INSERT INTO suppressed_entries(blog_id, identity, url_key, reason, reviewed_by)
+					VALUES ($1, $2, (SELECT url_key FROM entries WHERE blog_id = $1 AND identity = $2), $3, $4)
+					ON CONFLICT (blog_id, identity) DO UPDATE SET url_key = coalesce(excluded.url_key, suppressed_entries.url_key),
+					    reason = excluded.reason, reviewed_by = excluded.reviewed_by`, blogID, *identity, reason, reviewer)
 			}
 			if err != nil {
 				return err

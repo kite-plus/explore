@@ -20,7 +20,7 @@ type TagJob struct {
 // newest first, so a rebuilt cache fills the stream from the top.
 func (s *Store) Untagged(ctx context.Context, limit int) ([]TagJob, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT e.id, e.title, coalesce(e.excerpt, ''), e.categories, b.language, b.default_tags
+		SELECT e.id, e.title, coalesce(e.excerpt, e.page_excerpt, ''), e.categories, b.language, b.default_tags
 		FROM entries e
 		JOIN blogs b ON b.id = e.blog_id
 		WHERE e.tagged_at IS NULL AND b.status = 'active' AND b.gone_since IS NULL

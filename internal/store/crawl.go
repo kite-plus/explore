@@ -150,8 +150,22 @@ func (s *Store) SyncSnapshot(ctx context.Context, blogID int64, entries []model.
 		}
 		if _, err := tx.Exec(ctx, `
 			DELETE FROM entries
-			WHERE blog_id = @blog_id AND NOT (identity = ANY (@identities::text[]))`,
+			WHERE blog_id = @blog_id AND source = 'feed' AND NOT (identity = ANY (@identities::text[]))`,
 			pgx.NamedArgs{"blog_id": blogID, "identities": identities}); err != nil {
+			return err
+		}
+		// The feed says more about a post than its page does. The sitemap
+		// address is read again once the feed drops the post.
+		if _, err := tx.Exec(ctx, `
+			WITH covered AS (
+				DELETE FROM entries s
+				WHERE s.blog_id = @blog_id AND s.source = 'sitemap'
+				  AND EXISTS (SELECT 1 FROM entries f WHERE f.blog_id = s.blog_id AND f.source = 'feed' AND f.url_key = s.url_key)
+				RETURNING s.url_key
+			)
+			UPDATE sitemap_urls SET next_check_at = now()
+			WHERE blog_id = @blog_id AND url_key IN (SELECT url_key FROM covered)`,
+			pgx.NamedArgs{"blog_id": blogID}); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
@@ -218,7 +232,10 @@ func (s *Store) RecordFailure(ctx context.Context, blogID int64, f Failure) erro
 // entries are fetched in full, so each comes back on its next fetch. See
 // docs/design/architecture.md section 0.1.
 func (s *Store) ClearCache(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `TRUNCATE entries`)
+	if _, err := s.pool.Exec(ctx, `TRUNCATE entries, sitemap_urls`); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `UPDATE blogs SET sitemap_next_check_at = now()`)
 	return err
 }
 

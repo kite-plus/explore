@@ -51,9 +51,10 @@ type Worker struct {
 
 	lastMaintenance time.Time
 	lastLinkCheck   time.Time
-	lastPageCheck   time.Time
-	tagFailures     int
-	nextTagAt       time.Time
+	// Used by pageLoop alone.
+	lastSitemapCheck time.Time
+	tagFailures      int
+	nextTagAt        time.Time
 }
 
 // Run polls until ctx is canceled.
@@ -62,6 +63,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	defer wg.Wait()
 	workerID := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
 	wg.Go(func() { w.heartbeatLoop(ctx, workerID) })
+	wg.Go(func() { w.pageLoop(ctx) })
 	if w.Tagger != nil {
 		wg.Go(func() { w.tagLoop(ctx) })
 	}
@@ -83,7 +85,6 @@ func (w *Worker) Run(ctx context.Context) error {
 			}
 		}
 		w.checkLinks(ctx)
-		w.checkPages(ctx)
 		w.maintain(ctx)
 		select {
 		case <-ctx.Done():

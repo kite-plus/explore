@@ -17,7 +17,7 @@ Explore is the discovery side of [Kite Plus](https://github.com/kite-plus).
 - **Reading**: the latest posts from every listed blog in one stream, filtered by language or topic; a directory with a page for each blog; the stream as RSS at `/feed.xml` and the whole blog list as OPML at `/blogs.opml`. The interface is in Chinese and English.
 - **Accounts, optional**: follow blogs for a stream of your own, claim your blog, report a problem. Reading needs no account.
 - **Joining**: authors submit a blog and its feed is checked on the spot, with what to fix if it fails. `explore check <url>` runs the same check from a terminal.
-- **Crawling**: follows robots.txt, makes conditional requests and respects Retry-After; posts that link outside the blog's own site are dropped.
+- **Crawling**: reads each blog's feed, and its sitemap for older posts, taking only the metadata in a post page's `<head>`; follows robots.txt and robots meta tags, makes conditional requests and respects Retry-After; posts that link outside the blog's own site are dropped.
 - **Admin console**: review submissions, manage blogs and posts, handle takedowns and users, watch the crawl queue, and switch registration, submissions and crawling on or off.
 
 ## Status

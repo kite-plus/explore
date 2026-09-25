@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jimsmart/grobotstxt"
@@ -21,23 +22,10 @@ type robotsEntry struct {
 // robotsAllow applies RFC 9309: a 4xx robots.txt allows everything, while a
 // 5xx or an unreachable server means nothing may be fetched.
 func (c *Client) robotsAllow(ctx context.Context, u *url.URL) error {
-	origin := u.Scheme + "://" + u.Host
-
-	c.mu.Lock()
-	entry, ok := c.robots[origin]
-	c.mu.Unlock()
-	if !ok || c.now().After(entry.expires) {
-		var err error
-		entry, err = c.fetchRobots(ctx, origin)
-		if err != nil {
-			// Not cached: the next attempt asks again.
-			return err
-		}
-		c.mu.Lock()
-		c.robots[origin] = entry
-		c.mu.Unlock()
+	entry, err := c.robotsFor(ctx, u.Scheme+"://"+u.Host)
+	if err != nil {
+		return err
 	}
-
 	if entry.allowAll {
 		return nil
 	}
@@ -46,6 +34,49 @@ func (c *Client) robotsAllow(ctx context.Context, u *url.URL) error {
 		return nil
 	}
 	return &RobotsError{Explicit: m.EverSeenSpecificAgent()}
+}
+
+// Sitemaps returns the sitemaps named in the robots.txt of site's origin,
+// read from the same cache as its rules.
+func (c *Client) Sitemaps(ctx context.Context, site *url.URL) ([]string, error) {
+	entry, err := c.robotsFor(ctx, site.Scheme+"://"+site.Host)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for line := range strings.Lines(entry.body) {
+		if hash := strings.IndexByte(line, '#'); hash >= 0 {
+			line = line[:hash]
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "sitemap") {
+			continue
+		}
+		u, err := site.Parse(strings.TrimSpace(value))
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			continue
+		}
+		out = append(out, u.String())
+	}
+	return out, nil
+}
+
+func (c *Client) robotsFor(ctx context.Context, origin string) (robotsEntry, error) {
+	c.mu.Lock()
+	entry, ok := c.robots[origin]
+	c.mu.Unlock()
+	if ok && !c.now().After(entry.expires) {
+		return entry, nil
+	}
+	entry, err := c.fetchRobots(ctx, origin)
+	if err != nil {
+		// Not cached: the next attempt asks again.
+		return robotsEntry{}, err
+	}
+	c.mu.Lock()
+	c.robots[origin] = entry
+	c.mu.Unlock()
+	return entry, nil
 }
 
 func (c *Client) fetchRobots(ctx context.Context, origin string) (robotsEntry, error) {

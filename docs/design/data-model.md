@@ -110,6 +110,8 @@ CREATE TABLE entries (
     page_image_url     text,
     page_excerpt       text        CHECK (char_length(page_excerpt) <= 140),
     page_next_check_at timestamptz DEFAULT now(),
+    source             text        NOT NULL DEFAULT 'feed' CHECK (source IN ('feed', 'sitemap')),
+    url_key            text        GENERATED ALWAYS AS (entry_url_key(url)) STORED,
 
     UNIQUE (blog_id, identity),
     CHECK (published_at IS NOT NULL OR NOT date_trusted)
@@ -121,17 +123,38 @@ CREATE INDEX entries_tags     ON entries USING gin (tags);
 CREATE INDEX entries_untagged ON entries (published_at DESC NULLS LAST, id DESC) WHERE tagged_at IS NULL;
 CREATE INDEX entries_link_due ON entries (link_next_check_at, id);
 CREATE INDEX entries_page_due ON entries (page_next_check_at) WHERE page_next_check_at IS NOT NULL;
+CREATE INDEX entries_url_key  ON entries (blog_id, url_key);
 ```
 
 - **没有正文字段**，`excerpt` 在数据库层面限制在 140 字以内：不是"约定不存"，而是"存不进去"。140 是 [architecture.md §6.5](architecture.md#6-抓取与展示规则) 的 `[待定]` 值，E0 改动它需要一个迁移。
 - `image_url` 只缓存订阅源给出的图片地址，不保存图片文件；代理加载图片时仅在内存中短时缓存。作者关闭摘要时也不展示缩略图。
 - `identity` 的取法见 [worker.md §5](worker.md#5-规范化)。
 - `date_trusted` 由规范化计算（没有日期、零值日期、"日期不可信"时为 `false`）；未来时间不在入库时判断，而在查询时比较 `now()`，因为它会随时间变化。
-- 每个博客最多 20 行（[architecture.md §0.1](architecture.md#0-两个核心判断) 的 N）。1,000 个博客约 2 万行，完全不需要分区。
+- 每个博客的行数是订阅源里的文章（通常不到 20 篇），加上站点地图补上的历史文章，后者最多 1,000 篇（[architecture.md §0.1](architecture.md#0-两个核心判断)）。1,000 个博客最多约一百万行，按博客的索引够用，不需要分区。
+- `source` 标出文章来自订阅源（`feed`）还是站点地图（`sitemap`）。同一篇文章两处都有时只留订阅源那一行：`url_key` 由 `entry_url_key()` 从链接算出（去掉协议、`www.`、`#` 片段和结尾斜杠，转小写），订阅源同步时删掉比对键相同的站点地图行。站点地图文章的 `identity` 以 `sitemap:` 开头，不会撞上订阅源自带的 ID。
+- `suppressed_entries` 同时记下被隐藏文章的 `url_key`，文章从订阅源挪到站点地图、换了 `identity` 之后仍然隐藏。
 - `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
 - `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
 - `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
 - `page_image_url`、`page_excerpt` 是订阅源缺图或摘要被截断时，从文章页 `<head>` 读到的封面地址和描述（[worker.md §12](worker.md#12-读文章页)）；`page_next_check_at` 是下次该读的时间，读过后为空。它们也是缓存：同步时链接不变就保留，链接变了就清空重读。展示时订阅源自己的图片和完整摘要优先。
+
+### 2.2.1 `sitemap_urls`
+
+博客站点地图里、看上去像文章的地址（[worker.md §13](worker.md#13-站点地图)）。和 `entries` 一样是缓存，清空后由读站点地图重新填上。
+
+```sql
+CREATE TABLE sitemap_urls (
+    blog_id       bigint      NOT NULL REFERENCES blogs (id) ON DELETE CASCADE,
+    url           text        NOT NULL CHECK (char_length(url) <= 2000),
+    url_key       text        GENERATED ALWAYS AS (entry_url_key(url)) STORED,
+    lastmod       timestamptz,
+    next_check_at timestamptz DEFAULT now(),
+    PRIMARY KEY (blog_id, url)
+);
+```
+
+- `next_check_at` 是该读这个地址的页面的时间，读过后为空；站点地图给出新的 `lastmod` 时重新到期。订阅源里已有这篇文章时不读，等它挤出订阅源再读。
+- 站点地图不再列出的地址连同读出的文章一起删除。`blogs.sitemap_next_check_at` 是下次读站点地图的时间：每天一次，找不到站点地图时七天后再试。
 
 ### 2.3 `submissions`
 

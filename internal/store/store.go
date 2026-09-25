@@ -136,3 +136,9 @@ const (
 	shownExcerpt = `CASE WHEN e.excerpt IS NULL OR ` + cutExcerpt + ` THEN coalesce(CASE WHEN (SELECT count(*) FROM entries o
 		WHERE o.blog_id = e.blog_id AND o.page_excerpt = e.page_excerpt) = 1 THEN e.page_excerpt END, e.excerpt) ELSE e.excerpt END`
 )
+
+// notSuppressed keeps out entries a maintainer hid. A hidden post stays
+// hidden when it turns up again from the sitemap, under another identity but
+// the same address.
+const notSuppressed = `NOT EXISTS (SELECT 1 FROM suppressed_entries se
+	WHERE se.blog_id = e.blog_id AND (se.identity = e.identity OR se.url_key = e.url_key))`
