@@ -262,7 +262,7 @@ func (c *Client) do(ctx context.Context, u *url.URL, r Request, robotsFile bool)
 	}
 	src := io.LimitReader(resp.Body, limit+1)
 	if r.StopAfter != "" {
-		src = &stopReader{r: src, marker: bytes.ToLower([]byte(r.StopAfter))}
+		src = &stopReader{r: src, marker: asciiLower([]byte(r.StopAfter))}
 	}
 	body, err := io.ReadAll(src)
 	if err != nil {
@@ -385,11 +385,11 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 }
 
 // stopReader ends a body at the end of the first match of marker, which is
-// lower case.
+// ASCII lower case.
 type stopReader struct {
 	r      io.Reader
 	marker []byte
-	tail   []byte // the last bytes read, lower case, for a match split across reads
+	tail   []byte // the last bytes read, folded, for a match split across reads
 	done   bool
 }
 
@@ -401,11 +401,25 @@ func (s *stopReader) Read(p []byte) (int, error) {
 	if n == 0 {
 		return 0, err
 	}
-	seen := append(bytes.Clone(s.tail), bytes.ToLower(p[:n])...)
+	// Folding only ASCII keeps every byte in place, so an index in seen maps
+	// back to p; bytes.ToLower changes the length of some other text.
+	seen := append(bytes.Clone(s.tail), asciiLower(p[:n])...)
 	if i := bytes.Index(seen, s.marker); i >= 0 {
 		s.done = true
 		return i + len(s.marker) - len(s.tail), nil
 	}
 	s.tail = seen[max(0, len(seen)-len(s.marker)+1):]
 	return n, err
+}
+
+// asciiLower returns a copy of b with its ASCII capitals in lower case.
+func asciiLower(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return out
 }

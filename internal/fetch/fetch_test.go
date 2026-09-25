@@ -315,6 +315,25 @@ func TestStopReaderFindsSplitMarkers(t *testing.T) {
 	}
 }
 
+func TestStopReaderKeepsByteOffsets(t *testing.T) {
+	// Lowering these would change their length: an invalid byte becomes
+	// U+FFFD, the Kelvin sign becomes k, a dotted capital I gains a mark.
+	for _, head := range []string{"<head>\xff\xfe", "<head>KK", "<title>İstanbul</title>", "<title>Straße \xe4</title>"} {
+		want := head + "</HEAD><Body"
+		readers := map[string]func(string) io.Reader{
+			"whole":  func(s string) io.Reader { return strings.NewReader(s) },
+			"bytes":  func(s string) io.Reader { return iotest.OneByteReader(strings.NewReader(s)) },
+			"halves": func(s string) io.Reader { return iotest.HalfReader(strings.NewReader(s)) },
+		}
+		for name, reader := range readers {
+			got, err := io.ReadAll(&stopReader{r: reader(want + " class=x>rest"), marker: []byte("<body")})
+			if err != nil || string(got) != want {
+				t.Errorf("%s %q: read %q, %v", name, head, got, err)
+			}
+		}
+	}
+}
+
 func TestGetRetryAfter(t *testing.T) {
 	srv, c := newServer(t, "", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "120")

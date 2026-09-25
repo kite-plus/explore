@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The crawler could crash while reading a post's page when the part before `<body>` held invalid UTF-8 or one of a few special characters, such as the Kelvin sign. This came with 0.1.4.
+
 ## [0.1.5] - 2026-09-25
 
 This release tidies the site's navigation: Latest, Recommended and Following sit under one Discover item, and the footer's source link becomes GitHub with its mark. Releases are complete now too: every version gets a GitHub Release with native builds for Linux, macOS and Windows.
