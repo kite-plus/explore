@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -82,7 +83,7 @@ func (w *Worker) readPost(ctx context.Context, job store.SitemapPageJob) store.S
 	if !ok {
 		return store.SitemapPage{Done: done, Identity: identity}
 	}
-	title := cleanTitle(h.title, job.BlogName)
+	title := cleanTitle(h.title, job.BlogName, h.siteName)
 	if h.noIndex || title == "" || (!h.article && h.published == nil) {
 		return store.SitemapPage{Done: true, Identity: identity}
 	}
@@ -99,7 +100,7 @@ func (w *Worker) readHead(ctx context.Context, pageURL string) (h pageHead, ok, 
 	ctx, cancel := context.WithTimeout(ctx, policy.PageCheckTimeout)
 	defer cancel()
 	resp, err := w.Fetch.Get(ctx, fetch.Request{
-		URL: pageURL, Accept: fetch.AcceptHTML, MaxBytes: policy.PageHeadBytes, Truncate: true,
+		URL: pageURL, Accept: fetch.AcceptHTML, MaxBytes: policy.PageHeadBytes, Truncate: true, StopAfter: "<body",
 	})
 	switch {
 	case errors.Is(err, fetch.ErrRobotsDisallowed), errors.Is(err, fetch.ErrBadURL),
@@ -123,6 +124,7 @@ func (w *Worker) readHead(ctx context.Context, pageURL string) (h pageHead, ok, 
 // already empty where the page's robots rules forbid them.
 type pageHead struct {
 	image, excerpt, title string
+	siteName              string // og:site_name
 	published             *time.Time
 	article               bool // og:type or JSON-LD calls it an article
 	noIndex               bool // it asks to stay out of indexes
@@ -140,7 +142,7 @@ func pageFromHTML(body []byte, pageURL string) (image, excerpt string) {
 // nosnippet the description, noimageindex the image.
 func parseHead(body []byte, pageURL string) pageHead {
 	var h pageHead
-	var ogImage, twitterImage, ogDescription, description, twitterDescription, ogTitle, titleTag, publishedTime string
+	var ogImage, twitterImage, ogDescription, description, twitterDescription, ogTitle, titleTag, publishedTime, pageTime string
 	allowImage, allowSnippet := true, true
 	tokens := html.NewTokenizer(bytes.NewReader(body))
 	var inTitle, inJSONLD bool
@@ -154,10 +156,12 @@ read:
 			case inTitle:
 				titleTag += string(tokens.Text())
 			case inJSONLD:
-				if published, article := fromJSONLD(tokens.Text()); article {
+				published, article, pageDate := fromJSONLD(tokens.Text())
+				if article {
 					h.article = true
 					publishedTime = first(publishedTime, published)
 				}
+				pageTime = first(pageTime, pageDate)
 			}
 		case html.EndTagToken:
 			inTitle, inJSONLD = false, false
@@ -214,6 +218,8 @@ read:
 				publishedTime = first(publishedTime, content)
 			case "og:title":
 				ogTitle = first(ogTitle, content)
+			case "og:site_name":
+				h.siteName = first(h.siteName, normalize.PlainText(content))
 			case "og:image", "og:image:url", "og:image:secure_url":
 				ogImage = first(ogImage, content)
 			case "twitter:image", "twitter:image:src":
@@ -235,15 +241,20 @@ read:
 	}
 	h.title = first(strings.TrimSpace(ogTitle), strings.TrimSpace(titleTag))
 	h.published = parseDate(publishedTime)
+	if h.published == nil && h.article {
+		// Some SEO plugins date only the WebPage node, not the article.
+		h.published = parseDate(pageTime)
+	}
 	return h
 }
 
 // fromJSONLD finds an article and its publish date in a JSON-LD block, which
-// may hold one object, a list or an @graph.
-func fromJSONLD(raw []byte) (published string, article bool) {
+// may hold one object, a list or an @graph. pageDate is a WebPage's publish
+// date, which does not make the page an article.
+func fromJSONLD(raw []byte) (published string, article bool, pageDate string) {
 	var doc any
 	if json.Unmarshal(raw, &doc) != nil {
-		return "", false
+		return "", false, ""
 	}
 	var walk func(v any)
 	walk = func(v any) {
@@ -253,17 +264,30 @@ func fromJSONLD(raw []byte) (published string, article bool) {
 				walk(item)
 			}
 		case map[string]any:
-			if isArticleType(v["@type"]) {
+			d, _ := v["datePublished"].(string)
+			switch {
+			case isArticleType(v["@type"]):
 				article = true
-				if d, ok := v["datePublished"].(string); ok && published == "" {
-					published = d
-				}
+				published = first(published, d)
+			case isType(v["@type"], "WebPage"):
+				pageDate = first(pageDate, d)
 			}
 			walk(v["@graph"])
 		}
 	}
 	walk(doc)
-	return published, article
+	return published, article, pageDate
+}
+
+// isType reports whether a JSON-LD @type, one name or a list, includes name.
+func isType(t any, name string) bool {
+	switch t := t.(type) {
+	case string:
+		return t == name
+	case []any:
+		return slices.Contains(t, any(name))
+	}
+	return false
 }
 
 func isArticleType(t any) bool {
@@ -294,16 +318,50 @@ func parseDate(s string) *time.Time {
 }
 
 // cleanTitle turns a page's title into a post's: plain text without the
-// blog's name, which themes often add before or after it.
-func cleanTitle(title, blogName string) string {
-	title = normalize.PlainText(title)
-	if name := strings.TrimSpace(blogName); name != "" {
+// site's name, which themes often add before or after it. names are the
+// blog's name and the page's og:site_name; they match with curly and straight
+// quotes alike, as WordPress curls the quotes in a title but not in a name.
+func cleanTitle(title string, names ...string) string {
+	t := []rune(normalize.PlainText(title))
+	for _, name := range names {
+		n := []rune(strings.TrimSpace(normalize.PlainText(name)))
+		if len(n) == 0 {
+			continue
+		}
 		for _, sep := range []string{" - ", " | ", " – ", " — ", " · ", " _ "} {
-			title = strings.TrimSpace(strings.TrimSuffix(title, sep+name))
-			title = strings.TrimSpace(strings.TrimPrefix(title, name+sep))
+			s := []rune(sep)
+			if affix := append(append([]rune{}, s...), n...); len(t) > len(affix) && sameText(t[len(t)-len(affix):], affix) {
+				t = t[:len(t)-len(affix)]
+			}
+			if affix := append(append([]rune{}, n...), s...); len(t) > len(affix) && sameText(t[:len(affix)], affix) {
+				t = t[len(affix):]
+			}
 		}
 	}
-	return normalize.Truncate(title, policy.TitleMaxRunes)
+	return normalize.Truncate(strings.TrimSpace(string(t)), policy.TitleMaxRunes)
+}
+
+// sameText compares two runs of text, taking curly quotes for straight ones.
+func sameText(a, b []rune) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if straightQuote(a[i]) != straightQuote(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func straightQuote(r rune) rune {
+	switch r {
+	case '‘', '’':
+		return '\''
+	case '“', '”':
+		return '"'
+	}
+	return r
 }
 
 // absoluteImage resolves an image reference against the page it came from,

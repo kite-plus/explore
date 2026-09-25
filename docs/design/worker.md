@@ -398,7 +398,7 @@ worker 里除了抓取，还有一个每分钟跑一轮的打标签循环。标�
 订阅源不带缩略图，或摘要被截成「[…]」时，worker 读一次这篇文章的页面补上。读页有自己的循环，每 20 秒一轮（`policy.PageRoundEvery`），和站点地图的文章（§13）共用：
 
 1. 取出订阅源缺图、缺摘要或摘要被截断，且 `page_next_check_at` 已到期的文章，每个博客最多一篇，每轮最多 30 篇（`policy.PageChecksPerRound`），领取时写入两分钟的租约。这一轮没轮到的博客，再各取一个待读的站点地图地址，同样最多 30 个，两类名额分开，补图的积压不会饿住站点地图。一个博客一轮最多被请求一页，也就是每分钟最多三页。
-2. 按文章链接发一次 GET，遵守 robots.txt 和 SSRF 防护，只下载开头最多 256 KB（`policy.PageHeadBytes`），读到 `<body>` 就停，正文不解析也不保存。
+2. 按文章链接发一次 GET，遵守 robots.txt 和 SSRF 防护，读到 `<body` 就停止下载，正文不解析也不保存；最多读 1 MB（`policy.PageHeadBytes`），有的主题在 `<head>` 里内联几百 KB 的样式和脚本，JSON-LD 排在它们后面。
 3. 从 `<head>` 里取 `og:image`（其次 `twitter:image`），相对地址按页面地址补全，只收 http 和 https；取 `og:description`（其次 `description`、`twitter:description`），和订阅源摘要一样去掉 HTML、截成 ≤ 140 字。针对所有抓取器或 `KiteExplore` 的 robots meta：`noindex` 两样都不取，`nosnippet` 不取描述，`noimageindex` 不取图片。
 4. 读到了（哪怕什么都没取到）、页面返回 404 这类确定结果、被 robots.txt 拒绝、不是 HTML，都算读过，`page_next_check_at` 置空，链接不变就不再读。网络出错、`429`、`5xx` 六小时后重试。
 5. 展示时订阅源自己的图片和完整摘要优先；同一博客多篇文章共用的页面图片或描述是主题给的默认值，不展示（`store` 里的 `shownImage`、`shownExcerpt`）。
@@ -411,7 +411,7 @@ worker 里除了抓取，还有一个每分钟跑一轮的打标签循环。标�
 
 1. **找站点地图**：每个可见博客每天读一次（`policy.SitemapCheckEvery`），读页循环里每分钟最多领 4 个博客。先看 robots.txt 的 `Sitemap:` 行，这份 robots.txt 和抓取规则共用缓存；没写的，依次试 `/sitemap.xml`、`/sitemap_index.xml`、`/wp-sitemap.xml`，找到一个就停。索引文件会展开，一个博客最多读 20 个文件（`policy.SitemapMaxFiles`），gzip 压缩的也能读，单个文件解压后最多 10 MB。只认博客自己站点（带不带 `www.` 都算）上的文件和地址。都找不到时七天后再试。
 2. **挑出文章**：站点地图里还有首页、标签页、分类页和普通页面。拿订阅源里现有文章的链接当样本（`internal/sitemap` 的 `Learn`）：按路径层数、结尾斜杠、扩展名和查询参数分组，所有样本一致的路径段保留原样，数字按年、月日、编号归类，其余当通配，最后一段是文章自己的，从不保留原样。于是 `/posts/a/`、`/posts/b/` 学成「posts/任意」，`/tags/go/` 就不会被选中。没有样本时全部候选。选中的地址按 `lastmod` 从新到旧，最多留 1,000 个（`policy.SitemapMaxPosts`），写入 `sitemap_urls`；`lastmod` 变了就重新到期，不再列出的地址连同读出的文章一起删除。
-3. **读文章页**：在 §12 的读页循环里，每个博客每轮最多一个地址，从新到旧。订阅源里已有的文章（`url_key` 相同）不读，等它挤出订阅源再读。页面要自称文章（`og:type` 为 `article`，或 JSON-LD 里有 Article、BlogPosting），或者给出发布时间，并且有标题，才算一篇文章。标题取 `og:title`，其次 `<title>`，去掉前后的博客名；发布时间取 `article:published_time`，其次 JSON-LD 的 `datePublished`，拿不到就当没有日期，不进首页时间流。robots meta 的 `noindex` 或 `none` 表示不要收录，这一页就不收。
+3. **读文章页**：在 §12 的读页循环里，每个博客每轮最多一个地址，从新到旧。订阅源里已有的文章（`url_key` 相同）不读，等它挤出订阅源再读。页面要自称文章（`og:type` 为 `article`，或 JSON-LD 里有 Article、BlogPosting），或者给出发布时间，并且有标题，才算一篇文章。标题取 `og:title`，其次 `<title>`，去掉前后的博客名或页面的 `og:site_name`，比较时弯引号和直引号视为相同（WordPress 会把标题里的 `'` 换成 `’`）；发布时间取 `article:published_time`，其次 JSON-LD 里文章节点的 `datePublished`，已经确认是文章时再退到 WebPage 节点的 `datePublished`（有的 SEO 插件只给它写日期），都拿不到就当没有日期，不进首页时间流。robots meta 的 `noindex` 或 `none` 表示不要收录，这一页就不收。
 4. **写入**：读出的文章以 `source = 'sitemap'`、`sitemap:` 开头的 `identity` 写进 `entries`，封面和摘要放在 `page_image_url`、`page_excerpt`，链接状态记为可访问，30 天后才再检查链接（`policy.SitemapLinkCheckInterval`）。写入前再看一次订阅源里是否已有这篇，有就不写；订阅源同步时也会删掉它已经覆盖的站点地图行，并让对应地址在它挤出订阅源后重新到期。
 
 清空缓存会同时清空 `sitemap_urls`，读站点地图和读文章页按同样的规则重新补回（`TestSitemapsBringInOlderPosts`）。

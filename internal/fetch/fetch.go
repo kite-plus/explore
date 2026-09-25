@@ -4,6 +4,7 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -86,6 +87,9 @@ type Request struct {
 	// Truncate keeps the first MaxBytes of a longer body instead of failing,
 	// for reading only the head of a page.
 	Truncate bool
+	// StopAfter ends the body at the first occurrence of this text, matched
+	// without regard to ASCII case, such as "<body" for a page's head.
+	StopAfter string
 }
 
 // Response is a completed GET, whatever its status.
@@ -256,7 +260,11 @@ func (c *Client) do(ctx context.Context, u *url.URL, r Request, robotsFile bool)
 	if limit <= 0 {
 		limit = policy.MaxFeedBytes
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	src := io.LimitReader(resp.Body, limit+1)
+	if r.StopAfter != "" {
+		src = &stopReader{r: src, marker: bytes.ToLower([]byte(r.StopAfter))}
+	}
+	body, err := io.ReadAll(src)
 	if err != nil {
 		return nil, err
 	}
@@ -374,4 +382,30 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 		}
 	}
 	return 0
+}
+
+// stopReader ends a body at the end of the first match of marker, which is
+// lower case.
+type stopReader struct {
+	r      io.Reader
+	marker []byte
+	tail   []byte // the last bytes read, lower case, for a match split across reads
+	done   bool
+}
+
+func (s *stopReader) Read(p []byte) (int, error) {
+	if s.done {
+		return 0, io.EOF
+	}
+	n, err := s.r.Read(p)
+	if n == 0 {
+		return 0, err
+	}
+	seen := append(bytes.Clone(s.tail), bytes.ToLower(p[:n])...)
+	if i := bytes.Index(seen, s.marker); i >= 0 {
+		s.done = true
+		return i + len(s.marker) - len(s.tail), nil
+	}
+	s.tail = seen[max(0, len(seen)-len(s.marker)+1):]
+	return n, err
 }

@@ -45,6 +45,58 @@ func TestPageFromHTML(t *testing.T) {
 	}
 }
 
+func TestCleanTitle(t *testing.T) {
+	cases := []struct {
+		title string
+		names []string
+		want  string
+	}{
+		{"Post | Blog", []string{"Blog"}, "Post"},
+		{"Blog - Post", []string{"Blog"}, "Post"},
+		{"Post &amp; more | Blog", []string{"Blog"}, "Post & more"},
+		{"过去、现在和未来 —— Java 的现代化之路 | HikariLan’s Blog", []string{"HikariLan's Blog"}, "过去、现在和未来 —— Java 的现代化之路"},
+		{"Post · Site Name", []string{"Blog", "Site Name"}, "Post"},
+		{"Blog", []string{"Blog"}, "Blog"},
+		{"A Blog | Post", []string{""}, "A Blog | Post"},
+	}
+	for _, c := range cases {
+		if got := cleanTitle(c.title, c.names...); got != c.want {
+			t.Errorf("cleanTitle(%q, %q) = %q, want %q", c.title, c.names, got, c.want)
+		}
+	}
+}
+
+func TestParseHeadDatesAndSiteName(t *testing.T) {
+	cases := []struct {
+		name, head, want string
+	}{
+		{"article meta", `<meta property="og:type" content="article"><meta property="article:published_time" content="2025-03-01T10:00:00+08:00">`,
+			"2025-03-01T02:00:00Z"},
+		{"the WebPage of an article", `<meta property="og:type" content="article">` +
+			`<script type="application/ld+json">{"@graph":[{"@type":"WebPage","datePublished":"2024-12-24T08:00:00+00:00"}]}</script>`,
+			"2024-12-24T08:00:00Z"},
+		{"the article's own date first", `<script type="application/ld+json">{"@graph":[{"@type":"WebPage","datePublished":"2020-01-01"},` +
+			`{"@type":"BlogPosting","datePublished":"2024-12-24"}]}</script>`, "2024-12-24T00:00:00Z"},
+		{"a WebPage alone is no post", `<script type="application/ld+json">{"@type":["WebPage"],"datePublished":"2024-12-24"}</script>`, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := parseHead([]byte("<html><head>"+c.head+"</head><body></body></html>"), "https://blog.example.com/p/")
+			got := ""
+			if h.published != nil {
+				got = h.published.Format(time.RFC3339)
+			}
+			if got != c.want {
+				t.Errorf("published = %q, want %q", got, c.want)
+			}
+		})
+	}
+	h := parseHead([]byte(`<head><meta property="og:site_name" content="HikariLan&#039;s Blog"></head>`), "https://blog.example.com/p/")
+	if h.siteName != "HikariLan's Blog" {
+		t.Errorf("siteName = %q", h.siteName)
+	}
+}
+
 func TestPagesFillWhatFeedsLeaveOut(t *testing.T) {
 	ctx := context.Background()
 	e := newEnv(t)

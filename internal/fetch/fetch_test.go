@@ -3,12 +3,14 @@ package fetch
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 )
 
@@ -287,6 +289,29 @@ func TestGetBoundsTheBody(t *testing.T) {
 	res, err := c.Get(context.Background(), Request{URL: srv.URL + "/big", MaxBytes: 2048})
 	if err != nil || len(res.Body) != 2048 {
 		t.Errorf("exact limit: res=%v err=%v", res, err)
+	}
+}
+
+func TestGetStopsAfterMarker(t *testing.T) {
+	head := "<html><head>" + strings.Repeat("<style>p{}</style>", 100) + "</head>\n<BODY class=x>"
+	srv, c := newServer(t, "", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(head + strings.Repeat("<p>post</p>", 10000)))
+	})
+	res, err := c.Get(context.Background(), Request{URL: srv.URL + "/post", MaxBytes: 1 << 20, Truncate: true, StopAfter: "<body"})
+	if err != nil || string(res.Body) != head[:len(head)-len(" class=x>")] {
+		t.Fatalf("body ends %q, err %v", res.Body[max(0, len(res.Body)-20):], err)
+	}
+	res, err = c.Get(context.Background(), Request{URL: srv.URL + "/post", MaxBytes: 1 << 20, Truncate: true, StopAfter: "<nothing"})
+	if err != nil || len(res.Body) != len(head)+len("<p>post</p>")*10000 {
+		t.Errorf("without a match the whole body is read: %d bytes, err %v", len(res.Body), err)
+	}
+}
+
+func TestStopReaderFindsSplitMarkers(t *testing.T) {
+	r := &stopReader{r: iotest.OneByteReader(strings.NewReader("<head></HEAD><Body>rest")), marker: []byte("<body")}
+	got, err := io.ReadAll(r)
+	if err != nil || string(got) != "<head></HEAD><Body" {
+		t.Errorf("read %q, %v", got, err)
 	}
 }
 

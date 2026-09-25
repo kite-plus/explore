@@ -8,7 +8,7 @@ User-Agent: KiteExplore/<version> (+https://explore.kite.plus/bot)
 
 它还会定时检查订阅源给出的原文链接是否有响应；读者也可以对尚未检测的文章发起一次检查。检查先发送 HEAD；需要确认时发送只请求首字节的 GET，不读取文章正文。检查结果只是提示，源站对抓取器和读者可能返回不同状态。
 
-订阅源里的文章没有图片，或者摘要被截断时（例如 WordPress 的「[…]」），它会读一次这篇文章的页面，只取 `<head>` 里的 `og:image` 和 `og:description` 作为缩略图和摘要：只下载页面开头最多 256 KB，读到 `<body>` 就停，不读取正文。页面里写给所有抓取器或 `KiteExplore` 的 robots meta 会被遵守：`noindex` 两样都不取，`nosnippet` 不取摘要，`noimageindex` 不取图片。
+订阅源里的文章没有图片，或者摘要被截断时（例如 WordPress 的「[…]」），它会读一次这篇文章的页面，只取 `<head>` 里的 `og:image` 和 `og:description` 作为缩略图和摘要：读到 `<body>` 就停止下载，最多读 1 MB，不读取正文。页面里写给所有抓取器或 `KiteExplore` 的 robots meta 会被遵守：`noindex` 两样都不取，`nosnippet` 不取摘要，`noimageindex` 不取图片。
 
 订阅源只带最近的文章，更早的从博客的站点地图找到：先看 robots.txt 里的 `Sitemap:`，没有时依次试 `/sitemap.xml`、`/sitemap_index.xml`、`/wp-sitemap.xml`。站点地图里看上去像文章的地址，同样只读页面的 `<head>`，取标题、发布时间、缩略图和摘要；页面写了 `noindex` 的不收录。站点地图不再列出的文章，Explore 也随之移除。
 
@@ -28,7 +28,7 @@ User-Agent: KiteExplore/<version> (+https://explore.kite.plus/bot)
 
 It also checks whether post links respond, and readers may start a check for a post that has not yet been checked. It sends HEAD first and, when needed, a GET requesting only the first byte; it does not read post bodies. The result is only a hint because a site may respond differently to the crawler and to readers.
 
-When a post in the feed has no image or a cut excerpt, such as WordPress's “[…]”, it reads that post's page once and takes only `og:image` and `og:description` from its `<head>` as the thumbnail and excerpt. It downloads at most the first 256 KB, stops at `<body>`, and never reads the post itself. A robots meta tag for all crawlers or for `KiteExplore` is honored: `noindex` takes neither, `nosnippet` no excerpt, `noimageindex` no image.
+When a post in the feed has no image or a cut excerpt, such as WordPress's “[…]”, it reads that post's page once and takes only `og:image` and `og:description` from its `<head>` as the thumbnail and excerpt. It stops downloading at `<body>`, reads at most 1 MB, and never reads the post itself. A robots meta tag for all crawlers or for `KiteExplore` is honored: `noindex` takes neither, `nosnippet` no excerpt, `noimageindex` no image.
 
 A feed carries only recent posts, so older ones come from the blog's sitemap: the one robots.txt names with `Sitemap:`, or else `/sitemap.xml`, `/sitemap_index.xml` or `/wp-sitemap.xml`. For each address that looks like a post, it again reads only the page's `<head>` for the title, publish date, thumbnail and excerpt, and skips pages marked `noindex`. A post the sitemap no longer lists leaves Explore too.
 

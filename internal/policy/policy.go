@@ -71,8 +71,9 @@ const (
 	// An article page is read, head only, where its feed gives no image or
 	// cuts the excerpt short, or to learn a post its sitemap lists. A round
 	// reads at most one page per blog, and up to PageChecksPerRound of each
-	// kind.
-	PageHeadBytes      = 256 << 10
+	// kind. The read stops where the body starts; PageHeadBytes is room for
+	// heads that carry hundreds of KB of inline styles before their JSON-LD.
+	PageHeadBytes      = 1 << 20
 	PageCheckTimeout   = 12 * time.Second
 	PageCheckLease     = 2 * time.Minute
 	PageRetryInterval  = 6 * time.Hour

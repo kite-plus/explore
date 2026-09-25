@@ -72,7 +72,8 @@ func TestSitemapsBringInOlderPosts(t *testing.T) {
 	page("/posts/old-1/", `<title>Old one | 127.0.0.1</title><meta property="og:type" content="article">`+
 		`<meta property="article:published_time" content="2025-03-01T10:00:00+08:00">`+
 		`<meta property="og:image" content="/covers/old-1.png"><meta property="og:description" content="An older post">`)
-	page("/posts/old-2/", `<title>127.0.0.1 - Old two</title>`+
+	// Inline styles push the JSON-LD past the first 256 KB, as some themes do.
+	page("/posts/old-2/", `<title>127.0.0.1 - Old two</title><style>`+strings.Repeat("p{}", 100_000)+`</style>`+
 		`<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":"BlogPosting","datePublished":"2024-12-24T08:00:00Z"}]}</script>`)
 	page("/posts/draft/", `<title>Draft</title><meta name="robots" content="noindex"><meta property="og:type" content="article">`+
 		`<meta property="article:published_time" content="2025-01-01T00:00:00Z">`)
