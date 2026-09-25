@@ -2,7 +2,7 @@ Explore gathers the public feeds of independent blogs and shows their latest pos
 
 ## What we show
 
-Each post shows its title, its publish date and an excerpt of at most 140 characters. Clicking a title takes you straight to the author's own site: the link is the original address, with no redirect page in between and no tracking parameters added.
+Each post shows its title, its publish date, an excerpt of at most 140 characters and, when its feed has one, a thumbnail. Clicking a title takes you straight to the author's own site: the link is the original address, with no redirect page in between and no tracking parameters added.
 
 The status beside a post comes from a link check. Click “Awaiting check” to check a post immediately. “Possibly unavailable” means the source returned 404 or 410 to the checker; readers may get a different result, and the original link remains available.
 
@@ -24,7 +24,11 @@ Leaving is always easier than joining. [Open an issue](https://github.com/kite-p
 
 ## Privacy
 
-Reading Explore needs no account. We set no cookies, run no analytics scripts, and pages make no requests to third parties. Access logs record the path and the outcome of a request, never your IP address. Your choice of dark or light theme stays in your own browser and is never sent to us.
+You can read everything on Explore without an account. When you browse anonymously, we set no cookies, run no analytics scripts, and pages make no requests to third parties: Explore's own server fetches post thumbnails and blog icons for you.
+
+The server logs only the kind of request and its outcome, such as “someone opened a blog page”, but not which blog, and never your IP address, browser details or filters. To stop abuse, the server counts requests per IP address briefly in memory; the counts go into no log and no database. Your choice of dark or light theme stays in your own browser and is never sent to us.
+
+With an account, we keep your email, your name and a hash of your password (never the password itself), plus the blogs you follow and claim; a report you file is kept with its reason and your account so maintainers can act on it. Signing in sets one cookie, used only to keep you signed in, which ends after 30 days or when you sign out. We do not record which posts you view, click or read, and recommendations will not use personal behavior.
 
 ## Take everything with you
 
