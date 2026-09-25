@@ -222,7 +222,7 @@ describe("content", () => {
 
   test("entry thumbnails use the local image endpoint", async () => {
     const { html } = await page("/");
-    assert.match(html, /<img src="\/api\/v1\/entries\/2\/image" alt="" loading="lazy" decoding="async"/);
+    assert.match(html, /<img src="\/api\/v1\/entries\/2\/image" alt="" loading="lazy" decoding="async" data-entry-cover/, "marked so the theme script can drop it if it fails");
     const image = await get("/api/v1/entries/2/image");
     assert.equal(image.status, 200);
     assert.equal(image.headers.get("content-type"), "image/png");

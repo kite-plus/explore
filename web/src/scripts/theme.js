@@ -88,14 +88,20 @@
       img.parentElement?.classList.add("has-favicon");
     }
   };
-  const initAvatars = () => {
+  // A cover that fails to load goes with its frame, so the post reads like
+  // one without a cover instead of showing a broken image.
+  const dropCover = (img) => {
+    if (img && img.complete && img.naturalWidth === 0) img.parentElement?.remove();
+  };
+  const initImages = () => {
     if (typeof document === "undefined" || !document.querySelectorAll) return;
     for (const img of document.querySelectorAll("[data-blog-favicon]")) {
       if (img.complete) updateAvatar(img);
     }
+    for (const img of document.querySelectorAll("[data-entry-cover]")) dropCover(img);
   };
   if (typeof document !== "undefined") {
-    document.addEventListener?.("DOMContentLoaded", initAvatars);
+    document.addEventListener?.("DOMContentLoaded", initImages);
     document.addEventListener?.(
       "load",
       (event) => {
@@ -106,6 +112,14 @@
       },
       true,
     );
-    initAvatars();
+    document.addEventListener?.(
+      "error",
+      (event) => {
+        const target = event.target;
+        if (target && target.nodeType === 1 && target.hasAttribute?.("data-entry-cover")) dropCover(target);
+      },
+      true,
+    );
+    initImages();
   }
 })();

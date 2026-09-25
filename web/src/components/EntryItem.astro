@@ -129,7 +129,7 @@ const pending = linkStatus === "unknown" && !entry.link_checked_at;
   {
     entry.image_url && (
       <div class="h-20 w-24 shrink-0 overflow-hidden rounded-md border bg-muted sm:h-24 sm:w-32">
-        <img src={entry.image_url} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+        <img src={entry.image_url} alt="" loading="lazy" decoding="async" data-entry-cover class="h-full w-full object-cover" />
       </div>
     )
   }

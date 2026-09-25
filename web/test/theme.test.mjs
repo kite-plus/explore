@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = readFileSync(new URL("../src/scripts/theme.js", import.meta.url), "utf8");
 
-function load({ saved, storage = true, systemDark = false, reducedMotion = false, transitions = false } = {}) {
+function load({ saved, storage = true, systemDark = false, reducedMotion = false, transitions = false, covers = [] } = {}) {
   const store = new Map(saved ? [["theme", saved]] : []);
   const listeners = { document: {}, window: {} };
   const on = (bucket) => (type, fn) => {
@@ -54,7 +54,7 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
     },
     document: {
       documentElement: root,
-      querySelectorAll: () => [button],
+      querySelectorAll: (selector) => (selector === "[data-entry-cover]" ? covers : [button]),
       addEventListener: on(listeners.document),
       ...(transitions ? { startViewTransition } : {}),
     },
@@ -73,6 +73,7 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
     label: () => button.attrs["aria-label"],
     title: () => button.attrs.title,
     ready: () => fire(listeners.document, "DOMContentLoaded"),
+    failed: (target) => fire(listeners.document, "error", { target }),
     click: (target = button) => fire(listeners.document, "click", { target }),
     clickElsewhere: () => fire(listeners.document, "click", { target: new Element() }),
     otherTab: (theme) => {
@@ -83,7 +84,27 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
   };
 }
 
+// An entry cover in its frame; the frame records whether it was removed.
+function cover({ complete = false, naturalWidth = 0 } = {}) {
+  const frame = { removed: false, remove() { this.removed = true; } };
+  return { nodeType: 1, complete, naturalWidth, parentElement: frame, hasAttribute: (name) => name === "data-entry-cover" };
+}
+
 describe("theme script", () => {
+  test("drops a cover that fails to load, with its frame", () => {
+    const broken = cover({ complete: true });
+    const shown = cover({ complete: true, naturalWidth: 640 });
+    const lazy = cover();
+    const page = load({ covers: [broken, shown, lazy] });
+    page.ready();
+    assert.equal(broken.parentElement.removed, true, "a cover that failed before the page was ready");
+    assert.equal(shown.parentElement.removed, false);
+    assert.equal(lazy.parentElement.removed, false, "a lazy cover that has not loaded yet");
+    lazy.complete = true;
+    page.failed(lazy);
+    assert.equal(lazy.parentElement.removed, true, "a cover that fails later");
+  });
+
   test("starts in automatic mode until the reader picks a theme", () => {
     const page = load();
     page.ready();
