@@ -72,7 +72,8 @@ export const api = {
   blogs: (lang: Lang, p: { cursor?: string; lang?: string; limit?: number }) =>
     call<Page<Blog>>(`/api/v1/blogs${query({ cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),
 
-  blog: (lang: Lang, host: string) => call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}`, { lang }),
+  blog: (lang: Lang, host: string, p: { cursor?: string; limit?: number } = {}) =>
+    call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}${query({ cursor: p.cursor, limit: p.limit?.toString() })}`, { lang }),
 
   submission: (lang: Lang, id: string) => call<Submission>(`/api/v1/submissions/${encodeURIComponent(id)}`, { lang }),
 

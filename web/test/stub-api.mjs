@@ -162,7 +162,9 @@ export function startStub() {
       const host = decodeURIComponent(url.pathname.slice("/api/v1/blogs/".length));
       const b = blogs.find((x) => x.host === host);
       if (!b) return error(404, "not_found");
-      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }, { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, image_url: null, published_at: null, link_status: "unknown", link_checked_at: null, tags: [] }] });
+      const undated = { id: "9", title: "无日期", url: "https://zh.example.com/undated/", excerpt: null, image_url: null, published_at: null, link_status: "unknown", link_checked_at: null, tags: [] };
+      if (url.searchParams.get("cursor") === "blog-page-two") return send(200, { blog: b, entries: [undated], next_cursor: null });
+      return send(200, { blog: b, entries: [{ ...entries.first.data[0], blog: undefined }], next_cursor: "blog-page-two" });
     }
     if (req.method === "GET" && url.pathname === `/api/v1/submissions/${submission.id}`) {
       const localized = structuredClone(submission);

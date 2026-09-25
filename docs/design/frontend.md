@@ -48,7 +48,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/` | 首页的最新流，按发布时间倒序翻页，含可用的文章缩略图；可按博客语言和文章标签筛选。最新、推荐、订阅三个标签在列表上方 | `GET /api/v1/entries`、`GET /api/v1/tags` | 按需 | `public, max-age=60` | 无筛选时收录 |
 | `/recommended` | 推荐流；评分上线前只说明即将上线，并链接到最新 | —— | 按需，不调用 API | `public, max-age=60` | `noindex` |
 | `/blogs` | 博客目录，含 favicon 和简短介绍 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
-| `/blogs/{host}` | 一个博客的介绍、最新文章、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
+| `/blogs/{host}` | 一个博客的介绍、文章（按页往下翻，带游标的页面 `noindex`）、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
 | `/submit` | 提交博客的表单 | —— | 按需 | `no-store` | `noindex` |
 | `/submissions/{id}` | 提交进度 | `GET /api/v1/submissions/{id}` | 按需 | `no-store` | `noindex` |

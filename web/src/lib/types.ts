@@ -46,6 +46,7 @@ export interface Page<T> {
 export interface BlogPage {
   blog: Blog;
   entries: Entry[];
+  next_cursor: string | null;
 }
 
 export type Severity = "error" | "warning" | "info";

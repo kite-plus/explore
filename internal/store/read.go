@@ -158,9 +158,32 @@ func scanListed(row pgx.CollectableRow) (ListedBlog, error) {
 	return b, err
 }
 
+// BlogPageQuery selects a page of a blog's entries; a Limit of 0 takes them
+// all.
+type BlogPageQuery struct {
+	Limit  int
+	Cursor *Cursor
+}
+
+// EntrySortAt is where an entry sorts on its blog's page and in the page
+// cursor: its publish date, or the epoch for an undated one, which puts it
+// last.
+func EntrySortAt(e model.Entry) time.Time {
+	if e.PublishedAt == nil {
+		return time.Unix(0, 0).UTC()
+	}
+	return *e.PublishedAt
+}
+
 // VisibleBlog returns a visible blog and every cached entry that is not in
-// the future, undated ones last.
+// the future.
 func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []model.Entry, error) {
+	return s.VisibleBlogPage(ctx, host, BlogPageQuery{})
+}
+
+// VisibleBlogPage returns a visible blog and a page of its entries that are
+// not in the future, newest first and undated ones last (EntrySortAt).
+func (s *Store) VisibleBlogPage(ctx context.Context, host string, q BlogPageQuery) (ListedBlog, []model.Entry, error) {
 	args := pgx.NamedArgs{
 		"host":             host,
 		"unhealthy_after":  seconds(policy.UnhealthyAfter),
@@ -191,8 +214,11 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 		FROM entries e
 		WHERE e.blog_id = @id AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
-		ORDER BY e.published_at DESC NULLS LAST, e.id`,
-		pgx.NamedArgs{"id": blog.ID, "future_tolerance": seconds(policy.FutureTolerance)})
+		  AND (NOT @has_cursor OR (coalesce(e.published_at, 'epoch'), e.id) < (@cursor_at, @cursor_id))
+		ORDER BY coalesce(e.published_at, 'epoch') DESC, e.id DESC
+		LIMIT @limit`,
+		pgx.NamedArgs{"id": blog.ID, "future_tolerance": seconds(policy.FutureTolerance), "limit": limitOrAll(q.Limit),
+			"has_cursor": q.Cursor != nil, "cursor_at": cursorAt(q.Cursor), "cursor_id": cursorID(q.Cursor)})
 	if err != nil {
 		return ListedBlog{}, nil, err
 	}
@@ -202,4 +228,26 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 		return e, err
 	})
 	return blog, entries, err
+}
+
+// limitOrAll turns a Limit of 0 into SQL's LIMIT NULL, which takes every row.
+func limitOrAll(limit int) any {
+	if limit <= 0 {
+		return nil
+	}
+	return limit
+}
+
+func cursorAt(c *Cursor) time.Time {
+	if c == nil {
+		return time.Time{}
+	}
+	return c.At
+}
+
+func cursorID(c *Cursor) int64 {
+	if c == nil {
+		return 0
+	}
+	return c.ID
 }

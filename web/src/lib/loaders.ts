@@ -82,15 +82,16 @@ export async function loadBlogs(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Di
   return { kind: "ok", data: { page: r.data, filter, paged: Boolean(cursor) } };
 }
 
-export type BlogView = BlogPage & { tags: Tag[] };
+export type BlogView = BlogPage & { tags: Tag[]; paged: boolean };
 
 export async function loadBlog(ctx: AstroGlobal, lang: Lang): Promise<Loaded<BlogView>> {
   const host = ctx.params.host ?? "";
-  const [r, tags] = await Promise.all([api.blog(lang, host), tagList(lang)]);
+  const cursor = param(ctx, "cursor");
+  const [r, tags] = await Promise.all([api.blog(lang, host, { cursor, limit: 30 }), tagList(lang)]);
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   cacheControl(ctx, "public, max-age=300");
-  return { kind: "ok", data: { ...r.data, tags: tags ?? [] } };
+  return { kind: "ok", data: { ...r.data, tags: tags ?? [], paged: Boolean(cursor) } };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {

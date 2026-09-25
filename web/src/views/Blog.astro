@@ -6,11 +6,12 @@ import EntryItem from "@/components/EntryItem.astro";
 import ExternalLink from "@/components/ExternalLink.astro";
 import Message from "@/components/Message.astro";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { dict, type Lang } from "@/i18n";
+import { ButtonLink, buttonVariants } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import type { BlogView, Loaded } from "@/lib/loaders";
 import { tagNames } from "@/lib/tags";
+import { withQuery } from "@/lib/utils";
 
 interface Props {
   lang: Lang;
@@ -22,6 +23,7 @@ const { lang, host, result } = Astro.props;
 const t = dict(lang);
 const data = result.kind === "ok" ? result.data : undefined;
 const names = data ? tagNames(data.tags, lang) : {};
+const older = data?.next_cursor && withQuery(localePath(lang, `/blogs/${host}`), { cursor: data.next_cursor });
 const title = data ? data.blog.name : t.errors.notFound;
 const description = data
   ? t.blog.description(
@@ -31,7 +33,7 @@ const description = data
   : t.errors.blogNotFound;
 ---
 
-<Base lang={lang} title={title} description={description} path={`/blogs/${host}`} entryChecks>
+<Base lang={lang} title={title} description={description} path={`/blogs/${host}`} entryChecks noindex={Boolean(data?.paged)}>
   {
     data ? (
       <>
@@ -62,10 +64,25 @@ const description = data
         {data.entries.length === 0 ? (
           <p class="py-10 text-muted-foreground">{t.blog.empty}</p>
         ) : (
-          <div class="divide-y">
+          <div class="divide-y" data-entry-stream>
             {data.entries.map((entry) => (
               <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} tagNames={names} />
             ))}
+          </div>
+        )}
+        {older && (
+          <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
+            <ButtonLink
+              href={older}
+              variant="outline"
+              data-load-more-btn
+              data-label-older={t.home.older}
+              data-label-loading={t.home.loading}
+              data-label-retry={t.home.retry}
+            >
+              <span data-load-more-text>{t.home.older}</span>
+            </ButtonLink>
+            <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
           </div>
         )}
       </>

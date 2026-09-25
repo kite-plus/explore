@@ -286,9 +286,15 @@ describe("content", () => {
     assert.equal((await current.json()).link_status, "available");
   });
 
-  test("an undated post says so", async () => {
-    const { html } = await page("/blogs/zh.example.com");
-    assert.match(html, /日期未知/);
+  test("a blog page lists older posts page by page, undated ones last", async () => {
+    const first = (await page("/blogs/zh.example.com")).html;
+    assert.match(first, /data-entry-stream/);
+    assert.match(first, /<a\b[^>]*\shref="\/blogs\/zh\.example\.com\?cursor=blog-page-two"[^>]*data-load-more-btn/);
+    assert.doesNotMatch(first, /name="robots"/);
+    const second = (await page("/blogs/zh.example.com?cursor=blog-page-two")).html;
+    assert.match(second, /日期未知/);
+    assert.doesNotMatch(second, /<a\b[^>]*data-load-more-btn/, "the last page has no older link");
+    assert.match(second, /<meta name="robots" content="noindex, follow">/);
   });
 
   test("the directory and blog page show the source description", async () => {

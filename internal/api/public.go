@@ -160,15 +160,27 @@ func directoryCursor(b store.ListedBlog) store.Cursor {
 }
 
 func (s *Server) blog(c *gin.Context) {
-	b, entries, err := s.Store.VisibleBlog(c.Request.Context(), strings.ToLower(c.Param("host")))
+	cur, limit, _, ok := s.pageParams(c)
+	if !ok {
+		return
+	}
+	b, entries, err := s.Store.VisibleBlogPage(c.Request.Context(), strings.ToLower(c.Param("host")),
+		store.BlogPageQuery{Limit: limit + 1, Cursor: cur})
 	if err != nil {
 		s.storeError(c, err)
 		return
 	}
 	out := struct {
-		Blog    blogJSON    `json:"blog"`
-		Entries []entryJSON `json:"entries"`
+		Blog       blogJSON    `json:"blog"`
+		Entries    []entryJSON `json:"entries"`
+		NextCursor *string     `json:"next_cursor"`
 	}{Blog: toBlog(b), Entries: make([]entryJSON, 0, len(entries))}
+	if len(entries) > limit {
+		entries = entries[:limit]
+		last := entries[limit-1]
+		next := encodeCursor(store.Cursor{At: store.EntrySortAt(last), ID: last.ID})
+		out.NextCursor = &next
+	}
 	for _, e := range entries {
 		out.Entries = append(out.Entries, toEntry(e))
 	}

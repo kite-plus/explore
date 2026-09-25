@@ -1103,3 +1103,38 @@ func TestTags(t *testing.T) {
 		}
 	}
 }
+
+func TestBlogPagePages(t *testing.T) {
+	e := newEnv(t, false)
+	undated := model.Entry{Identity: "undated", URL: "https://posts.example/undated", Title: "Post undated"}
+	e.seed("paged.example.com", "en", post("p1", 1, ""), post("p2", 2, ""), post("p3", 3, ""), post("p4", 4, ""), undated)
+
+	var titles []string
+	path := "/api/v1/blogs/paged.example.com?limit=2"
+	for pages := 0; ; pages++ {
+		if pages > 5 {
+			t.Fatal("the blog page kept giving cursors")
+		}
+		w := e.get(path)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s = %d %s", path, w.Code, w.Body.String())
+		}
+		page := decode[struct {
+			Entries    []entryOut `json:"entries"`
+			NextCursor *string    `json:"next_cursor"`
+		}](t, w)
+		for _, en := range page.Entries {
+			titles = append(titles, en.Title)
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		path = "/api/v1/blogs/paged.example.com?limit=2&cursor=" + url.QueryEscape(*page.NextCursor)
+	}
+	if got := strings.Join(titles, ","); got != "Post p1,Post p2,Post p3,Post p4,Post undated" {
+		t.Errorf("paged blog = %s", got)
+	}
+	if w := e.get("/api/v1/blogs/paged.example.com?cursor=nonsense"); w.Code != http.StatusBadRequest {
+		t.Errorf("bad cursor = %d", w.Code)
+	}
+}
