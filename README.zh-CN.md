@@ -32,13 +32,13 @@ Explore 是 [Kite Plus](https://github.com/kite-plus) 负责「发现」的部�
 
    ```bash
    mkdir explore && cd explore
-   base=https://raw.githubusercontent.com/kite-plus/explore/v0.1.2/deploy
+   base=https://raw.githubusercontent.com/kite-plus/explore/v0.1.3/deploy
    curl -fsSLO "$base/docker-compose.yaml"
    curl -fsSLO "$base/Caddyfile"
    curl -fsSL "$base/.env.example" -o .env
    ```
 
-2. 编辑 `.env`：设置 `EXPLORE_VERSION=0.1.2`、`POSTGRES_PASSWORD`（可以用 `openssl rand -hex 24` 生成）和 `EXPLORE_PUBLIC_URL`。其余可选项在文件里有说明。
+2. 编辑 `.env`：设置 `EXPLORE_VERSION=0.1.3`、`POSTGRES_PASSWORD`（可以用 `openssl rand -hex 24` 生成）和 `EXPLORE_PUBLIC_URL`。其余可选项在文件里有说明。
 
 3. 启动：
 
