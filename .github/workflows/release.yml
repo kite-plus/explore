@@ -42,7 +42,9 @@ jobs:
           echo "COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           echo "DATE=$(git log -1 --format=%cI)" >> "$GITHUB_ENV"
 
-      # arm64 too, as in Kite: small servers are often ARM.
+      # arm64 too, as in Kite: small servers are often ARM. Both Dockerfiles
+      # compile on the runner's own platform; QEMU only runs the few steps
+      # of the final arm64 stage.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 

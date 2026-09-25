@@ -3,7 +3,9 @@
 # Must match .nvmrc.
 ARG NODE_VERSION=22.19.0
 
-FROM node:${NODE_VERSION}-alpine AS build
+# dist is plain JavaScript, so it is built once on the build machine's own
+# platform and copied into the image of every target.
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS build
 WORKDIR /src
 
 # The manifest and lockfile first, so dependencies are cached across builds.

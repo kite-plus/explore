@@ -7,7 +7,9 @@
 ARG GO_VERSION=1.26.8
 ARG ALPINE_VERSION=3.22
 
-FROM golang:${GO_VERSION}-alpine AS build
+# The compiler runs on the build machine's own platform and cross-compiles
+# for the target, so an arm64 image builds without emulating arm64.
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -18,8 +20,10 @@ COPY . .
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
+ARG TARGETOS
+ARG TARGETARCH
 
-RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false \
     -ldflags "-s -w \
       -X github.com/kite-plus/explore/internal/buildinfo.Version=${VERSION} \
       -X github.com/kite-plus/explore/internal/buildinfo.Commit=${COMMIT} \
