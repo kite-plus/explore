@@ -29,12 +29,6 @@
 }
 
 @layer components {
-  .auth-panel {
-    --auth-contact-shadow: color-mix(in srgb, var(--foreground) 3%, transparent);
-    --auth-ambient-shadow: color-mix(in srgb, var(--foreground) 18%, transparent);
-    @apply shadow-[0_2px_4px_var(--auth-contact-shadow),0_16px_40px_-24px_var(--auth-ambient-shadow)];
-  }
-
   /* The toggle needs the theme script; without it the page just follows
      the system setting. */
   .theme-toggle {

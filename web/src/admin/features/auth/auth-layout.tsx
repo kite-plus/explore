@@ -15,7 +15,7 @@ export function AuthLayout({ children, wide = false }: { children: React.ReactNo
             <h1 className='text-xl font-medium'>Explore 管理后台</h1>
           </div>
         </div>
-        <div className={cn('mx-auto flex w-full flex-col justify-center space-y-2 pb-8', wide ? 'max-w-md' : 'max-w-sm')}>
+        <div className={cn('mx-auto flex w-full flex-col justify-center gap-6 pb-8', wide ? 'max-w-md' : 'max-w-sm')}>
           {children}
         </div>
       </div>

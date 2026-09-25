@@ -147,7 +147,7 @@ export function Setup() {
         <p className='text-sm text-muted-foreground'>三步完成安装，创建的账号就是这个站点的管理员。</p>
       </div>
 
-      <ol className='flex flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm'>
+      <ol className='flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'>
         {STEPS.map((label, index) => (
           <li key={label} className='flex items-center gap-2'>
             <span

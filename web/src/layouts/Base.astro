@@ -21,9 +21,11 @@ interface Props {
   bilingual?: boolean;
   entryChecks?: boolean;
   wide?: boolean;
+  /** Centers the content vertically between the header and the footer. */
+  center?: boolean;
 }
 
-const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false } = Astro.props;
+const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false, center = false } = Astro.props;
 const t = dict(lang);
 const base = publicURL();
 const canonical = base + localePath(lang, path);
@@ -68,7 +70,7 @@ const verification = {
   <body class="flex min-h-dvh flex-col">
     <SiteHeader lang={lang} path={path} bilingual={bilingual} wide={wide} />
     <div id="site-notice" hidden class="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"></div>
-    <main class:list={["mx-auto w-full flex-1 px-4 py-8 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
+    <main class:list={["mx-auto w-full flex-1 px-4 py-8 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl", center && "flex flex-col justify-center"]}>
       <slot />
     </main>
     <SiteFooter lang={lang} />
