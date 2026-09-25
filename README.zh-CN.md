@@ -58,6 +58,17 @@ docker compose exec -T postgres pg_dump -U explore --exclude-table-data=entries 
 
 想用服务器上已有的反向代理代替 Caddy，见 [docs/design/project-layout.md](docs/design/project-layout.md#10-部署)。
 
+### 不用 Docker
+
+每个版本的 [Release](https://github.com/kite-plus/explore/releases) 都附有原生构建：`explore-<版本>-<系统>-<架构>` 是服务端、抓取器和数据库迁移共用的程序，有 Linux、macOS 和 Windows 的 amd64、arm64 版本；`explore-web-<版本>.tar.gz` 是前台。另外需要 PostgreSQL 16、Node.js 22 和一个反向代理：
+
+1. 设置 `EXPLORE_DATABASE_URL` 和 `EXPLORE_PUBLIC_URL`，运行 `explore migrate up` 迁移数据库。每次升级后也要先运行一次。
+2. 让 `explore serve`（默认监听 `127.0.0.1:8080`）和 `explore worker` 常驻运行。设置 `EXPLORE_TRUSTED_PROXIES=127.0.0.1`，隔着反向代理和前台，限流也能认出读者的真实地址。
+3. 在解压出的 `explore-web-<版本>` 目录里运行 `node dist/server/entry.mjs`，设置 `EXPLORE_API_URL=http://127.0.0.1:8080`、`EXPLORE_PUBLIC_URL`、`HOST=127.0.0.1` 和 `PORT=4321`。
+4. 反向代理把 `/api/*`、`/feed.xml`、`/blogs.opml`、`/healthz` 和 `/readyz` 转给 serve，其余转给前台，写法见 `deploy/Caddyfile`。
+
+其余设置见 `deploy/.env.example`。
+
 ## 开发
 
 需要 Go 1.26 和 Docker；前端另需 Node 22 和 pnpm。

@@ -1,6 +1,8 @@
-# Pushing a tag such as v0.1.0 publishes the two images a server runs:
-# ghcr.io/kite-plus/explore (serve, worker, migrate) and
-# ghcr.io/kite-plus/explore-web. A manual run builds them without publishing.
+# Pushing a tag such as v0.1.0 publishes a release: the two images a server
+# runs, ghcr.io/kite-plus/explore (serve, worker, migrate) and
+# ghcr.io/kite-plus/explore-web, and a GitHub Release with notes from the
+# changelogs and native builds attached. A manual run builds everything
+# without publishing. RELEASE.md has the steps.
 name: Release
 
 on:
@@ -17,9 +19,36 @@ jobs:
     name: Verify
     uses: ./.github/workflows/ci.yml
 
+  # Before anything is published: a tag with no changelog section stops here.
+  notes:
+    name: Release notes
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+
+      - name: Build the notes
+        run: |
+          previous="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          PREVIOUS_TAG="$previous" node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
+          cat release-notes.md
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+
   image:
     name: Image (${{ matrix.name }})
-    needs: verify
+    needs: [verify, notes]
+    # A manual run skips the notes and still builds.
+    if: ${{ !cancelled() && needs.verify.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.notes.result) }}
     # Pinned for the same reason as in ci.yml.
     runs-on: ubuntu-24.04
     permissions:
@@ -80,3 +109,94 @@ jobs:
             DATE=${{ env.DATE }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # The same program and site without Docker. The Go build needs no cgo, so
+  # one runner compiles every platform.
+  native:
+    name: Native builds
+    needs: [verify, notes]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.notes.result) }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build the archives
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          pkg=github.com/kite-plus/explore/internal/buildinfo
+          ldflags="-s -w -X $pkg.Version=$version -X $pkg.Commit=$(git rev-parse --short HEAD) -X $pkg.Date=$(git log -1 --format=%cI)"
+          mkdir -p out stage
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}" arch="${target#*/}"
+            name="explore-$version-$os-$arch"
+            exe=explore
+            if [ "$os" = windows ]; then exe=explore.exe; fi
+            mkdir -p "stage/$name"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "stage/$name/$exe" ./cmd/explore
+            cp LICENSE README.md README.zh-CN.md "stage/$name/"
+            if [ "$os" = windows ]; then
+              (cd stage && zip -qr "../out/$name.zip" "$name")
+            else
+              tar -C stage -czf "out/$name.tar.gz" "$name"
+            fi
+          done
+          # The build bundles the site's dependencies into dist, so Node runs
+          # it without node_modules, as the image does.
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web build
+          name="explore-web-$version"
+          mkdir -p "stage/$name"
+          cp -R web/dist "stage/$name/dist"
+          cp LICENSE "stage/$name/"
+          tar -C stage -czf "out/$name.tar.gz" "$name"
+          (cd out && sha256sum -- explore-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native
+          path: out/
+
+  publish:
+    name: GitHub Release
+    needs: [notes, image, native]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+
+      # A re-run updates the release it made the first time.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          cd release
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Explore $GITHUB_REF_NAME" --notes-file release-notes.md
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber explore-* SHA256SUMS.txt
+          else
+            prerelease=""
+            case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $prerelease \
+              --title "Explore $GITHUB_REF_NAME" --notes-file release-notes.md explore-* SHA256SUMS.txt
+          fi

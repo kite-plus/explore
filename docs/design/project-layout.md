@@ -208,7 +208,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 | `worker` | 同一镜像，`explore worker` | 抓取；V1 一个实例 |
 | `web` | `ghcr.io/kite-plus/explore-web` | Node 服务，只在服务端调用 `serve`（[frontend.md §10](frontend.md#10-开发测试与部署)）。compose 给网络固定了 `10.89.0.0/24`，`serve` 默认信任它，限流才能拿到读者的地址 |
 
-**发版**：推送 `v*` 标签（例如 `v0.1.0`）后，`.github/workflows/release.yml` 先跑一遍 CI 的全部检查，再为 amd64 和 arm64 构建两个镜像，推送到 GitHub Container Registry：后端的 `ghcr.io/kite-plus/explore`（`deploy/Dockerfile`，serve、worker 和 migrate 共用）和前端的 `ghcr.io/kite-plus/explore-web`（`web/Dockerfile`）。镜像标签是 `0.1.0`、`0.1` 和 `latest`；带 `-` 的预发布版本不更新 `latest`。手动运行这个工作流只构建、不发布。GitHub 上新建的包默认私有，第一次发版后要在组织的 Packages 设置里把两个包改为公开，服务器才能不登录直接拉取。
+**发版**：推送 `v*` 标签（例如 `v0.1.0`）后，`.github/workflows/release.yml` 先跑一遍 CI 的全部检查，再为 amd64 和 arm64 构建两个镜像，推送到 GitHub Container Registry：后端的 `ghcr.io/kite-plus/explore`（`deploy/Dockerfile`，serve、worker 和 migrate 共用）和前端的 `ghcr.io/kite-plus/explore-web`（`web/Dockerfile`）。镜像标签是 `0.1.0`、`0.1` 和 `latest`；带 `-` 的预发布版本不更新 `latest`。同时构建原生版本：`explore-<版本>-<系统>-<架构>`（Linux、macOS、Windows 的 amd64 和 arm64，Go 交叉编译）、`explore-web-<版本>.tar.gz`（前台的 `dist`，依赖已打包进去，用 Node.js 22 运行）和 `SHA256SUMS.txt`，最后发布 GitHub Release：说明取自两份更新日志里这个版本的段落（`scripts/release-notes.mjs`），没有这一段时在推送镜像前就失败。手动运行这个工作流只构建、不发布。步骤见仓库根目录的 `RELEASE.md`。GitHub 上新建的包默认私有，第一次发版后要在组织的 Packages 设置里把两个包改为公开，服务器才能不登录直接拉取。
 
 **服务器部署**：服务器上只需要 Docker 和三个文件，不需要源码：`deploy/docker-compose.yaml`、`deploy/Caddyfile`，以及照 `deploy/.env.example` 填好的 `.env`（不进版本库）。三个文件放在同一个目录里运行：
 

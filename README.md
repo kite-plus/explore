@@ -58,6 +58,17 @@ docker compose exec -T postgres pg_dump -U explore --exclude-table-data=entries 
 
 To put a reverse proxy you already run in place of Caddy, see [docs/design/project-layout.md](docs/design/project-layout.md#10-部署).
 
+### Without Docker
+
+Every [release](https://github.com/kite-plus/explore/releases) also carries native builds: `explore-<version>-<os>-<arch>` is the one program behind the API, the crawler and database migrations, for Linux, macOS and Windows on amd64 and arm64, and `explore-web-<version>.tar.gz` is the site. You also need PostgreSQL 16, Node.js 22 and a reverse proxy:
+
+1. Set `EXPLORE_DATABASE_URL` and `EXPLORE_PUBLIC_URL`, then run `explore migrate up`. Run it again after every upgrade.
+2. Keep `explore serve` (on `127.0.0.1:8080` by default) and `explore worker` running. Set `EXPLORE_TRUSTED_PROXIES=127.0.0.1` so rate limits still see readers' addresses behind the proxy and the site.
+3. In the unpacked `explore-web-<version>` directory, run `node dist/server/entry.mjs` with `EXPLORE_API_URL=http://127.0.0.1:8080`, `EXPLORE_PUBLIC_URL`, `HOST=127.0.0.1` and `PORT=4321`.
+4. Have the proxy send `/api/*`, `/feed.xml`, `/blogs.opml`, `/healthz` and `/readyz` to serve and everything else to the site, as `deploy/Caddyfile` does.
+
+`deploy/.env.example` explains the other settings.
+
 ## Development
 
 You need Go 1.26 and Docker, plus Node 22 and pnpm for the frontend.
