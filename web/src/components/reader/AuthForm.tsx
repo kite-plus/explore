@@ -11,7 +11,7 @@ import { readerRequest, type ReaderUser } from "@/lib/reader-api";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD = 12;
 
-type Errors = Partial<Record<"name" | "email" | "password", string>>;
+type Errors = Partial<Record<"name" | "email" | "password" | "confirm", string>>;
 
 // Laid out like the admin sign-in (src/admin/features/auth/sign-in.tsx), so
 // both read as one site.
@@ -21,6 +21,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,6 +54,8 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
     if (!password) found.password = zh ? "请输入密码。" : "Enter your password.";
     else if (register && password.length < MIN_PASSWORD) {
       found.password = zh ? `密码至少 ${MIN_PASSWORD} 位。` : `Use at least ${MIN_PASSWORD} characters.`;
+    } else if (register && confirm !== password) {
+      found.confirm = zh ? "两次输入的密码不一致。" : "The passwords do not match.";
     }
     return found;
   }
@@ -81,6 +84,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
 
   function switchMode() {
     setRegister(value => !value);
+    setConfirm("");
     setSubmitted(false);
     setError("");
   }
@@ -169,6 +173,22 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
               aria-describedby={errors.password || register ? "auth-password-message" : undefined}
             />
           </Item>
+
+          {register && (
+            <Item id="auth-confirm" label={zh ? "确认密码" : "Confirm password"} error={errors.confirm} busy={busy}>
+              <PasswordInput
+                zh={zh}
+                id="auth-confirm"
+                name="confirm"
+                value={confirm}
+                onChange={event => setConfirm(event.target.value)}
+                disabled={busy}
+                autoComplete="new-password"
+                aria-invalid={Boolean(errors.confirm)}
+                aria-describedby={errors.confirm ? "auth-confirm-message" : undefined}
+              />
+            </Item>
+          )}
 
           {error && (
             <Alert variant="destructive">
