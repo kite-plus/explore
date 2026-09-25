@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = readFileSync(new URL("../src/scripts/theme.js", import.meta.url), "utf8");
 
-function load({ saved, storage = true } = {}) {
+function load({ saved, storage = true, systemDark = false, reducedMotion = false, transitions = false } = {}) {
   const store = new Map(saved ? [["theme", saved]] : []);
   const listeners = { document: {}, window: {} };
   const on = (bucket) => (type, fn) => {
@@ -30,9 +30,19 @@ function load({ saved, storage = true } = {}) {
     setAttribute(name, value) {
       this.attrs[name] = value;
     }
+    getBoundingClientRect() {
+      return { left: 100, top: 10, width: 32, height: 32 };
+    }
   }
   const button = new Element(true);
-  const root = { dataset: {} };
+  const animations = [];
+  const root = { dataset: {}, animate: (keyframes, options) => animations.push({ keyframes, options }) };
+  let started = 0;
+  const startViewTransition = (update) => {
+    started++;
+    update();
+    return { ready: Promise.resolve() };
+  };
 
   vm.runInNewContext(source, {
     Element,
@@ -42,12 +52,24 @@ function load({ saved, storage = true } = {}) {
       setItem: (key, value) => (blocked(), store.set(key, value)),
       removeItem: (key) => (blocked(), store.delete(key)),
     },
-    document: { documentElement: root, querySelectorAll: () => [button], addEventListener: on(listeners.document) },
+    document: {
+      documentElement: root,
+      querySelectorAll: () => [button],
+      addEventListener: on(listeners.document),
+      ...(transitions ? { startViewTransition } : {}),
+    },
+    matchMedia: (query) => ({
+      matches: (query.includes("color-scheme: dark") && systemDark) || (query.includes("reduced-motion") && reducedMotion),
+    }),
+    innerWidth: 1200,
+    innerHeight: 800,
   });
 
   return {
     root,
     store,
+    animations,
+    transitions: () => started,
     label: () => button.attrs["aria-label"],
     title: () => button.attrs.title,
     ready: () => fire(listeners.document, "DOMContentLoaded"),
@@ -121,6 +143,34 @@ describe("theme script", () => {
     assert.equal(page.root.dataset.theme, "light");
     page.click();
     assert.equal(page.root.dataset.theme, undefined);
+  });
+
+  test("reveals the new theme from the toggle when the page changes color", async () => {
+    const page = load({ transitions: true });
+    page.ready();
+    page.click();
+    assert.equal(page.transitions(), 1);
+    assert.equal(page.root.dataset.theme, "dark", "the transition applies the theme");
+    assert.equal(page.root.dataset.themeSwitched, "", "the new icon turns in");
+    await Promise.resolve();
+    const [{ keyframes, options }] = page.animations;
+    assert.equal(options.pseudoElement, "::view-transition-new(root)");
+    const radius = Math.hypot(1200 - 116, 800 - 26);
+    assert.deepEqual([...keyframes.clipPath], ["circle(0 at 116px 26px)", `circle(${radius}px at 116px 26px)`]);
+  });
+
+  test("switches at once when the page keeps its colors or motion is reduced", () => {
+    const dark = load({ transitions: true, systemDark: true });
+    dark.click();
+    assert.equal(dark.root.dataset.theme, "dark");
+    assert.equal(dark.transitions(), 0, "automatic already showed dark");
+    dark.click();
+    assert.equal(dark.transitions(), 1, "dark to light changes the page");
+
+    const still = load({ transitions: true, reducedMotion: true });
+    still.click();
+    assert.equal(still.root.dataset.theme, "dark");
+    assert.equal(still.transitions(), 0);
   });
 
   test("follows a choice made in another tab", () => {

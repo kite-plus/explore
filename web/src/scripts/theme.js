@@ -42,8 +42,14 @@
     if (event.persisted) reload();
   });
 
+  const prefers = (query) => typeof matchMedia === "function" && matchMedia(query).matches;
+  // Automatic mode shows the system's theme.
+  const shown = () => theme ?? (prefers("(prefers-color-scheme: dark)") ? "dark" : "light");
+
   document.addEventListener("click", (event) => {
-    if (!(event.target instanceof Element) || !event.target.closest("[data-theme-toggle]")) return;
+    const button = event.target instanceof Element ? event.target.closest("[data-theme-toggle]") : null;
+    if (!button) return;
+    const before = shown();
     theme = theme === null ? "dark" : theme === "dark" ? "light" : null;
     try {
       if (theme) localStorage.setItem("theme", theme);
@@ -51,7 +57,30 @@
     } catch {
       // Storage may be blocked; the choice then holds only on this page.
     }
-    apply();
+    // Lets the new icon turn in (global.css) without animating the first paint.
+    root.dataset.themeSwitched = "";
+    if (
+      shown() === before ||
+      prefers("(prefers-reduced-motion: reduce)") ||
+      typeof document.startViewTransition !== "function"
+    ) {
+      apply();
+      return;
+    }
+    // The new theme spreads from the toggle as a growing circle.
+    const box = button.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    document.startViewTransition(apply).ready.then(
+      () =>
+        root.animate(
+          { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+          { duration: 450, easing: "cubic-bezier(0.4, 0, 0.2, 1)", pseudoElement: "::view-transition-new(root)" },
+        ),
+      // A newer click skipped this transition; its theme is already applied.
+      () => {},
+    );
   });
 
   const updateAvatar = (img) => {
