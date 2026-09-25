@@ -27,7 +27,7 @@
 
 `GET /api/v1/me` 返回当前用户；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
 
-`GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`，维护者 Bearer Token 仍可使用。
+`GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`。
 
 ### 安装
 
@@ -271,7 +271,7 @@
 | `invalid_request` | 400 | 请求体或参数格式错误 |
 | `invalid_url` | 400 | 不是公网的 `http(s)` 地址 |
 | `invalid_cursor` | 400 | 游标无法解析 |
-| `unauthorized` | 401 | 管理接口的令牌缺失或无效 |
+| `unauthorized` | 401 | 未登录或会话已失效；调用管理接口的账号没有后台权限 |
 | `excluded` | 403 | 博客已退出或被屏蔽 |
 | `not_found` | 404 | 资源不存在或不可见 |
 | `already_listed` | 409 | 博客已经收录 |
