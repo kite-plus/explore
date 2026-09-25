@@ -13,6 +13,7 @@ export const ADMIN_TITLES: Record<string, string> = {
   '/admin/settings': '系统设置',
   '/admin/settings/notice': '站点公告',
   '/admin/settings/appearance': '外观',
+  '/admin/profile': '个人资料',
 }
 
 export function adminTitle(pathname: string) {

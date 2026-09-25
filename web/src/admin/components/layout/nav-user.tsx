@@ -1,9 +1,8 @@
-import { ChevronsUpDown, ExternalLink, LogOut, Settings } from 'lucide-react'
+import { ChevronsUpDown, ExternalLink, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { Link } from '@/admin/router'
-import { getDisplayNameInitials } from '@/admin/lib/utils'
 import { useAuth } from '@/admin/context/auth-provider'
 import useDialogState from '@/admin/hooks/use-dialog-state'
-import { Avatar, AvatarFallback } from '@/admin/components/ui/avatar'
+import { Badge } from '@/admin/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,13 +19,14 @@ import {
   useSidebar,
 } from '@/admin/components/ui/sidebar'
 import { SignOutDialog } from '@/admin/components/sign-out-dialog'
+import { UserAvatar } from '@/admin/components/user-avatar'
 
+/** The signed-in admin at the foot of the sidebar, the one place for account actions. */
 export function NavUser() {
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
   const { user } = useAuth()
   const [open, setOpen] = useDialogState()
-  const name = user?.name ?? '管理员'
-  const initials = getDisplayNameInitials(user?.name ?? '')
+  if (!user) return null
 
   return (
     <>
@@ -38,39 +38,41 @@ export function NavUser() {
                 size='lg'
                 className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
               >
-                <Avatar className='h-8 w-8 rounded-lg'>
-                  <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
-                </Avatar>
+                <UserAvatar name={user.name} email={user.email} />
                 <div className='grid flex-1 text-start text-sm leading-tight'>
-                  <span className='truncate font-semibold'>{name}</span>
-                  <span className='truncate text-xs'>{user?.email}</span>
+                  <span className='truncate font-medium'>{user.name}</span>
+                  <span className='truncate text-xs text-muted-foreground'>{user.email}</span>
                 </div>
-                <ChevronsUpDown className='ms-auto size-4' />
+                <ChevronsUpDown className='ms-auto size-4 text-muted-foreground' />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
+              className='w-(--radix-dropdown-menu-trigger-width) min-w-64 rounded-lg'
               side={isMobile ? 'bottom' : 'right'}
               align='end'
               sideOffset={4}
             >
               <DropdownMenuLabel className='p-0 font-normal'>
-                <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
-                  <Avatar className='h-8 w-8 rounded-lg'>
-                    <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
-                  </Avatar>
-                  <div className='grid flex-1 text-start text-sm leading-tight'>
-                    <span className='truncate font-semibold'>{name}</span>
-                    <span className='truncate text-xs'>{user?.email}</span>
+                <div className='flex items-center gap-3 p-2 text-start'>
+                  <UserAvatar name={user.name} email={user.email} className='size-10 text-base' />
+                  <div className='grid min-w-0 flex-1 gap-1 leading-tight'>
+                    <div className='flex min-w-0 items-center gap-2'>
+                      <span className='truncate text-sm font-semibold'>{user.name}</span>
+                      <Badge variant='secondary'>
+                        <ShieldCheck />
+                        管理员
+                      </Badge>
+                    </div>
+                    <span className='truncate text-xs text-muted-foreground'>{user.email}</span>
                   </div>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <Link to='/admin/settings'>
-                    <Settings />
-                    系统设置
+                  <Link to='/admin/profile' onClick={() => setOpenMobile(false)}>
+                    <UserRound />
+                    个人资料
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
@@ -81,10 +83,7 @@ export function NavUser() {
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant='destructive'
-                onClick={() => setOpen(true)}
-              >
+              <DropdownMenuItem variant='destructive' onClick={() => setOpen(true)}>
                 <LogOut />
                 退出登录
               </DropdownMenuItem>

@@ -6,7 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AdminUnauthorizedError, adminRequest } from '@/lib/admin-api'
+import { AdminUnauthorizedError, accountRequest, adminRequest } from '@/lib/admin-api'
 import { useAuth } from '@/admin/context/auth-provider'
 
 export function createQueryClient() {
@@ -33,16 +33,25 @@ export function toastError(cause: unknown, fallback?: string) {
   if (message) toast.error(message)
 }
 
-/** Admin requests with the signed-in account's session. */
-export function useAdminRequest() {
+function useSignedInRequest(send: typeof adminRequest) {
   const { status, onUnauthorized } = useAuth()
   return useCallback(
     <T>(path: string, init: RequestInit = {}): Promise<T> => {
       if (status !== 'signed-in') return Promise.reject(new AdminUnauthorizedError())
-      return adminRequest<T>(path, onUnauthorized, init)
+      return send<T>(path, onUnauthorized, init)
     },
-    [status, onUnauthorized]
+    [send, status, onUnauthorized]
   )
+}
+
+/** Admin requests with the signed-in account's session. */
+export function useAdminRequest() {
+  return useSignedInRequest(adminRequest)
+}
+
+/** Requests about the signed-in account itself, under /api/v1/me. */
+export function useAccountRequest() {
+  return useSignedInRequest(accountRequest)
 }
 
 export function useAdminQuery<T>(

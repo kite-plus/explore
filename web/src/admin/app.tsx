@@ -27,6 +27,7 @@ const Queue = lazy(() => import('@/admin/features/queue').then((m) => ({ default
 const ExcludedHosts = lazy(() => import('@/admin/features/excluded-hosts').then((m) => ({ default: m.ExcludedHosts })))
 const Tools = lazy(() => import('@/admin/features/tools').then((m) => ({ default: m.Tools })))
 const Settings = lazy(() => import('@/admin/features/settings').then((m) => ({ default: m.Settings })))
+const Profile = lazy(() => import('@/admin/features/profile').then((m) => ({ default: m.Profile })))
 
 const PAGES: Record<string, ComponentType> = {
   '/admin': Dashboard,
@@ -41,6 +42,7 @@ const PAGES: Record<string, ComponentType> = {
   '/admin/settings': Settings,
   '/admin/settings/notice': Settings,
   '/admin/settings/appearance': Settings,
+  '/admin/profile': Profile,
 }
 
 export function AdminApp() {

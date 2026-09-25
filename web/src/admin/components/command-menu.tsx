@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowRight, ChevronRight, ExternalLink, Laptop, Moon, Sun } from 'lucide-react'
+import { ArrowRight, ChevronRight, ExternalLink, Laptop, Moon, Sun, UserRound } from 'lucide-react'
 import { useNavigate } from '@/admin/router'
 import { useSearch } from '@/admin/context/search-provider'
 import { useTheme } from '@/admin/context/theme-provider'
@@ -92,6 +92,10 @@ export function CommandMenu() {
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading='其他'>
+            <CommandItem onSelect={() => runCommand(() => navigate({ to: '/admin/profile' }))}>
+              <UserRound />
+              <span>个人资料</span>
+            </CommandItem>
             <CommandItem
               onSelect={() => runCommand(() => window.open('/', '_blank'))}
             >

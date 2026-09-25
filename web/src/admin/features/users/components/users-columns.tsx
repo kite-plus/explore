@@ -1,9 +1,9 @@
 import { type ColumnDef } from '@tanstack/react-table'
-import { cn, getDisplayNameInitials } from '@/admin/lib/utils'
+import { cn } from '@/admin/lib/utils'
 import { formatDate, formatDateTime } from '@/admin/lib/format'
-import { Avatar, AvatarFallback } from '@/admin/components/ui/avatar'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { LongText } from '@/admin/components/long-text'
+import { UserAvatar } from '@/admin/components/user-avatar'
 import type { AdminUserRow } from '@/lib/admin-types'
 import { roles, userStatuses } from '../data/data'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -14,9 +14,7 @@ export const usersColumns: ColumnDef<AdminUserRow>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title='用户' />,
     cell: ({ row }) => (
       <div className='flex items-center gap-3'>
-        <Avatar className='size-8'>
-          <AvatarFallback>{getDisplayNameInitials(row.original.display_name)}</AvatarFallback>
-        </Avatar>
+        <UserAvatar name={row.original.display_name} email={row.original.email} />
         <LongText className='max-w-40 font-medium'>{row.original.display_name}</LongText>
       </div>
     ),

@@ -16,7 +16,7 @@ type AuthContextType = {
   status: AuthStatus
   user: AdminUser | null
   error: string | null
-  /** Takes the account that just signed in or finished setup. */
+  /** Takes the account after sign-in, setup or a change to its profile. */
   signedIn: (account: ReaderUser) => void
   logout: () => void
   /** Called by admin requests that get a 401. */
