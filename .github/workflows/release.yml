@@ -179,10 +179,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      # By name: build-push-action uploads its build records as artifacts of
+      # the run too, and those do not download.
       - uses: actions/download-artifact@v8
         with:
+          name: release-notes
           path: release
-          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: native
+          path: release
 
       # A re-run updates the release it made the first time.
       - name: Publish the release
