@@ -224,7 +224,7 @@ WHERE id = @blog_id;
 
 ### 4.1 首页时间流
 
-规则见 [architecture.md §6.6](architecture.md#6-抓取与展示规则)：近 30 天、日期可信、不在未来、同一博客每天最多 3 篇。
+规则见 [architecture.md §6.6](architecture.md#6-抓取与展示规则)：日期可信、不在未来、同一博客每天最多 3 篇，不限时间范围。
 
 ```sql
 WITH visible AS (
@@ -239,7 +239,6 @@ WITH visible AS (
       AND b.gone_since IS NULL
       AND b.last_succeeded_at > now() - interval '7 days'
       AND e.date_trusted
-      AND e.published_at >  now() - @window::interval
       AND e.published_at <= now() + @future_tolerance::interval
 )
 SELECT id, blog_id, title, url, excerpt, published_at
@@ -253,11 +252,12 @@ LIMIT @page_size;
 - **先算每天的上限，再套游标**：上限在 `visible` 里对全体数据计算，翻页时结果才前后一致。第一页不带游标条件。
 - "每天"按 UTC 划分 `[待定]`。
 - 参数值来自 `internal/policy`，不在 SQL 里写死。
+- **不设时间窗口**：缓存本身有上限（博客数 × 20 篇），对全部缓存排序和翻页的代价随之有界。
 
 ### 4.2 博客目录与博客页
 
 - 目录：可见的博客，按最近一篇可信日期的文章倒序（没有文章的排最后），游标为 `(coalesce(last_published_at, '-infinity'), id)`。`last_published_at` 同时供前端生成 `sitemap.xml` 的 `lastmod`。
-- 博客页：该博客在 `entries` 里的全部文章，包括没有日期、日期不可信和超过 30 天的，按发布时间倒序、没有日期的排最后。
+- 博客页：该博客在 `entries` 里的全部文章，包括没有日期和日期不可信的，按发布时间倒序、没有日期的排最后。
 
 ---
 

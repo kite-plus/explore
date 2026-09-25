@@ -32,6 +32,10 @@ type SurveyRecord struct {
 	Error  string          `json:"error,omitempty"`
 }
 
+// surveyWindow is the recent span the survey counts posts in, the period the
+// E0 measurements report on.
+const surveyWindow = 30 * 24 * time.Hour
+
 // FeedStats measures the feed a check found. Text lengths are runes of
 // plain text, as medians over the items.
 type FeedStats struct {
@@ -54,7 +58,7 @@ type FeedStats struct {
 	Untrusted  int `json:"untrusted,omitempty"`
 
 	MaxSameMinute int `json:"max_same_minute"`
-	InWindow      int `json:"in_window"` // dated items inside policy.StreamWindow
+	InWindow      int `json:"in_window"` // dated items from the last surveyWindow
 	SpanDays      int `json:"span_days"` // from the oldest dated item to the newest
 
 	SummaryRunes int `json:"summary_runes"` // over items with a summary
@@ -139,7 +143,7 @@ func (c *Checker) measure(ctx context.Context, r *model.CheckReport, loc *locate
 		if t.After(newest) {
 			newest = *t
 		}
-		if t.After(now.Add(-policy.StreamWindow)) && !t.After(now.Add(policy.FutureTolerance)) {
+		if t.After(now.Add(-surveyWindow)) && !t.After(now.Add(policy.FutureTolerance)) {
 			fs.InWindow++
 		}
 	}

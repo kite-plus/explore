@@ -2,6 +2,7 @@
 import EntryItem from "@/components/EntryItem.astro";
 import LangFilter from "@/components/LangFilter.astro";
 import Message from "@/components/Message.astro";
+import StreamTabs from "@/components/StreamTabs.astro";
 import TagFilter from "@/components/TagFilter.astro";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
@@ -41,18 +42,7 @@ const names = data ? tagNames(data.tags, lang) : {};
           <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{t.home.intro}</p>
         </div>
         <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b">
-          <nav aria-label={t.home.feedLabel} class="flex items-end gap-6">
-            <a
-              href={withQuery(localePath(lang, "/"), { lang: data.filter, tag: data.tag })}
-              aria-current="page"
-              class="-mb-px border-b-2 border-foreground pb-3 text-sm font-semibold text-foreground outline-offset-4"
-            >
-              {t.home.discover}
-            </a>
-            <a href={localePath(lang, "/following")} class="pb-3 text-sm text-muted-foreground hover:text-foreground">
-              {t.home.subscriptions}
-            </a>
-          </nav>
+          <StreamTabs lang={lang} current="latest" query={{ lang: data.filter, tag: data.tag }} />
           <div class="flex flex-wrap items-center gap-2 pb-2">
             <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} variant="segmented" />
             <TagFilter lang={lang} path="/" tags={data.tags} current={data.tag} filter={data.filter} />

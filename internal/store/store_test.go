@@ -404,7 +404,8 @@ func TestStreamRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Join(identities(all, func(e StreamEntry) string { return e.Identity }), ",")
-	if want := "soon,en1,zh5,zh4,zh3,en2"; got != want {
+	// A post from over a month ago still shows, after the newer ones.
+	if want := "soon,en1,zh5,zh4,zh3,en2,old"; got != want {
 		t.Fatalf("stream = %s, want %s", got, want)
 	}
 
@@ -412,7 +413,7 @@ func TestStreamRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(identities(zhOnly, func(e StreamEntry) string { return e.Identity }), ","); got != "soon,zh5,zh4,zh3" {
+	if got := strings.Join(identities(zhOnly, func(e StreamEntry) string { return e.Identity }), ","); got != "soon,zh5,zh4,zh3,old" {
 		t.Errorf("zh stream = %s", got)
 	}
 	if zhOnly[0].Blog.Host != "zh.example.com" || zhOnly[0].Blog.Language != "zh-CN" {

@@ -30,7 +30,6 @@ var EarliestDate = time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // Stream rules.
 const (
-	StreamWindow        = 30 * 24 * time.Hour
 	StreamPerBlogPerDay = 3
 	FutureTolerance     = time.Hour
 )

@@ -1,0 +1,7 @@
+---
+import Recommended from "@/views/Recommended.astro";
+
+Astro.response.headers.set("Cache-Control", "public, max-age=60");
+---
+
+<Recommended lang="en" />

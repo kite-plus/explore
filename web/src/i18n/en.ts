@@ -30,7 +30,8 @@ export const en: Dict = {
     title: "New posts from independent blogs",
     heading: "Latest posts",
     feedLabel: "Post feeds",
-    discover: "Discover",
+    latest: "Latest",
+    recommended: "Recommended",
     subscriptions: "Following",
     intro: "From the public feeds of listed blogs, newest first. Click a title to read the post on the author's site, in a new tab.",
     empty: "No posts yet.",
@@ -38,6 +39,12 @@ export const en: Dict = {
     loading: "Loading…",
     retry: "Failed to load. Click to retry",
     end: "You’re all caught up",
+  },
+  recommended: {
+    title: "Recommended posts",
+    intro: "Posts scored on quality, with the best first.",
+    soon: "Recommendations are coming soon. Until then, try the latest posts.",
+    latest: "See the latest posts",
   },
   blogs: {
     title: "Blog directory",

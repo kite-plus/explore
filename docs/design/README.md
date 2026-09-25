@@ -12,7 +12,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | [api.md](api.md) | HTTP 接口：约定、公开接口、提交、管理、`/feed.xml` 与 OPML、错误码 | 后端、前端 |
 | [frontend.md](frontend.md) | 前端（Astro）：选型、页面与路由、中英双语、组件规则、数据获取、提交流程、SEO、CSP | 前端 |
 | [project-layout.md](project-layout.md) | 工程结构：目录、包的职责与依赖规则、命令、配置、测试、本地开发、部署 | 所有写代码的人 |
-| [accounts.md](accounts.md) | 读者账号、订阅、推荐流与订阅流、文章标签，以及它们对核心原则的修订 | 所有贡献者 |
+| [accounts.md](accounts.md) | 读者账号、订阅、三条信息流（最新、推荐、订阅）、文章标签，以及它们对核心原则的修订 | 所有贡献者 |
 | [admin.md](admin.md) | 管理后台：产品定位、审核工作台、博客治理、健康监控、鉴权与 UI 架构 | 维护者、前端、后端 |
 | [admin-frontend.md](admin-frontend.md) | 管理后台**前端实现**：目录结构、路由、组件树、鉴权 Hook、数据类型、快捷键、错误处理规范 | 前端 |
 | [admin-operations.md](admin-operations.md) | 当前内容运营后台的页面、数据、权限、接口与验证方式 | 前端、后端、运维 |

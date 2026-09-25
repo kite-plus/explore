@@ -41,13 +41,13 @@ type StreamQuery struct {
 	Cursor *Cursor
 }
 
-// Stream returns the home stream: trusted, recent, not in the future, and
-// at most policy.StreamPerBlogPerDay entries per blog and day. The daily
-// cap is applied before the cursor so pages stay consistent.
+// Stream returns the latest stream: every entry with a trusted date that is
+// not in the future, newest first, and at most policy.StreamPerBlogPerDay
+// entries per blog and day. The daily cap is applied before the cursor so
+// pages stay consistent.
 func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error) {
 	args := pgx.NamedArgs{
 		"unhealthy_after":  seconds(policy.UnhealthyAfter),
-		"window":           seconds(policy.StreamWindow),
 		"future_tolerance": seconds(policy.FutureTolerance),
 		"per_day":          policy.StreamPerBlogPerDay,
 		"lang":             q.Lang,
@@ -73,7 +73,6 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 			WHERE `+visible+`
 			  AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 			  AND e.date_trusted
-			  AND e.published_at >  now() - (@window * interval '1 second')
 			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 			  AND (@tag::text = '' OR @tag = ANY (e.tags))

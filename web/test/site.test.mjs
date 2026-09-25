@@ -62,7 +62,7 @@ const entryStreamScript = readFileSync(new URL("../src/scripts/entry-stream.js",
 const entryStreamHash = `'sha256-${createHash("sha256").update(entryStreamScript).digest("base64")}'`;
 const entryPages = new Set(["/", "/en/", "/blogs/zh.example.com", "/en/blogs/zh.example.com"]);
 
-const publicPages = ["/", "/en/", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
+const publicPages = ["/", "/en/", "/recommended", "/en/recommended", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
 
 describe("only local scripts, zero third parties", () => {
   for (const path of publicPages) {
@@ -132,7 +132,7 @@ describe("search engines", () => {
     assert.match(html, /<title>中文博客 - Explore<\/title>/);
   });
 
-  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`]) {
+  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/blogs?lang=en", "/submit", "/recommended", `/submissions/11111111-2222-3333-4444-555555555555`]) {
     test(`${path} stays out of the index`, async () => {
       const { html } = await page(path);
       assert.match(html, /<meta name="robots" content="noindex, follow">/);
@@ -157,6 +157,32 @@ describe("search engines", () => {
 });
 
 describe("content", () => {
+  test("the stream tabs lead to latest, recommended and following", async () => {
+    const cases = [
+      ["/", "/", ["最新", "推荐", "订阅"]],
+      ["/recommended", "/recommended", ["最新", "推荐", "订阅"]],
+      ["/en/", "/en/", ["Latest", "Recommended", "Following"]],
+      ["/en/recommended", "/en/recommended", ["Latest", "Recommended", "Following"]],
+    ];
+    for (const [path, own, labels] of cases) {
+      const { html } = await page(path);
+      const tabs = [...html.matchAll(/<a href="([^"]*)"( aria-current="page")? class="-mb-px[^"]*"[^>]*>([^<]*)<\/a>/g)].map(
+        ([, href, current, label]) => ({ href, current: Boolean(current), label: label.trim() }),
+      );
+      assert.deepEqual(tabs.map((tab) => tab.label), labels, path);
+      assert.deepEqual(tabs.filter((tab) => tab.current).map((tab) => tab.href), [own], `${path} marks its own tab`);
+    }
+  });
+
+  test("the recommended page says it is coming and links the latest posts", async () => {
+    const { res, html } = await page("/recommended");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=60");
+    assert.match(html, /推荐即将上线/);
+    assert.match(html, /<a\b[^>]*\shref="\/"[^>]*>\s*看最新文章/);
+    assert.match((await page("/en/recommended")).html, /<a\b[^>]*\shref="\/en\/"[^>]*>\s*See the latest posts/);
+  });
+
   test("entries keep their own language and link to the original", async () => {
     const { html } = await page("/en/");
     assert.match(html, /<article class="[^"]*" lang="zh-CN">/);

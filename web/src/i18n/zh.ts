@@ -28,7 +28,8 @@ export const zh = {
     title: "独立博客的最新文章",
     heading: "最新文章",
     feedLabel: "文章流",
-    discover: "发现",
+    latest: "最新",
+    recommended: "推荐",
     subscriptions: "订阅",
     intro: "来自已收录博客的公开订阅源，按发布时间排列。点击标题，会在新标签页打开作者的网站阅读原文。",
     empty: "暂时还没有文章。",
@@ -36,6 +37,12 @@ export const zh = {
     loading: "加载中…",
     retry: "加载失败，点击重试",
     end: "已经看完了所有最新文章",
+  },
+  recommended: {
+    title: "推荐文章",
+    intro: "给文章评分，把优质文章排在前面。",
+    soon: "推荐即将上线。在那之前，可以先看最新文章。",
+    latest: "看最新文章",
   },
   blogs: {
     title: "博客目录",

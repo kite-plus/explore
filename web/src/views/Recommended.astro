@@ -1,0 +1,29 @@
+---
+import StreamTabs from "@/components/StreamTabs.astro";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+
+interface Props {
+  lang: Lang;
+}
+
+// Posts are not scored yet, so the page says what is coming and stays out of
+// the index until it has posts to show.
+const { lang } = Astro.props;
+const t = dict(lang);
+---
+
+<Base lang={lang} title={t.recommended.title} description={t.recommended.intro} path="/recommended" noindex>
+  <div>
+    <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.recommended.title}</h1>
+    <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{t.recommended.intro}</p>
+  </div>
+  <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b">
+    <StreamTabs lang={lang} current="recommended" />
+  </div>
+  <div class="flex flex-col items-center gap-4 py-16 text-center">
+    <p class="text-muted-foreground">{t.recommended.soon}</p>
+    <ButtonLink href={localePath(lang, "/")} variant="outline">{t.recommended.latest}</ButtonLink>
+  </div>
+</Base>

@@ -1,0 +1,35 @@
+---
+import { dict, localePath, type Lang } from "@/i18n";
+import { withQuery } from "@/lib/utils";
+
+type Stream = "latest" | "recommended" | "following";
+
+interface Props {
+  lang: Lang;
+  current: Stream;
+  // The current stream's filters, which its own tab keeps.
+  query?: Record<string, string | undefined>;
+}
+
+const { lang, current, query = {} } = Astro.props;
+const t = dict(lang);
+const tabs: { id: Stream; path: string; label: string }[] = [
+  { id: "latest", path: "/", label: t.home.latest },
+  { id: "recommended", path: "/recommended", label: t.home.recommended },
+  { id: "following", path: "/following", label: t.home.subscriptions },
+];
+---
+
+<nav aria-label={t.home.feedLabel} class="flex items-end gap-6">
+  {
+    tabs.map((tab) => (
+      <a
+        href={tab.id === current ? withQuery(localePath(lang, tab.path), query) : localePath(lang, tab.path)}
+        aria-current={tab.id === current ? "page" : undefined}
+        class="-mb-px border-b-2 border-transparent pb-3 text-sm text-muted-foreground outline-offset-4 hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
+      >
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>
