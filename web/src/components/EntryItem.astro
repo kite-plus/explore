@@ -1,6 +1,6 @@
 ---
 import BlogAvatar from "@/components/BlogAvatar.astro";
-import { Check, CircleHelp, CircleX } from "lucide-react";
+import { CircleCheck, CircleHelp, CircleX } from "lucide-react";
 import ExternalLink from "@/components/ExternalLink.astro";
 import { dict, localePath, type Lang } from "@/i18n";
 import { relativeTime } from "@/lib/format";
@@ -34,6 +34,7 @@ const statusLabel = linkStatus === "available"
 const checkedAt = entry.link_checked_at ? t.entryStatus.checkedAt(relativeTime(entry.link_checked_at, lang)) : null;
 const statusDescription = [statusLabel, checkedAt, t.entryStatus.hint].filter(Boolean).join(" · ");
 const pending = linkStatus === "unknown" && !entry.link_checked_at;
+const statusClass = linkStatus === "available" || linkStatus === "unavailable" ? `entry-status-${linkStatus}` : "entry-status-unknown";
 ---
 
 <article class="flex gap-4 py-5" lang={contentLang}>
@@ -85,7 +86,7 @@ const pending = linkStatus === "unknown" && !entry.link_checked_at;
           <span data-check-label>{statusLabel}</span>
         </button>
         <span data-entry-check-result class="hidden items-center gap-1 rounded-full" role="status">
-          <Check data-link-icon="available" className="hidden size-4" strokeWidth={2.5} aria-hidden="true" />
+          <CircleCheck data-link-icon="available" className="hidden size-3.5" aria-hidden="true" />
           <CircleX data-link-icon="unavailable" className="hidden size-3" aria-hidden="true" />
           <CircleHelp data-link-icon="unknown" className="hidden size-3" aria-hidden="true" />
           <span data-link-label></span>
@@ -97,13 +98,13 @@ const pending = linkStatus === "unknown" && !entry.link_checked_at;
         <span
           class:list={[
             "inline-flex items-center gap-1 rounded-full",
-            linkStatus === "available" ? "entry-status-available" : "px-2 py-0.5",
-            linkStatus === "unavailable" ? "entry-status-unavailable" : "entry-status-unknown",
+            statusClass,
+            linkStatus !== "available" && "px-2 py-0.5",
           ]}
           title={statusDescription}
         >
           {linkStatus === "available" ? (
-            <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
+            <CircleCheck className="size-3.5" aria-hidden="true" />
           ) : linkStatus === "unavailable" ? (
             <CircleX className="size-3" aria-hidden="true" />
           ) : (

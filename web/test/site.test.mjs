@@ -262,6 +262,7 @@ describe("content", () => {
     const zh = (await page("/")).html;
     const en = (await page("/en/")).html;
     assert.match(zh, /entry-status-available/);
+    assert.doesNotMatch(zh, /class="[^"]*\bentry-status-available\b[^"]*\bentry-status-unknown\b/, "an available link is green, not also amber");
     assert.match(zh, /class="sr-only">最近检测正常/);
     assert.match(zh, /疑似失效/);
     assert.match(en, /class="sr-only">Last check succeeded/);
