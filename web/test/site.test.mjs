@@ -175,10 +175,10 @@ describe("content", () => {
   });
 
   test("the streams share one nav item and one heading", async () => {
-    for (const [path, label] of [["/", "文章"], ["/recommended", "文章"], ["/en/", "Posts"], ["/en/recommended", "Posts"]]) {
+    for (const [path, label] of [["/", "发现"], ["/recommended", "发现"], ["/en/", "Discover"], ["/en/recommended", "Discover"]]) {
       const { html } = await page(path);
       const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
-      assert.match(header, new RegExp(`<a href="[^"]*" aria-current="page" class="[^"]*">\\s*${label}\\s*</a>`), `${path} marks the posts item`);
+      assert.match(header, new RegExp(`<a href="[^"]*" aria-current="page" class="[^"]*">\\s*${label}\\s*</a>`), `${path} marks the Discover item`);
       assert.doesNotMatch(header, /href="(\/en)?\/following"/, "following is a tab, not a nav item");
       assert.match(html, new RegExp(`<h1[^>]*>${label}</h1>`), `${path} keeps the heading`);
     }
