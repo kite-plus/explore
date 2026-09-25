@@ -83,6 +83,9 @@ type Request struct {
 	MaxBytes     int64
 	ETag         string
 	LastModified string
+	// Truncate keeps the first MaxBytes of a longer body instead of failing,
+	// for reading only the head of a page.
+	Truncate bool
 }
 
 // Response is a completed GET, whatever its status.
@@ -258,7 +261,7 @@ func (c *Client) do(ctx context.Context, u *url.URL, r Request, robotsFile bool)
 		return nil, err
 	}
 	if int64(len(body)) > limit {
-		if !robotsFile {
+		if !robotsFile && !r.Truncate {
 			return nil, ErrTooLarge
 		}
 		body = body[:limit]

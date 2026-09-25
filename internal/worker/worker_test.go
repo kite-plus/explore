@@ -288,7 +288,7 @@ func (e *env) view(hosts ...string) snapshot {
 		e.t.Fatal(err)
 	}
 	for _, se := range stream {
-		v.Stream = append(v.Stream, se.Blog.Host+" "+se.Identity+" "+se.Title+" "+se.Excerpt+" "+se.PublishedAt.String())
+		v.Stream = append(v.Stream, se.Blog.Host+" "+se.Identity+" "+se.Title+" "+se.Excerpt+" "+se.ImageURL+" "+se.PublishedAt.String())
 	}
 	dir, err := e.s.Directory(ctx, store.DirectoryQuery{Limit: 100})
 	if err != nil {
@@ -307,7 +307,7 @@ func (e *env) view(hosts ...string) snapshot {
 			e.t.Fatal(err)
 		}
 		for _, en := range entries {
-			raw, _ := json.Marshal([]any{en.Identity, en.URL, en.Title, en.Excerpt, en.PublishedAt, en.DateTrusted})
+			raw, _ := json.Marshal([]any{en.Identity, en.URL, en.Title, en.Excerpt, en.ImageURL, en.PublishedAt, en.DateTrusted})
 			v.Blogs[h] = append(v.Blogs[h], string(raw))
 		}
 	}
@@ -328,7 +328,29 @@ func TestClearingTheCacheLosesNothing(t *testing.T) {
 	if n := e.runOnce(); n != 2 {
 		t.Fatalf("claimed %d, want 2", n)
 	}
+	// Each article page offers a cover and a description of its own, which
+	// the rebuilt cache has to find again.
+	for _, s := range []*site{hexo, wp} {
+		_, entries, err := e.s.VisibleBlog(context.Background(), s.host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, en := range entries {
+			u, err := url.Parse(en.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			head := `<meta property="og:image" content="/covers` + u.Path + `cover.png"><meta property="og:description" content="About ` + en.Identity + `">`
+			s.handle(u.Path, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, "<!doctype html><html><head>"+head+"</head><body></body></html>")
+			})
+		}
+	}
+	e.readPages()
 	before := e.view("127.0.0.1", "localhost")
+	if raw, _ := json.Marshal(before); !strings.Contains(string(raw), "/covers/") {
+		t.Fatal("no entry took a cover from its page, so the rebuild would prove nothing about pages")
+	}
 	if len(before.Stream) == 0 || len(before.Blogs["localhost"]) != 2 {
 		t.Fatalf("nothing to compare: %+v", before)
 	}
@@ -348,6 +370,7 @@ func TestClearingTheCacheLosesNothing(t *testing.T) {
 		t.Fatal("conditional requests were sent while the cache was empty")
 	}
 
+	e.readPages()
 	after := e.view("127.0.0.1", "localhost")
 	a, _ := json.Marshal(after)
 	b, _ := json.Marshal(before)

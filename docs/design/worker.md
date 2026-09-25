@@ -392,3 +392,15 @@ worker 里除了抓取，还有一个每分钟跑一轮的打标签循环。标�
 5. 没配置模型和密钥时不启动这个循环，文章都不带标签，按标签筛选得到的是空列表。
 
 `internal/tagger` 是唯一调用模型的包，这条依赖规则由 `scripts/check-imports.sh` 守住。worker 只认一个接口，由 `cli` 把两者接起来，所以 worker 的测试用的是假的实现，`tagger` 的测试用的是假的接口服务器。
+
+## 12. 读文章页
+
+订阅源不带缩略图，或摘要被截成「[…]」时，worker 读一次这篇文章的页面补上。它和链接检测一样每分钟跑一轮：
+
+1. 取出订阅源缺图、缺摘要或摘要被截断，且 `page_next_check_at` 已到期的文章，每个博客最多一篇，每轮最多 8 篇（`policy.PageChecksPerMinute`），领取时写入两分钟的租约。
+2. 按文章链接发一次 GET，遵守 robots.txt 和 SSRF 防护，只下载开头最多 256 KB（`policy.PageHeadBytes`），读到 `<body>` 就停，正文不解析也不保存。
+3. 从 `<head>` 里取 `og:image`（其次 `twitter:image`），相对地址按页面地址补全，只收 http 和 https；取 `og:description`（其次 `description`、`twitter:description`），和订阅源摘要一样去掉 HTML、截成 ≤ 140 字。针对所有抓取器或 `KiteExplore` 的 robots meta：`noindex` 两样都不取，`nosnippet` 不取描述，`noimageindex` 不取图片。
+4. 读到了（哪怕什么都没取到）、页面返回 404 这类确定结果、被 robots.txt 拒绝、不是 HTML，都算读过，`page_next_check_at` 置空，链接不变就不再读。网络出错、`429`、`5xx` 六小时后重试。
+5. 展示时订阅源自己的图片和完整摘要优先；同一博客多篇文章共用的页面图片或描述是主题给的默认值，不展示（`store` 里的 `shownImage`、`shownExcerpt`）。
+
+清空 `entries` 后，这些字段由这个循环按同样的规则重新读回，每个博客每分钟一篇，比订阅源本身慢一些，但结果一致（`TestClearingTheCacheLosesNothing`）。

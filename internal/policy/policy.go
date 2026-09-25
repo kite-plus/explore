@@ -67,6 +67,14 @@ const (
 	LinkCheckLease      = 2 * time.Minute
 	LinkCheckTimeout    = 10 * time.Second
 	LinkChecksPerMinute = 8
+
+	// An article page is read, head only, where its feed gives no image or
+	// cuts the excerpt short.
+	PageHeadBytes       = 256 << 10
+	PageCheckTimeout    = 12 * time.Second
+	PageCheckLease      = 2 * time.Minute
+	PageRetryInterval   = 6 * time.Hour
+	PageChecksPerMinute = 8
 )
 
 // UserAgentToken is the product token robots.txt rules address.

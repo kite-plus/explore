@@ -62,7 +62,7 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 	}
 	rows, err := s.pool.Query(ctx, `
 		WITH ranked AS (
-			SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(e.excerpt, '') AS excerpt, coalesce(e.image_url, '') AS image_url, e.published_at, e.tags, e.link_status, e.link_checked_at,
+			SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, '') AS excerpt, coalesce(`+shownImage+`, '') AS image_url, e.published_at, e.tags, e.link_status, e.link_checked_at,
 			       b.host, b.name, b.site_url, b.feed_url, b.language,
 			       row_number() OVER (
 			           PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE 'UTC')
@@ -186,11 +186,12 @@ func (s *Store) VisibleBlog(ctx context.Context, host string) (ListedBlog, []mod
 	}
 
 	rows, err = s.pool.Query(ctx, `
-		SELECT id, blog_id, identity, url, title, coalesce(excerpt, ''), coalesce(image_url, ''), published_at, date_trusted, tags, link_status, link_checked_at
-		FROM entries
-		WHERE blog_id = @id AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = entries.blog_id AND se.identity = entries.identity)
-		  AND (published_at IS NULL OR published_at <= now() + (@future_tolerance * interval '1 second'))
-		ORDER BY published_at DESC NULLS LAST, id`,
+		SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, ''), coalesce(`+shownImage+`, ''),
+		       e.published_at, e.date_trusted, e.tags, e.link_status, e.link_checked_at
+		FROM entries e
+		WHERE e.blog_id = @id AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
+		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
+		ORDER BY e.published_at DESC NULLS LAST, e.id`,
 		pgx.NamedArgs{"id": blog.ID, "future_tolerance": seconds(policy.FutureTolerance)})
 	if err != nil {
 		return ListedBlog{}, nil, err

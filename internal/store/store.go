@@ -122,3 +122,17 @@ func scanBlog(row pgx.Row) (model.Blog, error) {
 // active, not gone, and fetched successfully within policy.UnhealthyAfter.
 const visible = `b.status = 'active' AND b.gone_since IS NULL
 	AND b.last_succeeded_at > now() - (@unhealthy_after * interval '1 second')`
+
+// cutExcerpt matches a feed excerpt WordPress cut short with "[…]".
+const cutExcerpt = `e.excerpt ~ '\[(…|\.\.\.)\]\s*$'`
+
+// shownImage and shownExcerpt are what readers see of entry e: the feed's own
+// image and excerpt, else what the entry's page head offered (pages.go). A
+// page value that several of a blog's entries share is the site's default,
+// not the post's own, and is left out.
+const (
+	shownImage = `coalesce(e.image_url, CASE WHEN (SELECT count(*) FROM entries o
+		WHERE o.blog_id = e.blog_id AND o.page_image_url = e.page_image_url) = 1 THEN e.page_image_url END)`
+	shownExcerpt = `CASE WHEN e.excerpt IS NULL OR ` + cutExcerpt + ` THEN coalesce(CASE WHEN (SELECT count(*) FROM entries o
+		WHERE o.blog_id = e.blog_id AND o.page_excerpt = e.page_excerpt) = 1 THEN e.page_excerpt END, e.excerpt) ELSE e.excerpt END`
+)

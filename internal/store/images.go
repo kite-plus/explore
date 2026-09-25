@@ -14,9 +14,9 @@ import (
 func (s *Store) VisibleImageURL(ctx context.Context, entryID int64) (string, error) {
 	var source string
 	err := s.pool.QueryRow(ctx, `
-		SELECT e.image_url
+		SELECT `+shownImage+`
 		FROM entries e JOIN blogs b ON b.id = e.blog_id
-		WHERE e.id = @entry_id AND e.image_url IS NOT NULL
+		WHERE e.id = @entry_id AND `+shownImage+` IS NOT NULL
 		  AND `+visible+`
 		  AND NOT EXISTS (SELECT 1 FROM suppressed_entries se WHERE se.blog_id = e.blog_id AND se.identity = e.identity)
 		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))`,

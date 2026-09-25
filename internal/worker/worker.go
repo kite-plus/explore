@@ -51,6 +51,7 @@ type Worker struct {
 
 	lastMaintenance time.Time
 	lastLinkCheck   time.Time
+	lastPageCheck   time.Time
 	tagFailures     int
 	nextTagAt       time.Time
 }
@@ -82,6 +83,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			}
 		}
 		w.checkLinks(ctx)
+		w.checkPages(ctx)
 		w.maintain(ctx)
 		select {
 		case <-ctx.Done():

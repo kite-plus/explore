@@ -41,6 +41,9 @@ entries.image_url text
 entries.link_checked_at timestamp with time zone
 entries.link_next_check_at timestamp with time zone
 entries.link_status text
+entries.page_excerpt text
+entries.page_image_url text
+entries.page_next_check_at timestamp with time zone
 entries.published_at timestamp with time zone
 entries.synced_at timestamp with time zone
 entries.tagged_at timestamp with time zone
