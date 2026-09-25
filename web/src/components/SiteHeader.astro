@@ -14,10 +14,11 @@ interface Props {
 
 const { lang, path, bilingual, wide = false } = Astro.props;
 const t = dict(lang);
+// The three post streams are tabs on their pages (StreamTabs), so one item
+// stands for all of them.
 const links = [
-  { href: localePath(lang, "/"), label: t.nav.home, current: path === "/" },
+  { href: localePath(lang, "/"), label: t.nav.home, current: ["/", "/recommended", "/following"].includes(path) },
   { href: localePath(lang, "/blogs"), label: t.nav.blogs, current: path.startsWith("/blogs") },
-  { href: localePath(lang, "/following"), label: t.home.subscriptions, current: path === "/following" },
   { href: localePath(lang, "/submit"), label: t.nav.submit, current: path === "/submit" },
   { href: localePath(lang, "/about"), label: t.nav.about, current: path === "/about" },
 ];

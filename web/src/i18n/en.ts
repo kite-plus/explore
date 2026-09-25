@@ -9,7 +9,7 @@ export const en: Dict = {
     name: "Explore",
     description: "New posts from the public feeds of independent blogs. Every link takes you to the author's own site.",
   },
-  nav: { home: "Latest", blogs: "Blogs", submit: "Submit a blog", about: "About" },
+  nav: { home: "Posts", blogs: "Blogs", submit: "Submit a blog", about: "About" },
   theme: { auto: "Automatic mode", dark: "Dark mode", light: "Light mode", switchTo: "Switch to " },
   newTab: " (opens in a new tab)",
   entryStatus: {
@@ -28,7 +28,7 @@ export const en: Dict = {
   filter: { label: "Blog language", tags: "Tags", all: "All", zh: "Chinese", en: "English" },
   home: {
     title: "New posts from independent blogs",
-    heading: "Latest posts",
+    heading: "Posts",
     feedLabel: "Post feeds",
     latest: "Latest",
     recommended: "Recommended",

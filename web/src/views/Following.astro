@@ -21,7 +21,7 @@ const older = data?.page.next_cursor && withQuery(localePath(lang, "/following")
 
 <Base lang={lang} title={t.home.subscriptions} description={t.home.subscriptions} path="/following" noindex entryChecks>
   {data ? <>
-    <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.home.subscriptions}</h1>
+    <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.home.heading}</h1>
     <p class="mt-1.5 text-sm text-muted-foreground">{lang === "zh" ? "来自你订阅博客的文章，按发布时间排列。" : "Posts from blogs you follow, newest first."}</p>
     <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b"><StreamTabs lang={lang} current="following" query={{ lang: data.filter, tag: data.tag }} /><div class="flex flex-wrap items-center gap-2 pb-2"><LangFilter lang={lang} path="/following" current={data.filter} tag={data.tag} variant="segmented" /><TagFilter lang={lang} path="/following" tags={data.tags} current={data.tag} filter={data.filter} /></div></div>
     {data.page.data.length ? <div class="divide-y" data-entry-stream>{data.page.data.map(entry => <EntryItem lang={lang} entry={entry} tagNames={names} tagPath="/following" />)}</div> : <p class="py-16 text-center text-muted-foreground">{lang === "zh" ? "订阅流还没有文章。去博客目录订阅几个博客吧。" : "No posts yet. Follow blogs from the directory."}</p>}

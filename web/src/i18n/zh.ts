@@ -7,7 +7,7 @@ export const zh = {
     name: "Explore",
     description: "汇集独立博客公开的订阅源，按时间展示最新文章。点进去，读的永远是作者自己的网站。",
   },
-  nav: { home: "最新", blogs: "博客", submit: "提交博客", about: "关于" },
+  nav: { home: "文章", blogs: "博客", submit: "提交博客", about: "关于" },
   theme: { auto: "自动模式", dark: "深色模式", light: "浅色模式", switchTo: "点击切换至" },
   newTab: "（在新标签页打开）",
   entryStatus: {
@@ -26,7 +26,7 @@ export const zh = {
   filter: { label: "博客语言", tags: "标签", all: "全部", zh: "中文", en: "英文" },
   home: {
     title: "独立博客的最新文章",
-    heading: "最新文章",
+    heading: "文章",
     feedLabel: "文章流",
     latest: "最新",
     recommended: "推荐",
