@@ -8,6 +8,8 @@
   let loading = false;
   let observer = null;
 
+  // Appended pages leave the address bar alone: a cursor is not for people
+  // to read, and a reload should start from the newest posts.
   async function loadNextPage() {
     const button = pagination.querySelector("[data-load-more-btn]");
     if (!button || loading) return;
@@ -49,10 +51,6 @@
         button.removeAttribute("aria-busy");
         if (textEl) textEl.textContent = originalText;
 
-        try {
-          window.history.replaceState(null, "", nextHref);
-        } catch (_) {}
-
         autoPagesLoaded++;
         if (autoPagesLoaded >= MAX_AUTO_PAGES && observer) {
           observer.disconnect();
@@ -66,9 +64,6 @@
         button.classList.add("hidden");
         const endEl = pagination.querySelector("[data-load-more-end]");
         if (endEl) endEl.classList.remove("hidden");
-        try {
-          window.history.replaceState(null, "", nextHref);
-        } catch (_) {}
       }
     } catch (_) {
       button.disabled = false;
