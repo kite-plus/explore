@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-04
+
+This release brings new posts in sooner and makes them easier to read: blogs can ask to be fetched right after they publish, subscriptions move in and out as OPML, Recommended has posts at last, and the stream pages are rebuilt around the posts, on phones too. It also fixes rate limits that, behind the reverse proxy every deployment uses, counted the site rather than each reader.
+
 ### Added
 
 - A blog can have Explore fetch it right after publishing. `POST /api/v1/ping` takes a JSON `{"url": ...}`, or the XML-RPC `weblogUpdates.ping` and `weblogUpdates.extendedPing` that WordPress sends to its update services, and brings a listed blog's next fetch forward to no sooner than 5 minutes after its last one. A ping cannot list a blog, and the answer is the same for any address. The About page shows authors how to set it up.
@@ -18,8 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The stream pages lead with the posts. The large heading and its fixed text are gone; the tabs and the language filter, now a switch whose thumb slides to the new choice, sit in a toolbar that stays under the header in one row at any width, phones folding the language switch and the tags into a Filter button, and posts are grouped by the day they came out. Each post shows its blog and time first, and a link still to be checked is quiet grey text instead of an amber badge. Wide screens get a sidebar with a note on the stream, the tags and the blogs listed last. `GET /api/v1/blogs` takes `order=newest` for the latter.
 - Switching streams, the blog language or a tag no longer reloads the page: only the list and what goes with it are swapped in place, the address still changes so it can be shared, and back and forward work the same way. The blog directory's language switch does the same.
-- The header stays at the top of the window on every page, so the logo is always in view; on phones its links fold into a menu.
-- The header shows a signed-in reader's avatar and name, drawn on the server so it no longer flashes Sign in first, and opens a menu with Following, My account, Admin for admins, and Sign out. The language switch and the theme toggle move to the footer.
+- The header stays at the top of the window on every page, so the logo is always in view, and on phones its links fold into a menu. It shows a signed-in reader's avatar and name, drawn on the server so it no longer flashes Sign in first, and opens a menu with Following, My account, Admin for admins, and Sign out. The language switch and the theme toggle move to the footer.
 - A reader who is signed in already skips the sign-in page, and the page's text has more room.
 - Clicking a post's title no longer drops the reader straight onto another site: the new tab shows Explore's page for under a second, naming the blog and the post, then goes on. The link is still the post's own address, for search engines, copied links and other clicks, and the destination stays in the address's fragment, which never reaches the server. Opened from anywhere but an Explore page, the page lists the destination and waits for a click.
 
