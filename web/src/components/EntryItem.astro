@@ -138,6 +138,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
             <a
               href={withQuery(localePath(lang, tagPath), { tag: slug })}
               class="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-brand"
+              data-swap
             >
               <TagIcon slug={slug} className="size-3.5" />{tagNames[slug]}
             </a>

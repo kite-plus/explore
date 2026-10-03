@@ -27,6 +27,7 @@ const tabs: { id: Stream; path: string; label: string }[] = [
         href={tab.id === current ? withQuery(localePath(lang, tab.path), query) : localePath(lang, tab.path)}
         aria-current={tab.id === current ? "page" : undefined}
         class="-mb-px border-b-2 border-transparent pb-3 text-sm text-muted-foreground outline-offset-4 hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
+        data-swap
       >
         {tab.label}
       </a>

@@ -287,7 +287,7 @@ describe("content", () => {
 
   test("entries show their tags, each a way into the stream", async () => {
     // Each tag is its icon, then its name.
-    const tagLink = (href, name) => new RegExp(`<a href="${href}" class="[^"]*"><svg[^>]*>.*?</svg>${name}</a>`, "s");
+    const tagLink = (href, name) => new RegExp(`<a href="${href}" class="[^"]*"[^>]*><svg[^>]*>.*?</svg>${name}</a>`, "s");
     const { html } = await page("/");
     const stream = html.slice(html.indexOf("data-entry-stream"), html.indexOf("<aside"));
     assert.match(stream, tagLink("/\\?tag=backend", "后端"));
@@ -327,6 +327,16 @@ describe("content", () => {
     assert.match(tagged, /<a href="\/\?tag=backend" aria-current="page"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?后端</s);
     const zh = (await page("/?lang=zh")).html;
     assert.match(zh, /<a href="\/\?lang=zh&amp;tag=life"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?生活随笔</s);
+  });
+
+  test("tabs and filters mark what they change, for swapping it in place", async () => {
+    const { html } = await page("/");
+    assert.equal(html.match(/data-swap-root/g)?.length, 1, "one part of the page is swapped");
+    assert.match(html, /<a href="\/recommended" class="[^"]*"[^>]*data-swap/, "the stream tabs swap");
+    assert.match(html, /<a href="\/\?tag=backend"[^>]*data-swap/, "so do the tags");
+    assert.match(html, /<a href="\/en\/"[^>]*data-swap-mirror="lang"/, "the footer's language link follows the page");
+    assert.match((await page("/blogs")).html, /data-swap-root/, "the directory swaps its list too");
+    assert.doesNotMatch((await page("/about")).html, /data-swap-root/, "other pages load as pages");
   });
 
   test("the blog language is a switch whose thumb starts under the current choice", async () => {

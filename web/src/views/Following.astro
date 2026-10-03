@@ -3,6 +3,7 @@ import EntryStream from "@/components/EntryStream.astro";
 import Message from "@/components/Message.astro";
 import StreamSidebar from "@/components/StreamSidebar.astro";
 import StreamToolbar from "@/components/StreamToolbar.astro";
+import SwapRoot from "@/components/SwapRoot.astro";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import type { Loaded, StreamPage } from "@/lib/loaders";
@@ -26,7 +27,7 @@ const older =
 <Base lang={lang} title={t.home.subscriptions} description={t.home.subscriptions} path="/following" noindex entryChecks wide>
   {
     data ? (
-      <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-12">
+      <SwapRoot class="lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-12">
         <div class="min-w-0">
           <h1 class="sr-only">{t.home.heading}</h1>
           <StreamToolbar lang={lang} stream="following" path="/following" filter={data.filter} tag={data.tag} tags={data.tags} />
@@ -37,7 +38,7 @@ const older =
           )}
         </div>
         <StreamSidebar lang={lang} stream="following" path="/following" filter={data.filter} tag={data.tag} tags={data.tags} newBlogs={data.newBlogs} />
-      </div>
+      </SwapRoot>
     ) : (
       <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
     )

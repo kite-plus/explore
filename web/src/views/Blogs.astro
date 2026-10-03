@@ -2,6 +2,7 @@
 import BlogAvatar from "@/components/BlogAvatar.astro";
 import LangFilter from "@/components/LangFilter.astro";
 import Message from "@/components/Message.astro";
+import SwapRoot from "@/components/SwapRoot.astro";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
@@ -28,7 +29,7 @@ if (data?.page.next_cursor) {
 <Base lang={lang} title={t.blogs.title} description={t.blogs.intro} path="/blogs" noindex={Boolean(data?.paged || data?.filter)}>
   {
     data ? (
-      <>
+      <SwapRoot>
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 class="text-2xl font-semibold tracking-tight">{t.blogs.title}</h1>
@@ -39,7 +40,7 @@ if (data?.page.next_cursor) {
         {data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.blogs.empty}</p>
         ) : (
-          <ul class="mt-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3">
+          <ul data-swap-dim class="mt-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3">
             {data.page.data.map((b) => (
               <li
                 class="group relative flex flex-col justify-between rounded-lg border bg-card p-3.5 text-card-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30"
@@ -81,7 +82,7 @@ if (data?.page.next_cursor) {
             </ButtonLink>
           </div>
         )}
-      </>
+      </SwapRoot>
     ) : (
       <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
     )

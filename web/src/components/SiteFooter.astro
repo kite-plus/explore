@@ -38,6 +38,7 @@ const switchTo = other(lang);
           href={localePath(switchTo, bilingual ? path : "/")}
           hreflang={switchTo}
           lang={switchTo === "zh" ? "zh-CN" : "en"}
+          data-swap-mirror="lang"
           class="hover:text-foreground"
         >
           {all.otherLangName}

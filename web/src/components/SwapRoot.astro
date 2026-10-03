@@ -1,0 +1,18 @@
+---
+interface Props {
+  class?: string;
+}
+
+// The part of a page that its filters and tabs change. Links marked
+// data-swap replace it in place (lib/swap.ts); without JavaScript they are
+// plain links.
+const { class: className } = Astro.props;
+---
+
+<div data-swap-root class={className}><slot /></div>
+
+<script>
+  import { listen } from "@/lib/swap";
+
+  listen();
+</script>

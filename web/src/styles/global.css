@@ -103,6 +103,13 @@
     }
   }
 
+  /* A list being swapped for another in place (lib/swap.ts) dims until the
+     new one arrives. */
+  [data-swap-root][aria-busy="true"] [data-swap-dim] {
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+
   /* The arrow after a link that opens in a new tab (ExternalLink.astro). */
   .external-mark {
     display: inline-block;

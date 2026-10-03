@@ -73,14 +73,14 @@ const tile =
         <div class="flex items-baseline justify-between">
           <h2 class="text-sm font-semibold">{s.tags}</h2>
           {tag && (
-            <a href={withQuery(base, { lang: filter })} class="text-xs text-muted-foreground hover:text-foreground">
+            <a href={withQuery(base, { lang: filter })} class="text-xs text-muted-foreground hover:text-foreground" data-swap>
               {t.filter.all}
             </a>
           )}
         </div>
         <nav aria-label={s.tags} class="mt-2 grid grid-cols-2 gap-0.5">
           {tags.map((item) => (
-            <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === tag ? "page" : undefined} class={tile}>
+            <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === tag ? "page" : undefined} class={tile} data-swap>
               <TagIcon slug={item.slug} className="size-4 shrink-0" />
               <span class="leading-snug">{item.name[lang]}</span>
             </a>
