@@ -70,15 +70,13 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
 }
 
 /**
- * loadLogin sends a reader who is signed in already on to where they were
- * going. Anonymous readers carry no cookie at all, so asking costs them
- * nothing.
+ * loadLogin sends a reader who is signed in already, as src/middleware.ts
+ * found, on to where they were going.
  */
-export async function loadLogin(ctx: AstroGlobal, lang: Lang): Promise<{ next: string } | Response> {
+export function loadLogin(ctx: AstroGlobal, lang: Lang): { next: string } | Response {
   cacheControl(ctx, "private, no-store");
   const next = safeNext(param(ctx, "next"), localePath(lang, "/following"));
-  const cookie = ctx.request.headers.get("cookie");
-  if (cookie && (await api.me(lang, cookie)).kind === "ok") return ctx.redirect(next, 302);
+  if (ctx.locals.reader) return ctx.redirect(next, 302);
   return { next };
 }
 

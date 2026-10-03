@@ -105,7 +105,7 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | POST | `/api/v1/me/blog-claims/{host}` | 生成 DNS TXT 验证记录 |
 | POST | `/api/v1/me/blog-claims/{host}/verify` | 验证并认领博客 |
 
-`/login` 是本站账号登录与注册页；`/following`、`/account` 均有英文页面。匿名页面仍可公开缓存，页头由客户端查询会话状态；个人页面一律 `private, no-store`。所有已登录写操作要求会话对应的 CSRF 请求头。
+`/login` 是本站账号登录与注册页；`/following`、`/account` 均有英文页面。页头的登录状态由服务端按请求带的会话画出，画了读者名称的页面 `private, no-store`，匿名页面照常公开缓存（[frontend.md §5](frontend.md#5-数据获取)）；个人页面一律 `private, no-store`；已登录的读者打开 `/login` 直接跳到原本要去的页面。所有已登录写操作要求会话对应的 CSRF 请求头。
 
 ## 7. 部署与待定
 

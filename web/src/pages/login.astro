@@ -3,7 +3,7 @@ import { AuthForm } from "@/components/reader/AuthForm";
 import Base from "@/layouts/Base.astro";
 import { loadLogin } from "@/lib/loaders";
 
-const state = await loadLogin(Astro, "zh");
+const state = loadLogin(Astro, "zh");
 if (state instanceof Response) return state;
 ---
 <Base lang="zh" title="登录" description="登录 Explore" path="/login" noindex center>

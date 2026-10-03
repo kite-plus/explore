@@ -558,6 +558,23 @@ describe("reader accounts", () => {
     }
   });
 
+  test("the header names a signed-in reader from the server", async () => {
+    const signedIn = await get("/", { headers: { Cookie: "explore_session=test-session" } });
+    assert.equal(signedIn.status, 200);
+    assert.equal(signedIn.headers.get("cache-control"), "private, no-store", "a page with a name in it is the reader's alone");
+    assert.match(signedIn.headers.get("vary") ?? "", /Cookie/);
+    assert.match(await signedIn.text(), /href="\/account">Reader<\/a>/);
+
+    const anonymous = await get("/");
+    assert.equal(anonymous.headers.get("cache-control"), "public, max-age=60");
+    assert.match(anonymous.headers.get("vary") ?? "", /Cookie/);
+    assert.match(await anonymous.text(), /href="\/login">登录<\/a>/);
+
+    const stale = await get("/", { headers: { Cookie: "explore_session=stale" } });
+    assert.equal(stale.headers.get("cache-control"), "public, max-age=60");
+    assert.match(await stale.text(), /href="\/login">登录<\/a>/);
+  });
+
   test("a signed-in reader skips the sign-in page", async () => {
     const signedIn = { headers: { Cookie: "explore_session=test-session" } };
     for (const [path, location] of [

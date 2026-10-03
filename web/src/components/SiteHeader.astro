@@ -44,7 +44,7 @@ const switchTo = other(lang);
         ))
       }
     </nav>
-    <AccountNav client:load lang={lang} />
+    <AccountNav client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
     <a
       href={localePath(switchTo, bilingual ? path : "/")}
       hreflang={switchTo}
