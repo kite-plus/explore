@@ -67,7 +67,7 @@ const description = data
         ) : (
           <div class="border-t" data-entry-stream>
             {data.entries.map((entry) => (
-              <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} tagNames={names} />
+              <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} blogHost={data.blog.host} blogName={data.blog.name} tagNames={names} />
             ))}
           </div>
         )}

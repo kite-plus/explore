@@ -42,6 +42,16 @@ export const en: Dict = {
     retry: "Failed to load. Click to retry",
     end: "You’re all caught up",
   },
+  go: {
+    title: "On your way",
+    going: "Taking you to the author's site",
+    direct: "Not moving? Go there now",
+    confirmTitle: "You are leaving Explore",
+    confirmBody: "This link was not opened from an Explore page. Continue only if this is where you meant to go:",
+    continue: "Continue",
+    back: "Back to Explore",
+    missing: "There is nowhere to go from here.",
+  },
   sidebar: {
     latestTitle: "Write a blog?",
     latestBody: "Submit it. Once it is reviewed, its new posts show up here on their own, and readers click through to your site.",

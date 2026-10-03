@@ -1,0 +1,7 @@
+---
+import Go from "@/views/Go.astro";
+
+Astro.response.headers.set("Cache-Control", "public, max-age=86400");
+---
+
+<Go lang="zh" />

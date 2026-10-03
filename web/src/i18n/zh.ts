@@ -40,6 +40,16 @@ export const zh = {
     retry: "加载失败，点击重试",
     end: "已经看完了所有最新文章",
   },
+  go: {
+    title: "正在前往",
+    going: "正在前往作者的网站",
+    direct: "没有跳转？直接前往",
+    confirmTitle: "即将离开 Explore",
+    confirmBody: "这个链接不是在 Explore 的页面上点开的。确认是你要去的地方，再继续：",
+    continue: "继续前往",
+    back: "回到 Explore",
+    missing: "这里没有要前往的地址。",
+  },
   sidebar: {
     latestTitle: "写独立博客？",
     latestBody: "提交你的博客，审核通过后，新文章会自动出现在这里，读者点开标题回到你的网站阅读。",

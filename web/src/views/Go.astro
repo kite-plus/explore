@@ -1,0 +1,105 @@
+---
+import "@/styles/global.css";
+
+import Logo from "@/components/Logo.astro";
+import { dict, localePath, type Lang } from "@/i18n";
+import themeScript from "@/scripts/theme.js?raw";
+
+interface Props {
+  lang: Lang;
+}
+
+// The page a post opens through: it names where the reader is going, then
+// goes there. All it knows of the destination it reads in the browser
+// (scripts/go.js); the server sends every reader the same page.
+const { lang } = Astro.props;
+const t = dict(lang);
+const g = t.go;
+const button = "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium";
+---
+
+<!doctype html>
+<html lang={t.htmlLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline set:html={themeScript} />
+    <title>{g.title} - Explore</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="flex min-h-dvh items-center justify-center bg-background px-6 text-foreground">
+    <main class="w-full max-w-sm text-center" data-go-page>
+      <h1 class="sr-only">{g.title}</h1>
+      <Logo class="mx-auto h-7 w-auto" />
+
+      <section data-go-going hidden>
+        <p class="mt-8 text-sm text-muted-foreground">{g.going}</p>
+        <div class="mt-4 flex items-center justify-center gap-3">
+          <span
+            data-go-avatar
+            class="group/avatar relative inline-flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-base font-medium text-white"
+          >
+            <span data-go-initial class="group-[.has-favicon]/avatar:hidden"></span>
+            <img data-blog-favicon data-go-favicon alt="" class="absolute inset-0 hidden size-full object-contain p-1 group-[.has-favicon]/avatar:block group-[.has-favicon]/avatar:bg-white" />
+          </span>
+          <div class="min-w-0 text-left">
+            <p data-go-blog class="truncate font-semibold"></p>
+            <p data-go-host class="truncate text-sm text-muted-foreground"></p>
+          </div>
+        </div>
+        <p data-go-title class="mt-5 line-clamp-2 text-sm leading-relaxed"></p>
+        <div class="mx-auto mt-6 h-1 w-40 overflow-hidden rounded-full bg-muted">
+          <div class="go-progress h-full rounded-full bg-brand"></div>
+        </div>
+        <a data-go-direct class="mt-6 inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">{g.direct}</a>
+      </section>
+
+      <section data-go-confirm hidden>
+        <h2 class="mt-8 text-lg font-semibold">{g.confirmTitle}</h2>
+        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{g.confirmBody}</p>
+        <p data-go-url class="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-left font-mono text-xs break-all"></p>
+        <div class="mt-5 flex justify-center gap-3">
+          <a data-go-continue class={`${button} bg-primary text-primary-foreground hover:bg-primary/90`}>{g.continue}</a>
+          <a href={localePath(lang, "/")} class={`${button} border hover:bg-accent`}>{g.back}</a>
+        </div>
+      </section>
+
+      <section data-go-missing hidden>
+        <p class="mt-8 text-sm text-muted-foreground">{g.missing}</p>
+        <a href={localePath(lang, "/")} class={`${button} mt-5 border hover:bg-accent`}>{g.back}</a>
+      </section>
+    </main>
+
+    <script>
+      import { avatarColor, initial } from "@/lib/avatar";
+      import { destination, openedByExplore } from "@/scripts/go.js";
+
+      const page = document.querySelector<HTMLElement>("[data-go-page]")!;
+      const part = <T extends HTMLElement>(name: string) => page.querySelector<T>(`[data-go-${name}]`)!;
+      const to = destination(location.hash);
+      // Whatever the post's site is, it must not reach back into Explore.
+      const trusted = openedByExplore(window);
+      window.opener = null;
+
+      if (!to) {
+        part("missing").hidden = false;
+      } else if (trusted) {
+        const site = to.site || to.host;
+        part("blog").textContent = to.blog || to.host;
+        part("host").textContent = to.host;
+        part("title").textContent = to.title;
+        part("initial").textContent = initial(to.blog || to.host);
+        part("avatar").classList.add(avatarColor(site));
+        part<HTMLImageElement>("favicon").src = `/api/v1/blogs/${encodeURIComponent(site)}/favicon`;
+        part<HTMLAnchorElement>("direct").href = to.url;
+        part("going").hidden = false;
+        setTimeout(() => location.replace(to.url), 700);
+      } else {
+        part("url").textContent = to.url;
+        part<HTMLAnchorElement>("continue").href = to.url;
+        part("confirm").hidden = false;
+      }
+    </script>
+  </body>
+</html>

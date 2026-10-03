@@ -14,6 +14,9 @@ interface Props {
   entry: Entry;
   /** The blog's language, when the entry does not carry its blog. */
   blogLanguage?: string;
+  /** The blog's host and name, when the entry does not carry its blog. */
+  blogHost?: string;
+  blogName?: string;
   /** Tag names by slug; tags without a name are not shown. */
   tagNames?: Record<string, string>;
   tagPath?: string;
@@ -21,7 +24,7 @@ interface Props {
   time?: "relative" | "clock";
 }
 
-const { lang, entry, blogLanguage, tagNames = {}, tagPath = "/", time = "relative" } = Astro.props;
+const { lang, entry, blogLanguage, blogHost, blogName, tagNames = {}, tagPath = "/", time = "relative" } = Astro.props;
 const tags = (entry.tags ?? []).filter((slug) => tagNames[slug]);
 const t = dict(lang);
 // Titles and excerpts stay as the author wrote them; lang tells screen
@@ -117,7 +120,15 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
     )}
     </div>
     <h3 class="mt-1.5 text-[0.9375rem] leading-snug font-semibold sm:text-base">
-      <ExternalLink lang={lang} href={withSource(entry.url)} class="hover:underline">{entry.title}</ExternalLink>
+      <ExternalLink
+        lang={lang}
+        href={withSource(entry.url)}
+        class="hover:underline"
+        data-go={localePath(lang, "/go")}
+        data-go-site={entry.blog?.host ?? blogHost}
+        data-go-blog={entry.blog?.name ?? blogName}
+        data-go-title={entry.title}
+      >{entry.title}</ExternalLink>
     </h3>
     {entry.excerpt && <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{entry.excerpt}</p>}
     {
@@ -143,3 +154,24 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
     )
   }
 </article>
+
+<script>
+  // A plain click on a post's title opens it through the transition page
+  // (views/Go.astro), which says where the reader is going before going.
+  // The link stays the post's address, for crawlers, copied links and
+  // clicks that ask for something else.
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[data-go]") : null;
+    if (!link) return;
+    const hash = new URLSearchParams({
+      to: link.href,
+      site: link.dataset.goSite ?? "",
+      blog: link.dataset.goBlog ?? "",
+      title: link.dataset.goTitle ?? "",
+    });
+    // Opened with an opener, which tells the page Explore sent the reader.
+    // When the browser blocks it, the plain link still opens the post.
+    if (window.open(`${link.dataset.go}#${hash}`, "_blank")) event.preventDefault();
+  });
+</script>

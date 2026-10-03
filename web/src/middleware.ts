@@ -10,7 +10,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   ctx.locals.reader = null;
   ctx.locals.readerChecked = false;
   const path = ctx.url.pathname;
-  if (path.startsWith("/api/") || path.startsWith("/admin") || /\.[a-z0-9]+$/i.test(path)) return next();
+  if (path.startsWith("/api/") || path.startsWith("/admin") || /^(\/en)?\/go$/.test(path) || /\.[a-z0-9]+$/i.test(path)) return next();
 
   const cookie = ctx.request.headers.get("cookie");
   if (cookie) {

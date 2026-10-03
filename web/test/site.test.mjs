@@ -240,6 +240,22 @@ describe("content", () => {
     assert.doesNotMatch(older, /最近收录/, "a later page does without the sidebar's blogs");
   });
 
+  test("a post's title opens through the transition page, its link unchanged", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<a href="https:\/\/zh\.example\.com\/posts\/cache\/\?utm_source=[^"]*" target="_blank" rel="noopener" class="[^"]*" data-go="\/go" data-go-site="zh\.example\.com" data-go-blog="中文博客" data-go-title="缓存可以随时删掉">/);
+    assert.match((await page("/en/")).html, /data-go="\/en\/go"/);
+    assert.match((await page("/blogs/zh.example.com")).html, /data-go-site="zh\.example\.com" data-go-blog="中文博客"/, "a blog page names its blog too");
+
+    const go = await get("/go");
+    assert.equal(go.status, 200);
+    assert.equal(go.headers.get("cache-control"), "public, max-age=86400");
+    const body = await go.text();
+    assert.match(body, /<meta name="robots" content="noindex, nofollow">/);
+    assert.match(body, /data-go-page/);
+    assert.match((await (await get("/en/go")).text()), /Taking you to the author/);
+    assert.match(await (await get("/robots.txt")).text(), /Disallow: \/go\n/);
+  });
+
   test("entries keep their own language and link to the original", async () => {
     const { html } = await page("/en/");
     assert.match(html, /<article class="[^"]*" lang="zh-CN">/);

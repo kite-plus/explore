@@ -50,6 +50,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/blogs` | 博客目录，含 favicon 和简短介绍 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
 | `/blogs/{host}` | 一个博客的介绍、文章（按页往下翻，带游标的页面 `noindex`）、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
+| `/go` | 打开原文前的过渡页（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）：目的地在 `#` 后面，只在浏览器里读取；由 Explore 页面打开时约 0.7 秒后自动前往，从别处打开时只列出目的地 | —— | 按需，不调用 API | `public, max-age=86400` | `noindex`，robots.txt 禁止 |
 | `/submit` | 提交博客的表单 | —— | 按需 | `no-store` | `noindex` |
 | `/submissions/{id}` | 提交进度 | `GET /api/v1/submissions/{id}` | 按需 | `no-store` | `noindex` |
 
@@ -151,7 +152,7 @@ import SubmitForm from "@/components/submit-form";
 5. 不引入 CSS-in-JS 组件库（§1.2）。
 6. 不加载外部字体：用系统字体栈。中文网络字体动辄几 MB，还会产生第三方请求。
 7. 博客头像，包括博客目录、博客页的大头像和文章列表里的小头像，都通过本站 `/api/v1/blogs/{host}/favicon` 加载源站 favicon；缺失时显示博客名首字和由主机名算出的颜色。同一个博客的图标地址相同，浏览器缓存 1 小时，一页文章只按博客各请求一次。浏览器不向源站发图片请求。文章缩略图同样走本站的 `/api/v1/entries/{id}/image`；取不到时（源站失败、超过体积上限等），主题脚本把缩略图连同外框一起去掉，文章按没有封面的样子显示，不出现破图。
-8. **离开 Explore 的链接在新标签页打开**（原文、博客首页、订阅源、GitHub），读者看完还能回到信息流。提示要轻：文字后面一个淡色的 ↗，给读屏软件一段隐藏的"在新标签页打开"，文章流边栏的最后写一句；不用悬停提示，也不弹窗。组件里用 `ExternalLink.astro`，Markdown 页面的外链由 `ExternalLinks.astro` 统一改写。不加 `noreferrer`；文章和博客首页的链接还经 `withSource`（`lib/config.ts`）带上 `utm_source`，作者的统计里能看到来自 Explore 的访问（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）。站内链接照常在本页打开。
+8. **离开 Explore 的链接在新标签页打开**（原文、博客首页、订阅源、GitHub）；普通点击文章标题时，新标签页先经过不到一秒的过渡页 `/go` 再到原文（§2），读者看完还能回到信息流。提示要轻：文字后面一个淡色的 ↗，给读屏软件一段隐藏的"在新标签页打开"，文章流边栏的最后写一句；不用悬停提示，也不弹窗。组件里用 `ExternalLink.astro`，Markdown 页面的外链由 `ExternalLinks.astro` 统一改写。不加 `noreferrer`；文章和博客首页的链接还经 `withSource`（`lib/config.ts`）带上 `utm_source`，作者的统计里能看到来自 Explore 的访问（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）。站内链接照常在本页打开。
 
 | 场景 | 做法 | 浏览器里的 JS |
 |---|---|---|
