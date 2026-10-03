@@ -95,24 +95,10 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
         <h1 id="auth-title" className="text-lg font-semibold tracking-tight">
           {register ? zh ? "创建账号" : "Create an account" : zh ? "登录" : "Sign in"}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           {register
-            ? zh ? "订阅喜欢的博客，拥有自己的阅读流。" : "Follow your favorite blogs in your own reading feed. "
-            : zh ? "输入你的邮箱和密码。" : "Enter your email and password. "}
-          <br className="max-sm:hidden" />
-          {registrationEnabled ? (
-            <>
-              {register ? zh ? "已有账号？" : "Already have an account?" : zh ? "还没有账号？" : "New to Explore?"}{" "}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={switchMode}
-                className="cursor-pointer text-nowrap underline underline-offset-4 hover:text-primary disabled:cursor-not-allowed"
-              >
-                {register ? zh ? "返回登录" : "Sign in" : zh ? "创建账号" : "Create an account"}
-              </button>
-            </>
-          ) : zh ? "目前暂未开放注册。" : "Registration is currently closed."}
+            ? zh ? "订阅喜欢的博客，拥有自己的阅读流。" : "Follow your favorite blogs in your own reading feed."
+            : zh ? "输入你的邮箱和密码。" : "Enter your email and password."}
         </p>
       </div>
 
@@ -204,13 +190,30 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
         </FieldGroup>
       </form>
 
-      <p className="px-8 text-center text-sm text-muted-foreground">
-        {zh ? "不登录也能阅读，" : "Reading needs no account. "}
-        <a href={home} className="text-nowrap underline underline-offset-4 hover:text-primary">
-          {zh ? "返回首页" : "Start reading"}
-        </a>
-        {zh ? "。" : "."}
-      </p>
+      <div className="flex flex-col gap-3 px-8 text-center text-sm leading-relaxed text-muted-foreground">
+        <p>
+          {registrationEnabled ? (
+            <>
+              {register ? zh ? "已有账号？" : "Already have an account?" : zh ? "还没有账号？" : "New to Explore?"}{" "}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={switchMode}
+                className="cursor-pointer text-nowrap font-medium text-foreground underline underline-offset-4 hover:text-primary disabled:cursor-not-allowed"
+              >
+                {register ? zh ? "返回登录" : "Sign in" : zh ? "创建账号" : "Create an account"}
+              </button>
+            </>
+          ) : zh ? "目前暂未开放注册。" : "Registration is currently closed."}
+        </p>
+        <p>
+          {zh ? "不登录也能阅读，" : "Reading needs no account. "}
+          <a href={home} className="text-nowrap underline underline-offset-4 hover:text-primary">
+            {zh ? "返回首页" : "Start reading"}
+          </a>
+          {zh ? "。" : "."}
+        </p>
+      </div>
     </section>
   );
 }

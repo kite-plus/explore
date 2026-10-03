@@ -25,23 +25,24 @@ export function SignIn() {
     <AuthLayout>
       <div className='flex flex-col space-y-2 text-start'>
         <h2 className='text-lg font-semibold tracking-tight'>登录</h2>
-        <p className='text-sm text-muted-foreground'>
-          输入管理员账号的邮箱和密码。
-          <br className='max-sm:hidden' />
+        <p className='text-sm leading-relaxed text-muted-foreground'>输入管理员账号的邮箱和密码。</p>
+      </div>
+      <UserAuthForm />
+      <div className='flex flex-col gap-3 px-8 text-center text-sm leading-relaxed text-muted-foreground'>
+        <p>
           不是管理员？{' '}
-          <a href='/' className='text-nowrap underline underline-offset-4 hover:text-primary'>
+          <a href='/' className='text-nowrap font-medium text-foreground underline underline-offset-4 hover:text-primary'>
             返回首页
           </a>
         </p>
+        <p>
+          此页面仅供 Explore 管理员使用。想收录博客，请前往{' '}
+          <a href='/submit' className='underline underline-offset-4 hover:text-primary'>
+            提交页面
+          </a>
+          。
+        </p>
       </div>
-      <UserAuthForm />
-      <p className='px-8 text-center text-sm text-muted-foreground'>
-        此页面仅供 Explore 管理员使用。想收录博客，请前往{' '}
-        <a href='/submit' className='underline underline-offset-4 hover:text-primary'>
-          提交页面
-        </a>
-        。
-      </p>
     </AuthLayout>
   )
 }
