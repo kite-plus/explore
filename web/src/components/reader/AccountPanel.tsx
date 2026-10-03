@@ -55,7 +55,10 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
     }
   }
   function submitLink(item: ImportResult["not_listed"][number]) {
-    const query = new URLSearchParams({ site: item.site_url || item.feed_url });
+    // A feed with no site address stands for the site at its origin.
+    let site = item.site_url;
+    if (!site) { try { site = `${new URL(item.feed_url).origin}/`; } catch { site = item.feed_url; } }
+    const query = new URLSearchParams({ site });
     if (item.feed_url) query.set("feed", item.feed_url);
     return `${prefix}/submit?${query}`;
   }
