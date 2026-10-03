@@ -16,6 +16,7 @@ import (
 	"github.com/kite-plus/explore/internal/check"
 	"github.com/kite-plus/explore/internal/config"
 	"github.com/kite-plus/explore/internal/fetch"
+	"github.com/kite-plus/explore/internal/model"
 	"github.com/kite-plus/explore/internal/store"
 	"github.com/kite-plus/explore/internal/tagger"
 	"github.com/kite-plus/explore/internal/worker"
@@ -184,7 +185,7 @@ func newUsersCmd() *cobra.Command {
 // entryTagger hands the worker's tag jobs to the tagger.
 type entryTagger struct{ t *tagger.Tagger }
 
-func (e entryTagger) Tag(ctx context.Context, j store.TagJob) ([]string, error) {
+func (e entryTagger) Tag(ctx context.Context, j store.TagJob) (model.Rating, error) {
 	return e.t.Tag(ctx, tagger.Post{
 		Title: j.Title, Excerpt: j.Excerpt, Categories: j.Categories, Language: j.Language, BlogTags: j.BlogTags,
 	})

@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - A blog can have Explore fetch it right after publishing. `POST /api/v1/ping` takes a JSON `{"url": ...}`, or the XML-RPC `weblogUpdates.ping` and `weblogUpdates.extendedPing` that WordPress sends to its update services, and brings a listed blog's next fetch forward to no sooner than 5 minutes after its last one. A ping cannot list a blog, and the answer is the same for any address. The About page shows authors how to set it up.
 - Readers can take their subscriptions with them and bring them in. The account page exports the blogs you follow as OPML, and imports an OPML file from another reader: blogs Explore lists are followed at once, matched by feed or site address, and the rest are listed with a link that fills in the submission form.
+- The Recommended tab has posts. When the tagger files a post under its tags, the same model call now rates the writing as standout, solid, brief or skip, from the title and excerpt alone and never from anyone's reading. Recommended shows solid and standout posts, at most one per blog a day, newest first, with standout posts kept at the top two days longer, and filters by language and tag like Latest. Without a model configured it says why and links to Latest. Upgrading has every cached post tagged again, newest first, so it gets a rating; this costs about as much as tagging the cache did the first time.
 
 ### Fixed
 

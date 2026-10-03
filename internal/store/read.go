@@ -95,6 +95,68 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 	})
 }
 
+// Recommended returns the recommended stream: entries the tagger rated solid
+// or standout, under the latest stream's visibility rules, without a link
+// found unavailable, and at most policy.RecommendedPerBlogPerDay per blog and
+// day, the best first. They are ordered by SortAt: the publish time, plus
+// policy.StandoutBoost for standout entries. SortAt does not move with the
+// clock, so the cursor holds. See docs/design/accounts.md section 3.1.
+func (s *Store) Recommended(ctx context.Context, q StreamQuery) ([]StreamEntry, error) {
+	args := pgx.NamedArgs{
+		"unhealthy_after":  seconds(policy.UnhealthyAfter),
+		"future_tolerance": seconds(policy.FutureTolerance),
+		"per_day":          policy.RecommendedPerBlogPerDay,
+		"boost":            seconds(policy.StandoutBoost),
+		"solid":            int16(model.QualitySolid),
+		"standout":         int16(model.QualityStandout),
+		"lang":             q.Lang,
+		"tag":              q.Tag,
+		"has_cursor":       q.Cursor != nil,
+		"cursor_at":        time.Time{},
+		"cursor_id":        int64(0),
+		"limit":            q.Limit,
+	}
+	if q.Cursor != nil {
+		args["cursor_at"], args["cursor_id"] = q.Cursor.At, q.Cursor.ID
+	}
+	rows, err := s.pool.Query(ctx, `
+		WITH rated AS (
+			SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, '') AS excerpt, coalesce(`+shownImage+`, '') AS image_url, e.published_at, e.tags, e.link_status, e.link_checked_at,
+			       b.host, b.name, b.site_url, b.feed_url, b.language,
+			       e.published_at + CASE WHEN e.quality = @standout THEN @boost * interval '1 second' ELSE interval '0' END AS rank_at,
+			       row_number() OVER (
+			           PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE 'UTC')
+			           ORDER BY e.quality DESC, e.published_at DESC, e.id DESC
+			       ) AS rank_in_day
+			FROM entries e
+			JOIN blogs b ON b.id = e.blog_id
+			WHERE `+visible+`
+			  AND `+notSuppressed+`
+			  AND e.date_trusted
+			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
+			  AND e.quality >= @solid
+			  AND e.link_status <> 'unavailable'
+			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
+			  AND (@tag::text = '' OR @tag = ANY (e.tags))
+		)
+		SELECT id, blog_id, identity, url, title, excerpt, image_url, published_at, tags, link_status, link_checked_at, host, name, site_url, feed_url, language, rank_at
+		FROM rated
+		WHERE rank_in_day <= @per_day
+		  AND (NOT @has_cursor OR (rank_at, id) < (@cursor_at, @cursor_id))
+		ORDER BY rank_at DESC, id DESC
+		LIMIT @limit`, args)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (StreamEntry, error) {
+		var e StreamEntry
+		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.ImageURL, &e.PublishedAt, &e.Tags, &e.LinkStatus, &e.LinkCheckedAt,
+			&e.Blog.Host, &e.Blog.Name, &e.Blog.SiteURL, &e.Blog.FeedURL, &e.Blog.Language, &e.SortAt)
+		e.DateTrusted = true
+		return e, err
+	})
+}
+
 // ListedBlog is a visible blog as readers see it.
 type ListedBlog struct {
 	ID              int64

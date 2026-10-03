@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
+  const state = { down: false, unrated: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -142,6 +142,9 @@ export function startStub() {
       if (cursor === "bad") return error(400, "invalid_cursor");
       const tag = url.searchParams.get("tag");
       if (tag && !tags.some((t) => t.slug === tag)) return error(400, "invalid_request");
+      if (url.searchParams.get("order") === "recommended" && !tag) {
+        return send(200, { data: state.unrated ? [] : [entries.second.data[0]], next_cursor: null });
+      }
       if (tag) return send(200, { data: entries.first.data.filter((e) => e.tags.includes(tag)), next_cursor: null });
       if (url.searchParams.get("lang") === "zh") return send(200, { data: [entries.first.data[0]], next_cursor: null });
       return send(200, cursor === "page-two" ? entries.second : entries.first);

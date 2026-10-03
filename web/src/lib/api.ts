@@ -55,9 +55,9 @@ function query(params: Record<string, string | undefined>): string {
 }
 
 export const api = {
-  entries: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }) =>
+  entries: (lang: Lang, p: { order?: "recommended"; cursor?: string; lang?: string; tag?: string; limit?: number }) =>
     call<Page<Entry>>(
-      `/api/v1/entries${query({ cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
+      `/api/v1/entries${query({ order: p.order, cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
       { lang },
     ),
 

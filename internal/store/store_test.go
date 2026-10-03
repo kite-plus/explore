@@ -816,12 +816,12 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 		t.Errorf("job = %+v", jobs[0])
 	}
 	for _, j := range jobs {
-		if err := s.SetTags(ctx, j.EntryID, j.Title, []string{"backend"}); err != nil {
+		if err := s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"backend"}, Quality: model.QualitySolid}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// A title that changed after the job was read is left for its own turn.
-	if err := s.SetTags(ctx, jobs[0].EntryID, "an older title", []string{"ai"}); err != nil {
+	if err := s.SetRating(ctx, jobs[0].EntryID, "an older title", model.Rating{Tags: []string{"ai"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -973,5 +973,66 @@ func TestPingWaitsForAClaimInProgress(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRecommendedStream(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	// Noon two days ago, so no entry crosses a UTC day by accident.
+	day := time.Now().UTC().Truncate(24 * time.Hour).Add(-36 * time.Hour)
+	a := listBlog(t, s, "a.example.com", "en")
+	b := listBlog(t, s, "b.example.org", "zh-CN")
+	sync(t, s, a.ID,
+		entry("a-solid", at(day.Add(time.Hour)), true),
+		entry("a-standout", at(day), true),
+		entry("a-yesterday", at(day.Add(-24*time.Hour)), true),
+	)
+	sync(t, s, b.ID,
+		entry("b-solid", at(day.Add(2*time.Hour)), true),
+		entry("b-brief", at(day.Add(-21*time.Hour)), true),
+		entry("b-gone-link", at(day.Add(-48*time.Hour)), true),
+		entry("b-skip", at(day.Add(-30*24*time.Hour)), true),
+		entry("b-standout", at(day.Add(-36*time.Hour)), true),
+		entry("b-unrated", at(day.Add(-3*time.Hour)), true),
+	)
+	for id, q := range map[string]model.Quality{
+		"a-solid": model.QualitySolid, "a-standout": model.QualityStandout, "a-yesterday": model.QualitySolid,
+		"b-solid": model.QualitySolid, "b-brief": model.QualityBrief, "b-gone-link": model.QualityStandout,
+		"b-skip": model.QualitySkip, "b-standout": model.QualityStandout,
+	} {
+		s.exec(t, `UPDATE entries SET quality = $2 WHERE identity = $1`, id, int16(q))
+	}
+	s.exec(t, `UPDATE entries SET link_status = 'unavailable' WHERE identity = 'b-gone-link'`)
+
+	page := func(q StreamQuery) []string {
+		t.Helper()
+		rows, err := s.Recommended(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return identities(rows, func(e StreamEntry) string { return e.Identity })
+	}
+	// A standout post ranks as if published policy.StandoutBoost later, and a
+	// blog keeps its best post of the day.
+	want := "a-standout,b-standout,b-solid,a-yesterday"
+	if got := strings.Join(page(StreamQuery{Limit: 10}), ","); got != want {
+		t.Fatalf("recommended = %s, want %s", got, want)
+	}
+
+	first, err := s.Recommended(ctx, StreamQuery{Limit: 2})
+	if err != nil || len(first) != 2 {
+		t.Fatalf("first page = %v, %v", first, err)
+	}
+	if !first[0].SortAt.Equal(day.Add(policy.StandoutBoost)) {
+		t.Errorf("standout sorts at %v, want %v", first[0].SortAt, day.Add(policy.StandoutBoost))
+	}
+	last := first[1]
+	if got := strings.Join(page(StreamQuery{Limit: 10, Cursor: &Cursor{At: last.SortAt, ID: last.ID}}), ","); got != "b-solid,a-yesterday" {
+		t.Errorf("second page = %s", got)
+	}
+
+	if got := strings.Join(page(StreamQuery{Limit: 10, Lang: "zh"}), ","); got != "b-standout,b-solid" {
+		t.Errorf("zh = %s", got)
 	}
 }

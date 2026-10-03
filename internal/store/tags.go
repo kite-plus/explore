@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/kite-plus/explore/internal/model"
 )
 
 // TagJob is an entry waiting for tags, with what the tagger reads.
@@ -36,12 +38,12 @@ func (s *Store) Untagged(ctx context.Context, limit int) ([]TagJob, error) {
 	})
 }
 
-// SetTags records an entry's tags. It does nothing when the entry is gone
-// or its title changed since the job was read: the new title waits for its
-// own turn.
-func (s *Store) SetTags(ctx context.Context, entryID int64, title string, tags []string) error {
+// SetRating records an entry's tags and quality. It does nothing when the
+// entry is gone or its title changed since the job was read: the new title
+// waits for its own turn.
+func (s *Store) SetRating(ctx context.Context, entryID int64, title string, r model.Rating) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE entries SET tags = $3, tagged_at = now()
-		WHERE id = $1 AND title = $2`, entryID, title, append([]string{}, tags...))
+		UPDATE entries SET tags = $3, quality = $4, tagged_at = now()
+		WHERE id = $1 AND title = $2`, entryID, title, append([]string{}, r.Tags...), int16(r.Quality))
 	return err
 }

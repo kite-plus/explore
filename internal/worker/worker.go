@@ -31,10 +31,10 @@ const maintenanceEvery = 24 * time.Hour
 // docs/design/data-model.md section 5.
 const submissionRetention = 90 * 24 * time.Hour
 
-// Tagger names the tags of one entry; see internal/tagger. An error means the
-// entry waits for a later round.
+// Tagger names the tags of one entry and rates it; see internal/tagger. An
+// error means the entry waits for a later round.
 type Tagger interface {
-	Tag(ctx context.Context, job store.TagJob) ([]string, error)
+	Tag(ctx context.Context, job store.TagJob) (model.Rating, error)
 }
 
 // Worker fetches due blogs and tags new entries. Zero values of the optional
@@ -336,7 +336,7 @@ func (w *Worker) TagOnce(ctx context.Context) int {
 	}
 	tagged := 0
 	for _, j := range jobs {
-		tags, err := w.Tagger.Tag(ctx, j)
+		rating, err := w.Tagger.Tag(ctx, j)
 		if err != nil {
 			if ctx.Err() != nil {
 				return tagged
@@ -347,7 +347,7 @@ func (w *Worker) TagOnce(ctx context.Context) int {
 			w.log().Warn("tagging failed", "entry", j.EntryID, "error", err, "retry_in", wait)
 			return tagged
 		}
-		if err := w.Store.SetTags(ctx, j.EntryID, j.Title, tags); err != nil {
+		if err := w.Store.SetRating(ctx, j.EntryID, j.Title, rating); err != nil {
 			w.log().Error("storing tags failed", "entry", j.EntryID, "error", err)
 			return tagged
 		}

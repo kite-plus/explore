@@ -132,7 +132,7 @@ describe("search engines", () => {
     assert.match(html, /<title>中文博客 - Explore<\/title>/);
   });
 
-  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/blogs?lang=en", "/submit", "/recommended", `/submissions/11111111-2222-3333-4444-555555555555`]) {
+  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/recommended?lang=zh", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`]) {
     test(`${path} stays out of the index`, async () => {
       const { html } = await page(path);
       assert.match(html, /<meta name="robots" content="noindex, follow">/);
@@ -143,7 +143,7 @@ describe("search engines", () => {
     const res = await get("/sitemap.xml");
     const xml = await res.text();
     assert.equal(res.status, 200);
-    for (const loc of [`${PUBLIC}/`, `${PUBLIC}/en/`, `${PUBLIC}/blogs/zh.example.com`, `${PUBLIC}/en/blogs/en.example.com`, `${PUBLIC}/bot`]) {
+    for (const loc of [`${PUBLIC}/`, `${PUBLIC}/en/`, `${PUBLIC}/recommended`, `${PUBLIC}/en/recommended`, `${PUBLIC}/blogs/zh.example.com`, `${PUBLIC}/en/blogs/en.example.com`, `${PUBLIC}/bot`]) {
       assert.ok(xml.includes(`<loc>${loc}</loc>`), `sitemap lacks ${loc}`);
     }
     assert.match(xml, /<lastmod>/);
@@ -189,13 +189,27 @@ describe("content", () => {
     assert.match(html, /<a href="https:\/\/github\.com\/kite-plus\/explore"[^>]*>\s*<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"[^>]*>.*?<\/svg>\s*GitHub\s*<span/s);
   });
 
-  test("the recommended page says it is coming and links the latest posts", async () => {
+  test("the recommended page lists the rated posts and keeps its filters", async () => {
     const { res, html } = await page("/recommended");
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("cache-control"), "public, max-age=60");
-    assert.match(html, /推荐即将上线/);
-    assert.match(html, /<a\b[^>]*\shref="\/"[^>]*>\s*看最新文章/);
-    assert.match((await page("/en/recommended")).html, /<a\b[^>]*\shref="\/en\/"[^>]*>\s*See the latest posts/);
+    assert.match(html, /Older post/);
+    assert.doesNotMatch(html, /缓存可以随时删掉/, "latest posts the stream did not return stay out");
+    assert.doesNotMatch(html, /noindex/);
+    assert.match(html, /<title>推荐文章 - Explore<\/title>/);
+    assert.match(html, /href="\/recommended\?lang=zh"/, "the language filter stays on the recommended stream");
+  });
+
+  test("a recommended stream with nothing rated links the latest posts", async () => {
+    stub.state.unrated = true;
+    try {
+      const { html } = await page("/recommended");
+      assert.match(html, /还没有评过分的文章/);
+      assert.match(html, /<a\b[^>]*\shref="\/"[^>]*>\s*看最新文章/);
+      assert.match((await page("/en/recommended")).html, /<a\b[^>]*\shref="\/en\/"[^>]*>\s*See the latest posts/);
+    } finally {
+      stub.state.unrated = false;
+    }
   });
 
   test("entries keep their own language and link to the original", async () => {

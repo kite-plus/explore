@@ -95,8 +95,21 @@ func (s *Server) entries(c *gin.Context) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
+	recommended := false
+	switch c.Query("order") {
+	case "", "latest":
+	case "recommended":
+		recommended = true
+	default:
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
+	stream := s.Store.Stream
+	if recommended {
+		stream = s.Store.Recommended
+	}
 	// One extra row says whether there is a next page.
-	rows, err := s.Store.Stream(c.Request.Context(), store.StreamQuery{Lang: language, Tag: tag, Limit: limit + 1, Cursor: cur})
+	rows, err := stream(c.Request.Context(), store.StreamQuery{Lang: language, Tag: tag, Limit: limit + 1, Cursor: cur})
 	if err != nil {
 		s.storeError(c, err)
 		return
@@ -105,7 +118,11 @@ func (s *Server) entries(c *gin.Context) {
 	if len(rows) > limit {
 		rows = rows[:limit]
 		last := rows[limit-1]
-		next := encodeCursor(store.Cursor{At: *last.PublishedAt, ID: last.ID})
+		at := *last.PublishedAt
+		if recommended {
+			at = last.SortAt
+		}
+		next := encodeCursor(store.Cursor{At: at, ID: last.ID})
 		out.NextCursor = &next
 	}
 	for _, r := range rows {

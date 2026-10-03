@@ -556,14 +556,14 @@ type fakeTagger struct {
 	err   error
 }
 
-func (f *fakeTagger) Tag(_ context.Context, j store.TagJob) ([]string, error) {
+func (f *fakeTagger) Tag(_ context.Context, j store.TagJob) (model.Rating, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
 	if f.err != nil {
-		return nil, f.err
+		return model.Rating{}, f.err
 	}
-	return []string{"life"}, nil
+	return model.Rating{Tags: []string{"life"}, Quality: model.QualitySolid}, nil
 }
 
 func TestTaggingNewEntries(t *testing.T) {
@@ -595,6 +595,9 @@ func TestTaggingNewEntries(t *testing.T) {
 	page, err := e.s.Stream(ctx, store.StreamQuery{Tag: "life", Limit: 10})
 	if err != nil || len(page) == 0 {
 		t.Errorf("stream tagged life = %+v, %v", page, err)
+	}
+	if rec, err := e.s.Recommended(ctx, store.StreamQuery{Limit: 10}); err != nil || len(rec) == 0 {
+		t.Errorf("recommended after rating = %+v, %v", rec, err)
 	}
 	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 3 {
 		t.Errorf("tagged entries asked about again: %d calls", tagger.calls)

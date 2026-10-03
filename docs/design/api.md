@@ -35,11 +35,12 @@
 
 ### 2.1 `GET /api/v1/entries`
 
-首页的最新流：按发布时间倒序，用游标往下翻。规则见 [architecture.md §6.6](architecture.md#6-抓取与展示规则)，查询见 [data-model.md §4.1](data-model.md#41-首页时间流)。
+首页的最新流：按发布时间倒序，用游标往下翻。规则见 [architecture.md §6.6](architecture.md#6-抓取与展示规则)，查询见 [data-model.md §4.1](data-model.md#41-首页时间流)。带 `order=recommended` 时是推荐流（[accounts.md §3.1](accounts.md#31-推荐评分)，查询见 [data-model.md §4.3](data-model.md#43-推荐流)），响应格式相同。
 
 | 参数 | 说明 |
 |---|---|
-| `cursor` | 上一页返回的 `next_cursor` |
+| `order` | `latest`（默认）或 `recommended`；其他值返回 `400 invalid_request` |
+| `cursor` | 上一页返回的 `next_cursor`，只在同一个 `order` 里有效 |
 | `limit` | 默认 30，最大 100 |
 | `lang` | 按博客语言的前缀筛选，例如 `zh` 匹配 `zh-CN` 和 `zh-TW` |
 | `tag` | 只要打了这个标签的文章，取值是标签表里的英文短名；不认识的返回 `400 invalid_request` |

@@ -11,7 +11,7 @@ export const GET: APIRoute = async () => {
   const langs: Lang[] = ["zh", "en"];
   const urls: { loc: string; lastmod?: string }[] = [];
 
-  for (const path of ["/", "/blogs", "/about"]) {
+  for (const path of ["/", "/recommended", "/blogs", "/about"]) {
     for (const lang of langs) urls.push({ loc: base + localePath(lang, path) });
   }
   urls.push({ loc: `${base}/bot` });

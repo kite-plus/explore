@@ -14,23 +14,29 @@ import { withQuery } from "@/lib/utils";
 interface Props {
   lang: Lang;
   result: Loaded<StreamPage>;
+  // The latest stream, or the recommended one: same posts, other rules.
+  stream?: "latest" | "recommended";
 }
 
-const { lang, result } = Astro.props;
+const { lang, result, stream = "latest" } = Astro.props;
 const t = dict(lang);
 const data = result.kind === "ok" ? result.data : undefined;
+const recommended = stream === "recommended";
+const path = recommended ? "/recommended" : "/";
 
 const older =
   data?.page.next_cursor &&
-  withQuery(localePath(lang, "/"), { cursor: data.page.next_cursor, lang: data.filter, tag: data.tag });
+  withQuery(localePath(lang, path), { cursor: data.page.next_cursor, lang: data.filter, tag: data.tag });
 const names = data ? tagNames(data.tags, lang) : {};
+// Without filters, an empty recommended stream means nothing is rated yet.
+const unrated = recommended && !data?.paged && !data?.filter && !data?.tag;
 ---
 
 <Base
   lang={lang}
-  title={t.home.title}
-  description={t.site.description}
-  path="/"
+  title={recommended ? t.recommended.title : t.home.title}
+  description={recommended ? t.recommended.intro : t.site.description}
+  path={path}
   entryChecks
   noindex={Boolean(data?.paged || data?.filter || data?.tag)}
 >
@@ -39,16 +45,21 @@ const names = data ? tagNames(data.tags, lang) : {};
       <>
         <div>
           <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.home.heading}</h1>
-          <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{t.home.intro}</p>
+          <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{recommended ? t.recommended.intro : t.home.intro}</p>
         </div>
         <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b">
-          <StreamTabs lang={lang} current="latest" query={{ lang: data.filter, tag: data.tag }} />
+          <StreamTabs lang={lang} current={stream} query={{ lang: data.filter, tag: data.tag }} />
           <div class="flex flex-wrap items-center gap-2 pb-2">
-            <LangFilter lang={lang} path="/" current={data.filter} tag={data.tag} variant="segmented" />
-            <TagFilter lang={lang} path="/" tags={data.tags} current={data.tag} filter={data.filter} />
+            <LangFilter lang={lang} path={path} current={data.filter} tag={data.tag} variant="segmented" />
+            <TagFilter lang={lang} path={path} tags={data.tags} current={data.tag} filter={data.filter} />
           </div>
         </div>
-        {data.page.data.length === 0 ? (
+        {data.page.data.length === 0 && unrated ? (
+          <div class="flex flex-col items-center gap-4 py-16 text-center">
+            <p class="max-w-prose text-muted-foreground">{t.recommended.empty}</p>
+            <ButtonLink href={localePath(lang, "/")} variant="outline">{t.recommended.latest}</ButtonLink>
+          </div>
+        ) : data.page.data.length === 0 ? (
           <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
         ) : (
           <div class="divide-y" data-entry-stream>

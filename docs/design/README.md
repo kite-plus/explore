@@ -43,9 +43,9 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | data-model.md | E1 与文章标签的表结构已实现 | 2026-09-23 |
 | worker.md | E1 与打标签循环已实现；阈值已按 E0 实测回填（§10） | 2026-09-23 |
 | api.md | E1、标签与发布即出现（ping）接口已实现；OpenAPI 待定 | 2026-10-03 |
-| frontend.md | E2 的读者页面和标签筛选已实现；账号相关页面见 accounts.md | 2026-09-23 |
+| frontend.md | E2 的读者页面、标签筛选和推荐流已实现；账号相关页面见 accounts.md | 2026-10-03 |
 | project-layout.md | 已按本文搭建 | 2026-09-23 |
-| accounts.md | 本站账号、订阅流和域名认领已实现；OIDC 待接入 | 2026-09-26 |
+| accounts.md | 本站账号、订阅流、OPML 导入导出、推荐评分和域名认领已实现；OIDC 待接入 | 2026-10-03 |
 | identity-and-comments.md | 架构决定；身份服务先行，实现方式在 identity 的 I0 选型后定案 | 2026-09-26 |
 | admin.md | 初始后台设计；当前实现状态见 admin-operations.md | 2026-09-24 |
 | admin-frontend.md | 初始页面设计；当前页面与接口见 admin-operations.md | 2026-09-24 |

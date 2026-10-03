@@ -32,6 +32,11 @@ var EarliestDate = time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC)
 const (
 	StreamPerBlogPerDay = 3
 	FutureTolerance     = time.Hour
+
+	// The recommended stream takes at most this many posts per blog and day,
+	// and keeps a standout post this much longer at its top.
+	RecommendedPerBlogPerDay = 1
+	StandoutBoost            = 48 * time.Hour
 )
 
 // Inclusion and health rules.

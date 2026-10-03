@@ -103,6 +103,7 @@ CREATE TABLE entries (
     categories    text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(categories) <= 10),
     tags          text[]      NOT NULL DEFAULT '{}' CHECK (cardinality(tags) <= 3),
     tagged_at     timestamptz,
+    quality       smallint             CHECK (quality BETWEEN 0 AND 3),
     link_status   text        NOT NULL DEFAULT 'unknown'
                               CHECK (link_status IN ('unknown', 'available', 'unavailable')),
     link_checked_at timestamptz,
@@ -134,7 +135,7 @@ CREATE INDEX entries_url_key  ON entries (blog_id, url_key);
 - `source` 标出文章来自订阅源（`feed`）还是站点地图（`sitemap`）。同一篇文章两处都有时只留订阅源那一行：`url_key` 由 `entry_url_key()` 从链接算出（去掉协议、`www.`、`#` 片段和结尾斜杠，转小写），订阅源同步时删掉比对键相同的站点地图行。站点地图文章的 `identity` 以 `sitemap:` 开头，不会撞上订阅源自带的 ID。
 - `suppressed_entries` 同时记下被隐藏文章的 `url_key`，文章从订阅源挪到站点地图、换了 `identity` 之后仍然隐藏。
 - `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
-- `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
+- `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。`quality` 是同一次模型调用给出的推荐评分（[accounts.md §3.1](accounts.md#31-推荐评分)）：0 `skip`、1 `brief`、2 `solid`、3 `standout`，为空表示还没评。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
 - `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
 - `page_image_url`、`page_excerpt` 是订阅源缺图或摘要被截断时，从文章页 `<head>` 读到的封面地址和描述（[worker.md §12](worker.md#12-读文章页)）；`page_next_check_at` 是下次该读的时间，读过后为空。它们也是缓存：同步时链接不变就保留，链接变了就清空重读。展示时订阅源自己的图片和完整摘要优先。
 
@@ -286,6 +287,36 @@ LIMIT @page_size;
 
 - 目录：可见的博客，按最近一篇可信日期的文章倒序（没有文章的排最后），游标为 `(coalesce(last_published_at, '-infinity'), id)`。`last_published_at` 同时供前端生成 `sitemap.xml` 的 `lastmod`。
 - 博客页：该博客在 `entries` 里的全部文章，包括没有日期和日期不可信的，按发布时间倒序、没有日期的排最后。
+
+### 4.3 推荐流
+
+规则见 [accounts.md §3.1](accounts.md#31-推荐评分)：评分至少为 2、日期可信、不在未来、链接没有疑似失效，同一博客每天最多 1 篇，按排序时间倒序。
+
+```sql
+WITH rated AS (
+    SELECT e.id, e.published_at,
+           e.published_at + CASE WHEN e.quality = 3 THEN @standout_boost::interval
+                                 ELSE interval '0' END AS rank_at,
+           row_number() OVER (
+               PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE 'UTC')
+               ORDER BY e.quality DESC, e.published_at DESC, e.id DESC
+           ) AS rank_in_day
+    FROM entries e
+    JOIN blogs b ON b.id = e.blog_id
+    WHERE -- 与 4.1 相同的可见条件
+      AND e.quality >= 2
+      AND e.link_status <> 'unavailable'
+)
+SELECT id, published_at, rank_at
+FROM rated
+WHERE rank_in_day <= @per_blog_per_day
+  AND (rank_at, id) < (@cursor_rank_at, @cursor_id)
+ORDER BY rank_at DESC, id DESC
+LIMIT @page_size;
+```
+
+- 游标是 `(rank_at, id)`。`rank_at` 只由发布时间和评分决定，不随当前时间变化，所以翻页前后一致。
+- 和 4.1 一样先算每天的上限再套游标；"每天"同样按发布日期的 UTC 划分。
 
 ---
 

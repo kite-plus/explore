@@ -1,6 +1,7 @@
-// Package tagger files posts under Explore's tag list with a Claude model.
-// It is the only package that talks to a model; the worker decides when to
-// call it. See docs/design/accounts.md section 5.
+// Package tagger files posts under Explore's tag list with a Claude model,
+// and in the same call rates them for the recommended stream. It is the only
+// package that talks to a model; the worker decides when to call it. See
+// docs/design/accounts.md sections 3.1 and 4.
 package tagger
 
 import (
@@ -40,6 +41,10 @@ type Options struct {
 // requestTimeout bounds one classification, retries included by the SDK.
 const requestTimeout = 60 * time.Second
 
+// qualities are the ratings the model chooses from, lowest first, in the
+// order of model.Quality.
+var qualities = []string{"skip", "brief", "solid", "standout"}
+
 // Tagger classifies posts. It is safe for concurrent use.
 type Tagger struct {
 	client anthropic.Client
@@ -69,9 +74,10 @@ func New(o Options) *Tagger {
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"tags": map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": slugs}},
+				"tags":    map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": slugs}},
+				"quality": map[string]any{"type": "string", "enum": qualities},
 			},
-			"required":             []string{"tags"},
+			"required":             []string{"tags", "quality"},
 			"additionalProperties": false,
 		},
 	}
@@ -88,6 +94,12 @@ func systemPrompt() string {
 	for _, t := range model.Tags {
 		fmt.Fprintf(&b, "- %s: %s\n", t.Slug, t.About)
 	}
+	b.WriteString("\nAlso rate the post for a stream of recommended reading, as its title and excerpt show it:\n")
+	b.WriteString("- standout: original, in-depth writing most readers would find worth their time, such as a thorough technical deep dive, original research, a well-argued long essay or a detailed account of hard-won experience.\n")
+	b.WriteString("- solid: a substantial post with a clear subject, such as a how-to, a review, an essay, a project write-up or a well-told personal story.\n")
+	b.WriteString("- brief: short notes, status updates, routine announcements, release notes, or lists of links with little commentary.\n")
+	b.WriteString("- skip: test or placeholder posts, advertising, posts that only point elsewhere, or too little to tell.\n")
+	b.WriteString("Rate the writing, not its topic or language: a solid post on any subject, in any language, is solid. When unsure between two ratings, choose the lower.\n")
 	return b.String()
 }
 
@@ -109,11 +121,12 @@ func userText(p Post) string {
 	return b.String()
 }
 
-// Tag returns the post's tags, best fit first, possibly none. An error means
-// the model could not be asked and the post should wait for another try; an
-// answer that cannot be used, such as a refusal, is no tags rather than an
-// error, so the post is not asked about again and again.
-func (t *Tagger) Tag(ctx context.Context, p Post) ([]string, error) {
+// Tag returns the post's tags, best fit first, possibly none, and its
+// quality. An error means the model could not be asked and the post should
+// wait for another try; an answer that cannot be used, such as a refusal, is
+// no tags and a skip rather than an error, so the post is not asked about
+// again and again.
+func (t *Tagger) Tag(ctx context.Context, p Post) (model.Rating, error) {
 	params := anthropic.MessageNewParams{
 		Model:     t.model,
 		MaxTokens: 1024,
@@ -129,38 +142,43 @@ func (t *Tagger) Tag(ctx context.Context, p Post) ([]string, error) {
 	}
 	msg, err := t.client.Messages.New(ctx, params)
 	if err != nil {
-		return nil, err
+		return model.Rating{}, err
 	}
 	if msg.StopReason != anthropic.StopReasonEndTurn {
-		return []string{}, nil
+		return model.Rating{Tags: []string{}}, nil
 	}
 	for _, block := range msg.Content {
 		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
 			return parse(text.Text)
 		}
 	}
-	return []string{}, nil
+	return model.Rating{Tags: []string{}}, nil
 }
 
 // ErrMalformed means the model's answer was not the JSON the schema asks for.
 var ErrMalformed = errors.New("malformed answer")
 
-// parse keeps the known tags of an answer, once each, at most three.
-func parse(answer string) ([]string, error) {
+// parse keeps the known tags of an answer, once each, at most three, and
+// its quality; a quality it does not know is a skip.
+func parse(answer string) (model.Rating, error) {
 	var out struct {
-		Tags []string `json:"tags"`
+		Tags    []string `json:"tags"`
+		Quality string   `json:"quality"`
 	}
 	if err := json.Unmarshal([]byte(answer), &out); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrMalformed, err)
+		return model.Rating{}, fmt.Errorf("%w: %w", ErrMalformed, err)
 	}
-	tags := []string{}
+	r := model.Rating{Tags: []string{}, Quality: model.QualitySkip}
 	for _, slug := range out.Tags {
-		if _, ok := model.TagBySlug(slug); ok && !slices.Contains(tags, slug) {
-			tags = append(tags, slug)
+		if _, ok := model.TagBySlug(slug); ok && !slices.Contains(r.Tags, slug) {
+			r.Tags = append(r.Tags, slug)
 		}
-		if len(tags) == model.MaxTagsPerEntry {
+		if len(r.Tags) == model.MaxTagsPerEntry {
 			break
 		}
 	}
-	return tags, nil
+	if i := slices.Index(qualities, out.Quality); i >= 0 {
+		r.Quality = model.Quality(i)
+	}
+	return r, nil
 }

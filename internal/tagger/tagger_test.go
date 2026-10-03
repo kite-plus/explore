@@ -66,13 +66,13 @@ var post = Post{
 
 func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":["ai","tools"]}`
-	tags, err := f.tagger("low").Tag(context.Background(), post)
+	f.text = `{"tags":["ai","tools"],"quality":"solid"}`
+	rating, err := f.tagger("low").Tag(context.Background(), post)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(tags, []string{"ai", "tools"}) {
-		t.Errorf("tags = %v", tags)
+	if !slices.Equal(rating.Tags, []string{"ai", "tools"}) || rating.Quality != model.QualitySolid {
+		t.Errorf("rating = %+v", rating)
 	}
 
 	req := f.last
@@ -93,9 +93,16 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 		t.Errorf("effort = %v", config["effort"])
 	}
 	format := config["format"].(map[string]any)
-	enum := format["schema"].(map[string]any)["properties"].(map[string]any)["tags"].(map[string]any)["items"].(map[string]any)["enum"].([]any)
+	properties := format["schema"].(map[string]any)["properties"].(map[string]any)
+	enum := properties["tags"].(map[string]any)["items"].(map[string]any)["enum"].([]any)
 	if format["type"] != "json_schema" || len(enum) != len(model.Tags) {
 		t.Errorf("format = %v", format)
+	}
+	if got := properties["quality"].(map[string]any)["enum"].([]any); len(got) != 4 || got[0] != "skip" || got[3] != "standout" {
+		t.Errorf("quality enum = %v", got)
+	}
+	if !strings.Contains(system["text"].(string), "- standout: ") {
+		t.Error("system prompt does not explain the ratings")
 	}
 	user := req["messages"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
 	for _, want := range []string{"Title: " + post.Title, "Categories: AI, 博客", "Language: zh-CN", "Blog's usual tags: tools"} {
@@ -107,7 +114,7 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 
 func TestTagWithoutEffort(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":[]}`
+	f.text = `{"tags":[],"quality":"brief"}`
 	if _, err := f.tagger("").Tag(context.Background(), post); err != nil {
 		t.Fatal(err)
 	}
@@ -116,12 +123,16 @@ func TestTagWithoutEffort(t *testing.T) {
 	}
 }
 
-func TestTagKeepsOnlyKnownTags(t *testing.T) {
+func TestTagKeepsOnlyKnownTagsAndRatings(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":["ai","nonsense","ai","backend","ops","data"]}`
-	tags, err := f.tagger("").Tag(context.Background(), post)
-	if err != nil || !slices.Equal(tags, []string{"ai", "backend", "ops"}) {
-		t.Errorf("tags = %v, %v", tags, err)
+	f.text = `{"tags":["ai","nonsense","ai","backend","ops","data"],"quality":"standout"}`
+	rating, err := f.tagger("").Tag(context.Background(), post)
+	if err != nil || !slices.Equal(rating.Tags, []string{"ai", "backend", "ops"}) || rating.Quality != model.QualityStandout {
+		t.Errorf("rating = %+v, %v", rating, err)
+	}
+	f.text = `{"tags":["ai"],"quality":"brilliant"}`
+	if rating, err := f.tagger("").Tag(context.Background(), post); err != nil || rating.Quality != model.QualitySkip {
+		t.Errorf("an unknown rating = %+v, %v; want a skip", rating, err)
 	}
 }
 
@@ -129,9 +140,9 @@ func TestTagUnusableAnswers(t *testing.T) {
 	for _, reason := range []string{"refusal", "max_tokens"} {
 		f := newFakeAPI(t)
 		f.stopReason, f.text = reason, `{"tags":["ai"`
-		tags, err := f.tagger("").Tag(context.Background(), post)
-		if err != nil || len(tags) != 0 {
-			t.Errorf("%s: tags = %v, %v; want none and no error", reason, tags, err)
+		rating, err := f.tagger("").Tag(context.Background(), post)
+		if err != nil || len(rating.Tags) != 0 || rating.Quality != model.QualitySkip {
+			t.Errorf("%s: rating = %+v, %v; want no tags, a skip and no error", reason, rating, err)
 		}
 	}
 	f := newFakeAPI(t)

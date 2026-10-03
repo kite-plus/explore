@@ -141,6 +141,7 @@ func (s *Store) SyncSnapshot(ctx context.Context, blogID int64, entries []model.
 			    -- is tagged again.
 			    tags         = CASE WHEN entries.title = excluded.title THEN entries.tags ELSE '{}' END,
 			    tagged_at    = CASE WHEN entries.title = excluded.title THEN entries.tagged_at END,
+			    quality      = CASE WHEN entries.title = excluded.title THEN entries.quality END,
 			    synced_at    = now()`,
 			pgx.NamedArgs{
 				"blog_id": blogID, "identities": identities, "urls": urls, "titles": titles,

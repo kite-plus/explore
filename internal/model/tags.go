@@ -32,6 +32,25 @@ var Tags = []Tag{
 	{"travel", "旅行与摄影", "Travel & photos", "Travel writing and photography."},
 }
 
+// Quality is how much a post deserves a place in the recommended stream,
+// judged by the tagger from what Explore shows of it. See
+// docs/design/accounts.md section 3.1.
+type Quality int16
+
+const (
+	QualitySkip Quality = iota
+	QualityBrief
+	QualitySolid
+	QualityStandout
+)
+
+// Rating is the tagger's verdict on one post: its tags, best fit first, and
+// its quality.
+type Rating struct {
+	Tags    []string
+	Quality Quality
+}
+
 // TagBySlug finds a tag in the list.
 func TagBySlug(slug string) (Tag, bool) {
 	for _, t := range Tags {

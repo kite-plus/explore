@@ -1,7 +1,8 @@
 ---
-import Recommended from "@/views/Recommended.astro";
+import { loadHome } from "@/lib/loaders";
+import Home from "@/views/Home.astro";
 
-Astro.response.headers.set("Cache-Control", "public, max-age=60");
+const result = await loadHome(Astro, "zh", "recommended");
 ---
 
-<Recommended lang="zh" />
+<Home lang="zh" result={result} stream="recommended" />

@@ -38,11 +38,13 @@ export interface StreamPage {
   paged: boolean;
 }
 
-export async function loadHome(ctx: AstroGlobal, lang: Lang): Promise<Loaded<StreamPage>> {
+/** loadHome loads a page of the latest stream, or of the recommended one. */
+export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | "recommended" = "latest"): Promise<Loaded<StreamPage>> {
   const cursor = param(ctx, "cursor");
   const filter = param(ctx, "lang");
   const tag = param(ctx, "tag");
-  const [r, tags] = await Promise.all([api.entries(lang, { cursor, lang: filter, tag, limit: 30 }), tagList(lang)]);
+  const order = stream === "recommended" ? "recommended" : undefined;
+  const [r, tags] = await Promise.all([api.entries(lang, { order, cursor, lang: filter, tag, limit: 30 }), tagList(lang)]);
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   cacheControl(ctx, "public, max-age=60");

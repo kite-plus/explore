@@ -1039,7 +1039,7 @@ func TestTags(t *testing.T) {
 	if err != nil || len(jobs) != 2 {
 		t.Fatalf("untagged = %+v, %v", jobs, err)
 	}
-	if err := e.s.SetTags(ctx, jobs[0].EntryID, jobs[0].Title, []string{"ai", "tools"}); err != nil {
+	if err := e.s.SetRating(ctx, jobs[0].EntryID, jobs[0].Title, model.Rating{Tags: []string{"ai", "tools"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1109,5 +1109,37 @@ func TestBlogPagePages(t *testing.T) {
 	}
 	if w := e.get("/api/v1/blogs/paged.example.com?cursor=nonsense"); w.Code != http.StatusBadRequest {
 		t.Errorf("bad cursor = %d", w.Code)
+	}
+}
+
+func TestRecommendedEntries(t *testing.T) {
+	e := newEnv(t, false)
+	// More than a day apart, so the daily cap of one leaves both.
+	e.seed("rec.example.com", "en", post("plain", 30, ""), post("deep", 60, ""), post("note", 50, ""))
+	ctx := context.Background()
+	jobs, err := e.s.Untagged(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quality := map[string]model.Quality{"Post plain": model.QualitySolid, "Post deep": model.QualityStandout, "Post note": model.QualityBrief}
+	for _, j := range jobs {
+		if err := e.s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"life"}, Quality: quality[j.Title]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page := decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1"))
+	if len(page.Data) != 1 || page.Data[0].Title != "Post deep" || page.NextCursor == nil {
+		t.Fatalf("first page = %+v", page)
+	}
+	page = decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1&cursor="+url.QueryEscape(*page.NextCursor)))
+	if len(page.Data) != 1 || page.Data[0].Title != "Post plain" || page.NextCursor != nil {
+		t.Fatalf("second page = %+v", page)
+	}
+	if latest := decode[pageOut](t, e.get("/api/v1/entries?order=latest")); len(latest.Data) != 3 {
+		t.Errorf("latest = %d entries, want all 3", len(latest.Data))
+	}
+	if w := e.get("/api/v1/entries?order=popular"); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown order = %d", w.Code)
 	}
 }
