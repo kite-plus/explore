@@ -50,6 +50,11 @@
     return avatarColors[hash % avatarColors.length];
   }
 
+  // Text from the API goes into HTML below, so it is escaped first.
+  function escapeHTML(text) {
+    return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
   function clearError() {
     if (!errorSection) return;
     errorSection.innerHTML = "";
@@ -80,9 +85,10 @@
 
     try {
       const feedUrl = (feedInput?.value || "").trim();
+      // The API writes its hints in the page's language, not the browser's.
       const res = await fetch("/api/v1/submissions/preview", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept-Language": document.documentElement.lang || "en" },
         body: JSON.stringify({ site_url: siteUrl, feed_url: feedUrl }),
       });
 
@@ -110,19 +116,26 @@
             </div>
           `);
         } else if (code === "check_failed" && data.check_report?.problems?.length) {
+          // As on the page the form posts to (Problems.astro): the hint
+          // says what to fix, the code names the problem.
           const list = data.check_report.problems
-            .map((p) => `<li class="text-xs text-destructive">• ${p.message || p.code}</li>`)
+            .map(
+              (p) => `<li class="text-sm">
+                <p class="text-destructive">• ${escapeHTML(p.hint || p.code)}</p>
+                <p class="mt-0.5 pl-3 text-xs break-all text-muted-foreground"><code>${escapeHTML(p.code)}</code>${p.detail ? ` · ${escapeHTML(p.detail)}` : ""}</p>
+              </li>`,
+            )
             .join("");
           showError(`
             <div class="rounded-lg border border-destructive/30 p-4 text-sm" role="alert">
               <p class="font-medium text-destructive mb-2">${errorSection.dataset.textFailed || "Check failed:"}</p>
-              <ul class="flex flex-col gap-1">${list}</ul>
+              <ul class="flex flex-col gap-2">${list}</ul>
             </div>
           `);
         } else {
           showError(`
             <p role="alert" class="rounded-lg border border-destructive/30 p-4 text-sm text-destructive">
-              ${data.error?.message || errorSection.dataset.textError || "Failed to inspect blog."}
+              ${escapeHTML(data.error?.message || errorSection.dataset.textError || "Failed to inspect blog.")}
             </p>
           `);
         }

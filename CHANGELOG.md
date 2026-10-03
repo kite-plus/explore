@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Explore can run behind a CDN such as Cloudflare without its rate limits counting the CDN instead of readers: list the CDN's address ranges in `EXPLORE_CDN_RANGES`, and Caddy takes the reader's address from the `X-Forwarded-For` the CDN sends, ignoring whatever a reader wrote there. `.env.example` carries Cloudflare's ranges ready to uncomment.
 
+### Fixed
+
+- When a blog did not pass the check on the submit page, the form listed each problem's bare code, such as `feed_not_found`, instead of the hint saying what to fix. It now shows the hint in the page's language, with the code beside it.
+
 ## [0.1.6] - 2026-10-04
 
 This release brings new posts in sooner and makes them easier to read: blogs can ask to be fetched right after they publish, subscriptions move in and out as OPML, Recommended has posts at last, and the stream pages are rebuilt around the posts, on phones too. It also fixes rate limits that, behind the reverse proxy every deployment uses, counted the site rather than each reader.

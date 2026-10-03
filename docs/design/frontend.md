@@ -218,7 +218,7 @@ import SubmitForm from "@/components/submit-form";
 | 接口结果 | 页面 |
 |---|---|
 | `201` | `303` 重定向到同一语言的 `/submissions/{id}` |
-| `422 check_failed` | 重新显示表单，逐条列出检查报告里的问题和修复提示 |
+| `422 check_failed` | 重新显示表单，逐条列出检查报告里的问题和修复提示。页面上“获取博客信息”的预览（`POST /api/v1/submissions/preview`）失败时也一样，同样用页面语言请求，列出每条问题的提示和代码 |
 | `409 already_pending` | 重定向到已有的那条提交 |
 | `409 already_listed` | 提示已收录，链接到 `/blogs/{host}` |
 | `403 excluded` | 说明该博客已退出或被屏蔽，以及如何联系维护者 |
