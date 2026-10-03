@@ -2,6 +2,7 @@
 import { ArrowRight, ArrowUpRight, PenLine, Rss, Sparkles, Zap } from "lucide-react";
 
 import BlogAvatar from "@/components/BlogAvatar.astro";
+import { TagIcon } from "@/components/TagIcon";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import type { Blog, Tag } from "@/lib/types";
@@ -25,19 +26,21 @@ const t = dict(lang);
 const s = t.sidebar;
 const base = localePath(lang, path);
 const pingHelp = lang === "zh" ? "/about#发布后更快出现" : "/en/about#appearing-sooner-after-you-publish";
-const chip =
-  "rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:border-foreground aria-[current=page]:bg-foreground aria-[current=page]:text-background";
+const tile =
+  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&>svg]:opacity-70 aria-[current=page]:bg-brand/10 aria-[current=page]:font-medium aria-[current=page]:text-brand aria-[current=page]:[&>svg]:opacity-100";
 ---
 
 <aside class="hidden space-y-8 pt-5 lg:sticky lg:top-4 lg:block lg:self-start">
   <section class="rounded-2xl border border-brand/20 bg-linear-to-b from-brand/12 to-brand/2 p-5">
-    <span class="flex size-9 items-center justify-center rounded-xl bg-background text-brand shadow-xs ring-1 ring-brand/15 [&>svg]:size-4.5">
-      {stream === "latest" ? <PenLine aria-hidden="true" /> : stream === "recommended" ? <Sparkles aria-hidden="true" /> : <Rss aria-hidden="true" />}
-    </span>
-    <h2 class="mt-3.5 text-[0.9375rem] font-semibold tracking-tight">
-      {stream === "latest" ? s.latestTitle : stream === "recommended" ? s.recommendedTitle : s.followingTitle}
-    </h2>
-    <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+    <div class="flex items-center gap-3">
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-brand shadow-xs ring-1 ring-brand/15 [&>svg]:size-4.5">
+        {stream === "latest" ? <PenLine aria-hidden="true" /> : stream === "recommended" ? <Sparkles aria-hidden="true" /> : <Rss aria-hidden="true" />}
+      </span>
+      <h2 class="text-[0.9375rem] font-semibold tracking-tight">
+        {stream === "latest" ? s.latestTitle : stream === "recommended" ? s.recommendedTitle : s.followingTitle}
+      </h2>
+    </div>
+    <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
       {stream === "latest" ? s.latestBody : stream === "recommended" ? t.recommended.intro : s.followingBody}
     </p>
     {
@@ -67,14 +70,19 @@ const chip =
   {
     tags.length > 0 && (
       <section>
-        <h2 class="text-sm font-semibold">{s.tags}</h2>
-        <nav aria-label={s.tags} class="mt-3 flex flex-wrap gap-1.5">
-          <a href={withQuery(base, { lang: filter })} aria-current={tag ? undefined : "page"} class={chip}>
-            {t.filter.all}
-          </a>
+        <div class="flex items-baseline justify-between">
+          <h2 class="text-sm font-semibold">{s.tags}</h2>
+          {tag && (
+            <a href={withQuery(base, { lang: filter })} class="text-xs text-muted-foreground hover:text-foreground">
+              {t.filter.all}
+            </a>
+          )}
+        </div>
+        <nav aria-label={s.tags} class="mt-2 grid grid-cols-2 gap-0.5">
           {tags.map((item) => (
-            <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === tag ? "page" : undefined} class={chip}>
-              {item.name[lang]}
+            <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === tag ? "page" : undefined} class={tile}>
+              <TagIcon slug={item.slug} className="size-4 shrink-0" />
+              <span class="leading-snug">{item.name[lang]}</span>
             </a>
           ))}
         </nav>

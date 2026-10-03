@@ -270,11 +270,14 @@ describe("content", () => {
   });
 
   test("entries show their tags, each a way into the stream", async () => {
+    // Each tag is its icon, then its name.
+    const tagLink = (href, name) => new RegExp(`<a href="${href}" class="[^"]*"><svg[^>]*>.*?</svg>${name}</a>`, "s");
     const { html } = await page("/");
-    assert.match(html, /<a href="\/\?tag=backend" class="[^"]*">后端<\/a>/);
-    assert.match(html, /<a href="\/\?tag=ops" class="[^"]*">运维与云<\/a>/);
+    const stream = html.slice(html.indexOf("data-entry-stream"), html.indexOf("<aside"));
+    assert.match(stream, tagLink("/\\?tag=backend", "后端"));
+    assert.match(stream, tagLink("/\\?tag=ops", "运维与云"));
     const en = (await page("/en/blogs/zh.example.com")).html;
-    assert.match(en, /<a href="\/en\/\?tag=backend" class="[^"]*">Backend<\/a>/);
+    assert.match(en, tagLink("/en/\\?tag=backend", "Backend"));
   });
 
   test("links to blogs name Explore as their source, feed links stay clean", async () => {
@@ -303,9 +306,9 @@ describe("content", () => {
     assert.match(tagged, /缓存可以随时删掉/);
     assert.doesNotMatch(tagged, /Notes on feeds/, "only entries with the tag");
     assert.match(tagged, /<a href="\/\?lang=zh&amp;tag=backend"[^>]*>中文<\/a>/);
-    assert.match(tagged, /<a href="\/\?tag=backend" aria-current="page"[^>]*>后端<\/a>/);
+    assert.match(tagged, /<a href="\/\?tag=backend" aria-current="page"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?后端</s);
     const zh = (await page("/?lang=zh")).html;
-    assert.match(zh, /<a href="\/\?lang=zh&amp;tag=life"[^>]*>生活随笔<\/a>/);
+    assert.match(zh, /<a href="\/\?lang=zh&amp;tag=life"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?生活随笔</s);
   });
 
   test("the tag list is asked for once, not on every page", async () => {

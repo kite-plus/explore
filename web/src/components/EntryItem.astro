@@ -2,6 +2,7 @@
 import BlogAvatar from "@/components/BlogAvatar.astro";
 import { CircleCheck, CircleHelp, CircleX } from "lucide-react";
 import ExternalLink from "@/components/ExternalLink.astro";
+import { TagIcon } from "@/components/TagIcon";
 import { dict, localePath, type Lang } from "@/i18n";
 import { withSource } from "@/lib/config";
 import { clockTime, relativeTime } from "@/lib/format";
@@ -121,13 +122,13 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
     {entry.excerpt && <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{entry.excerpt}</p>}
     {
       tags.length > 0 && (
-        <div class="mt-2 flex flex-wrap gap-1.5 text-xs" lang={t.htmlLang}>
+        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs" lang={t.htmlLang}>
           {tags.map((slug) => (
             <a
               href={withQuery(localePath(lang, tagPath), { tag: slug })}
-              class="rounded-full border px-2 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              class="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-brand"
             >
-              {tagNames[slug]}
+              <TagIcon slug={slug} className="size-3.5" />{tagNames[slug]}
             </a>
           ))}
         </div>

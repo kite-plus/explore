@@ -1,4 +1,5 @@
 ---
+import { TagIcon } from "@/components/TagIcon";
 import { dict, localePath, type Lang } from "@/i18n";
 import type { Tag } from "@/lib/types";
 import { withQuery } from "@/lib/utils";
@@ -34,9 +35,9 @@ const selected = options.find((option) => option.value === current)?.label ?? t.
           <a
             href={withQuery(base, { lang: filter, tag: o.value })}
             aria-current={o.value === current ? "page" : undefined}
-            class="rounded-md px-2.5 py-1.5 text-muted-foreground outline-offset-1 hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-secondary aria-[current=page]:font-medium aria-[current=page]:text-secondary-foreground"
+            class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-muted-foreground outline-offset-1 hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-brand/10 aria-[current=page]:font-medium aria-[current=page]:text-brand"
           >
-            {o.label}
+            {o.value && <TagIcon slug={o.value} className="size-4 shrink-0 opacity-70" />}{o.label}
           </a>
         ))}
       </nav>
