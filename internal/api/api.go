@@ -43,6 +43,7 @@ type Server struct {
 	registerLimit *limiter
 	loginLimit    *limiter
 	pingLimit     *limiter
+	importLimit   *limiter
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage
@@ -68,6 +69,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	s.registerLimit = newLimiter(5, time.Hour, s.Now)
 	s.loginLimit = newLimiter(10, time.Minute, s.Now)
 	s.pingLimit = newLimiter(60, time.Hour, s.Now)
+	s.importLimit = newLimiter(10, time.Hour, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -110,6 +112,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	account.PUT("/me/password", s.limit(s.loginLimit), s.changePassword)
 	account.POST("/auth/logout", s.logout)
 	account.GET("/me/subscriptions", s.subscriptions)
+	account.GET("/me/subscriptions.opml", s.exportSubscriptions)
+	account.POST("/me/subscriptions/import", s.limit(s.importLimit), s.importSubscriptions)
 	account.PUT("/me/subscriptions/:host", s.addSubscription)
 	account.DELETE("/me/subscriptions/:host", s.removeSubscription)
 	account.GET("/me/entries", s.following)

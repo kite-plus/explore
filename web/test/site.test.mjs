@@ -390,6 +390,13 @@ describe("submissions", () => {
     assert.match(html, /value="https:\/\/fail\.example\.com\/"/, "the form keeps what was typed");
   });
 
+  test("a link can fill in the addresses", async () => {
+    const { res, html } = await page("/en/submit?site=https%3A%2F%2Fnew.example.com%2F&feed=https%3A%2F%2Fnew.example.com%2Frss.xml");
+    assert.equal(res.status, 200);
+    assert.match(html, /name="site_url"[^>]*value="https:\/\/new\.example\.com\/"|value="https:\/\/new\.example\.com\/"[^>]*name="site_url"/);
+    assert.match(html, /value="https:\/\/new\.example\.com\/rss\.xml"/);
+  });
+
   test("a listed blog links to its page", async () => {
     const html = await (await submit("/submit", "https://listed.example.com/")).text();
     assert.match(html, /href="\/blogs\/listed\.example\.com"/);

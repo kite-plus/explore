@@ -118,7 +118,14 @@ export interface SubmitState {
 export async function loadSubmit(ctx: AstroGlobal, lang: Lang): Promise<SubmitState | Response> {
   cacheControl(ctx, "no-store");
   const state: SubmitState = { values: { site_url: "", feed_url: "", note: "" } };
-  if (ctx.request.method !== "POST") return state;
+  if (ctx.request.method !== "POST") {
+    // A link may fill in the addresses, as the account page does for blogs an
+    // imported OPML file named that Explore does not list.
+    const param = (name: string) => (ctx.url.searchParams.get(name) ?? "").trim().slice(0, 2048);
+    state.values.site_url = param("site");
+    state.values.feed_url = param("feed");
+    return state;
+  }
 
   const form = await ctx.request.formData();
   const field = (name: string) => String(form.get(name) ?? "").trim();

@@ -24,6 +24,7 @@ const (
 	codeInvalidRequest     = "invalid_request"
 	codeInvalidURL         = "invalid_url"
 	codeInvalidCursor      = "invalid_cursor"
+	codeInvalidOPML        = "invalid_opml"
 	codeUnauthorized       = "unauthorized"
 	codeExcluded           = "excluded"
 	codeNotFound           = "not_found"
@@ -46,6 +47,7 @@ var messages = map[string]struct{ en, zh string }{
 	codeInvalidRequest:     {"The request is malformed.", "请求格式不正确。"},
 	codeInvalidURL:         {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
 	codeInvalidCursor:      {"The cursor is not valid.", "游标无效。"},
+	codeInvalidOPML:        {"The file is not an OPML subscription list.", "文件不是 OPML 订阅列表。"},
 	codeUnauthorized:       {"Sign in first.", "请先登录。"},
 	codeExcluded:           {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
 	codeNotFound:           {"Not found.", "没有找到。"},

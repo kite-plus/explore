@@ -1,6 +1,6 @@
 # 统一身份、订阅与标签
 
-> 状态：本站账号、订阅流和域名认领已实现；OIDC 待接入 · 最近更新：2026-09-26
+> 状态：本站账号、订阅流、OPML 导入导出和域名认领已实现；OIDC 待接入 · 最近更新：2026-10-03
 > 跨站身份和评论的架构见 [identity-and-comments.md](identity-and-comments.md)。
 
 ## 0. 边界
@@ -22,7 +22,9 @@
 ## 2. 订阅
 
 - 订阅对象是博客，不是单篇文章或标签。博客页和目录页提供订阅入口。
-- 列表可取消、导出 OPML、导入 OPML；导入只匹配已收录博客。博客退出时删除其订阅。
+- 订阅列表可以逐个取消，也可以导出为 OPML，带去任何 RSS 阅读器。
+- 可以导入其他阅读器导出的 OPML。按每个订阅的订阅地址和站点地址找正在展示的已收录博客：主机名相同、只差 `www.`、是博客的额外域名，或订阅地址完全相同；找到的直接订阅，没找到的列出来，读者可以去提交。导入不新增博客，也不访问文件里的任何地址。
+- 博客退出时删除其订阅。
 - 每人最多 1,000 个订阅 `[待定]`。订阅人数是否公开展示 `[待定]`。
 
 ## 3. 三条信息流
@@ -79,7 +81,9 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除账号（唯一可用的管理员除外） |
 | PUT | `/api/v1/me/password` | 验证当前密码后修改密码，撤销其他会话 |
 | GET | `/api/v1/me/entries` | 订阅流 |
-| GET | `/api/v1/me/subscriptions` | 订阅列表与 OPML 导出 |
+| GET | `/api/v1/me/subscriptions` | 订阅列表 |
+| GET | `/api/v1/me/subscriptions.opml` | 导出订阅的 OPML |
+| POST | `/api/v1/me/subscriptions/import` | 导入 OPML，订阅其中已收录的博客 |
 | PUT、DELETE | `/api/v1/me/subscriptions/{host}` | 订阅和取消 |
 | GET | `/api/v1/me/blogs` | 已认领博客 |
 | POST | `/api/v1/me/blog-claims/{host}` | 生成 DNS TXT 验证记录 |

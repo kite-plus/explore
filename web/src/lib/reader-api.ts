@@ -13,6 +13,14 @@ export interface ReaderBlog {
   site_url: string;
 }
 
+export interface ImportResult {
+  outlines: number;
+  added: number;
+  already_following: number;
+  ignored: number;
+  not_listed: { title: string; site_url: string; feed_url: string }[];
+}
+
 export async function readerRequest<T>(path: string, init: RequestInit = {}, csrfToken?: string): Promise<T> {
   const response = await fetch(`/api/v1/${path}`, {
     ...init,

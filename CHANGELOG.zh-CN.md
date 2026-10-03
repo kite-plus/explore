@@ -11,6 +11,7 @@
 ### 新增
 
 - 博客发布后可以让 Explore 立即抓取。`POST /api/v1/ping` 接受 JSON `{"url": ...}`，也接受 WordPress 向"更新服务"发送的 XML-RPC `weblogUpdates.ping` 和 `weblogUpdates.extendedPing`，把已收录博客的下一次抓取提前，但离上次抓取至少 5 分钟。ping 不能收录博客，对任何地址的响应都一样。关于页写了作者怎样设置。
+- 订阅可以带走，也可以带进来。账号页能把订阅的博客导出为 OPML，也能导入其他阅读器导出的 OPML：Explore 已收录的博客按订阅地址或站点地址匹配后直接订阅，没收录的列出来，点一下就能带着地址去提交。
 
 ### 修复
 

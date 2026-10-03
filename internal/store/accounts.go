@@ -267,3 +267,67 @@ func (s *Store) OwnedBlogs(ctx context.Context, userID string) ([]ListedBlog, er
 	}
 	return pgx.CollectRows(rows, scanListed)
 }
+
+// ImportItem is one feed from an imported OPML file: the hosts its
+// addresses name, and its feed address in the form blogs store.
+type ImportItem struct {
+	Hosts   []string
+	FeedURL string
+}
+
+// Imported is the outcome of an import.
+type Imported struct {
+	Matched []bool // by item: whether it named a visible blog
+	Added   int    // blogs newly followed
+	Already int    // matched blogs that were followed before
+}
+
+// ImportSubscriptions follows every visible blog the items name, by host,
+// extra domain or exact feed address. It never lists a blog.
+func (s *Store) ImportSubscriptions(ctx context.Context, userID string, items []ImportItem) (Imported, error) {
+	var hostItems, feedItems []int32
+	var hosts, feeds []string
+	for i, it := range items {
+		for _, h := range it.Hosts {
+			hostItems, hosts = append(hostItems, int32(i)), append(hosts, h)
+		}
+		if it.FeedURL != "" {
+			feedItems, feeds = append(feedItems, int32(i)), append(feeds, it.FeedURL)
+		}
+	}
+	var matched []int32
+	var blogs, added int
+	err := s.pool.QueryRow(ctx, `
+		WITH hosts AS (
+			SELECT * FROM unnest(@host_items::int[], @hosts::text[]) AS h (item, host)
+		), candidates AS (
+			SELECT h.item, b.id FROM hosts h JOIN blogs b ON b.host = h.host
+			UNION
+			SELECT h.item, b.id FROM blogs b CROSS JOIN LATERAL unnest(b.extra_domains) AS d (domain)
+			JOIN hosts h ON h.host = d.domain
+			UNION
+			SELECT f.item, b.id FROM unnest(@feed_items::int[], @feeds::text[]) AS f (item, feed_url)
+			JOIN blogs b ON b.feed_url = f.feed_url
+		), matched AS (
+			SELECT c.item, c.id FROM candidates c JOIN blogs b ON b.id = c.id WHERE `+visible+`
+		), added AS (
+			INSERT INTO subscriptions (user_id, blog_id)
+			SELECT DISTINCT @user_id::uuid, id FROM matched
+			ON CONFLICT DO NOTHING
+			RETURNING blog_id
+		)
+		SELECT coalesce((SELECT array_agg(DISTINCT item) FROM matched), '{}'),
+		       (SELECT count(DISTINCT id) FROM matched), (SELECT count(*) FROM added)`,
+		pgx.NamedArgs{
+			"user_id": userID, "host_items": hostItems, "hosts": hosts, "feed_items": feedItems, "feeds": feeds,
+			"unhealthy_after": seconds(policy.UnhealthyAfter),
+		}).Scan(&matched, &blogs, &added)
+	if err != nil {
+		return Imported{}, err
+	}
+	out := Imported{Matched: make([]bool, len(items)), Added: added, Already: blogs - added}
+	for _, i := range matched {
+		out.Matched[i] = true
+	}
+	return out, nil
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { currentReader, readerRequest, type ReaderBlog, type ReaderUser } from "@/lib/reader-api";
+import { currentReader, readerRequest, type ImportResult, type ReaderBlog, type ReaderUser } from "@/lib/reader-api";
 
 interface Challenge { record: string; value: string; expires_in_seconds: number }
 
@@ -15,6 +15,8 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
   const [confirming, setConfirming] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<ImportResult | null>(null);
   const zh = lang === "zh";
   const prefix = lang === "en" ? "/en" : "";
 
@@ -37,6 +39,25 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       await readerRequest(`me/subscriptions/${encodeURIComponent(blogHost)}`, { method: "DELETE" }, user.csrf_token);
       setSubscriptions(items => items.filter(item => item.host !== blogHost));
     } catch (reason) { setError(String(reason)); }
+  }
+  async function importOPML(file: File | undefined) {
+    if (!user || !file) return;
+    setError(""); setImporting(true); setImported(null);
+    try {
+      const result = await readerRequest<ImportResult>("me/subscriptions/import", { method: "POST", body: await file.text(), headers: { "Content-Type": "text/x-opml" } }, user.csrf_token);
+      setImported(result);
+      const followed = await readerRequest<{ data: ReaderBlog[] }>("me/subscriptions");
+      setSubscriptions(followed.data);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setImporting(false);
+    }
+  }
+  function submitLink(item: ImportResult["not_listed"][number]) {
+    const query = new URLSearchParams({ site: item.site_url || item.feed_url });
+    if (item.feed_url) query.set("feed", item.feed_url);
+    return `${prefix}/submit?${query}`;
   }
   async function startClaim() {
     if (!user) return;
@@ -81,6 +102,24 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
     {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     <section><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{zh ? "订阅的博客" : "Following"}</h2><a className="text-sm underline" href={`${prefix}/following`}>{zh ? "查看订阅流" : "Open feed"}</a></div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <a className="rounded-md border px-3 py-1.5 hover:bg-accent" href="/api/v1/me/subscriptions.opml" download="explore-subscriptions.opml">{zh ? "导出 OPML" : "Export OPML"}</a>
+        <label className={`rounded-md border px-3 py-1.5 hover:bg-accent ${importing || !user ? "pointer-events-none opacity-50" : "cursor-pointer"}`}>
+          {importing ? (zh ? "正在导入…" : "Importing…") : (zh ? "导入 OPML" : "Import OPML")}
+          <input type="file" accept=".opml,.xml,text/x-opml,text/xml,application/xml" className="sr-only" disabled={importing || !user} onChange={e => { void importOPML(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        <span className="text-muted-foreground">{zh ? "导入其他阅读器导出的订阅，只订阅 Explore 已收录的博客。" : "Import subscriptions from another reader; only blogs Explore lists are followed."}</span>
+      </div>
+      {imported && <div role="status" className="mt-3 space-y-2 rounded-md bg-muted p-3 text-sm">
+        <p>{zh
+          ? `读取了 ${imported.outlines} 个订阅：新订阅 ${imported.added} 个博客，${imported.already_following} 个原本已订阅。`
+          : `Read ${imported.outlines} subscriptions: followed ${imported.added} new blogs; ${imported.already_following} were followed already.`}
+          {imported.ignored > 0 && (zh ? ` 另有 ${imported.ignored} 个超出 1000 个的上限，没有读取。` : ` ${imported.ignored} more were past the limit of 1,000 and not read.`)}</p>
+        {imported.not_listed.length > 0 && <>
+          <p>{zh ? `${imported.not_listed.length} 个博客还没有收录，可以提交：` : `${imported.not_listed.length} blogs are not on Explore yet; you can submit them:`}</p>
+          <ul className="max-h-64 space-y-1 overflow-auto">{imported.not_listed.map((item, i) => <li key={i} className="flex items-center justify-between gap-3"><span className="min-w-0 truncate">{item.title || item.site_url || item.feed_url}</span><a className="shrink-0 underline" href={submitLink(item)}>{zh ? "提交" : "Submit"}</a></li>)}</ul>
+        </>}
+      </div>}
       {subscriptions.length ? <ul className="mt-4 divide-y rounded-lg border">{subscriptions.map(blog => <li className="flex items-center justify-between gap-3 px-4 py-3" key={blog.host}><a className="min-w-0 truncate text-sm font-medium hover:underline" href={`${prefix}/blogs/${blog.host}`}>{blog.name} <span className="font-normal text-muted-foreground">· {blog.host}</span></a><button className="shrink-0 text-sm text-muted-foreground hover:text-foreground" onClick={() => remove(blog.host)}>{zh ? "取消订阅" : "Unfollow"}</button></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{zh ? "还没有订阅博客。可从博客详情页订阅。" : "No blogs followed yet. Open a blog to follow it."}</p>}
     </section>
     <section><h2 className="text-lg font-semibold">{zh ? "我认领的博客" : "My blogs"}</h2>

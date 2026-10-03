@@ -31,6 +31,8 @@ export const readerProxy: APIRoute = async ({ request, params, clientAddress }) 
     for (const cookie of response.headers.getSetCookie()) outgoing.append("Set-Cookie", cookie);
     const location = response.headers.get("Location");
     if (location) outgoing.set("Location", location);
+    const disposition = response.headers.get("Content-Disposition");
+    if (disposition) outgoing.set("Content-Disposition", disposition);
     return new Response(response.body, { status: response.status, headers: outgoing });
   } catch {
     return new Response(JSON.stringify({ error: { code: "unavailable" } }), {

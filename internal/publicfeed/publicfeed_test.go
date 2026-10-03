@@ -1,6 +1,8 @@
 package publicfeed
 
 import (
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -71,5 +73,50 @@ func TestOPML(t *testing.T) {
 	want := `<outline type="rss" text="Example &amp; Co" title="Example &amp; Co" xmlUrl="https://blog.example.com/atom.xml" htmlUrl="https://blog.example.com/"></outline>`
 	if !strings.Contains(string(out), want) || !strings.Contains(string(out), `<opml version="2.0">`) {
 		t.Errorf("OPML =\n%s", out)
+	}
+}
+
+func TestReadOPML(t *testing.T) {
+	// Folders as Feedly and Inoreader write them, an outline in lower case,
+	// a folder-only outline and a site without a feed.
+	const file = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head><title>Reader subscriptions</title></head>
+  <body>
+    <outline text="Tech" title="Tech">
+      <outline type="rss" text="Blog A" title="Blog A &amp; Co" xmlUrl="https://a.example.com/feed/" htmlUrl="https://a.example.com/"/>
+      <outline type="rss" text="Blog B" xmlurl=" https://b.example.org/atom.xml "/>
+    </outline>
+    <outline text="Empty folder"></outline>
+    <outline text="Blogroll only" htmlUrl="https://c.example.net/"/>
+  </body>
+</opml>`
+	got, more, err := ReadOPML(strings.NewReader(file), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Outline{
+		{Name: "Blog A & Co", SiteURL: "https://a.example.com/", FeedURL: "https://a.example.com/feed/"},
+		{Name: "Blog B", FeedURL: "https://b.example.org/atom.xml"},
+		{Name: "Blogroll only", SiteURL: "https://c.example.net/"},
+	}
+	if !slices.Equal(got, want) || more != 0 {
+		t.Errorf("ReadOPML = %+v, %d more\nwant %+v", got, more, want)
+	}
+
+	got, more, err = ReadOPML(strings.NewReader(file), 2)
+	if err != nil || len(got) != 2 || more != 1 {
+		t.Errorf("with max 2: %d outlines, %d more, %v; want 2, 1", len(got), more, err)
+	}
+
+	gbk := "<?xml version=\"1.0\" encoding=\"GBK\"?><opml><body><outline text=\"\xd6\xd0\xce\xc4\" xmlUrl=\"https://zh.example.com/rss.xml\"/></body></opml>"
+	if got, _, err := ReadOPML(strings.NewReader(gbk), 10); err != nil || len(got) != 1 || got[0].Name != "中文" {
+		t.Errorf("GBK file = %+v, %v", got, err)
+	}
+
+	for _, bad := range []string{"", "not xml", `{"url": "x"}`, `<rss version="2.0"><channel/></rss>`, `<opml><body><outline`} {
+		if _, _, err := ReadOPML(strings.NewReader(bad), 10); !errors.Is(err, ErrNotOPML) {
+			t.Errorf("ReadOPML(%q) error = %v, want ErrNotOPML", bad, err)
+		}
 	}
 }

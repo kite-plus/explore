@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - A blog can have Explore fetch it right after publishing. `POST /api/v1/ping` takes a JSON `{"url": ...}`, or the XML-RPC `weblogUpdates.ping` and `weblogUpdates.extendedPing` that WordPress sends to its update services, and brings a listed blog's next fetch forward to no sooner than 5 minutes after its last one. A ping cannot list a blog, and the answer is the same for any address. The About page shows authors how to set it up.
+- Readers can take their subscriptions with them and bring them in. The account page exports the blogs you follow as OPML, and imports an OPML file from another reader: blogs Explore lists are followed at once, matched by feed or site address, and the rest are listed with a link that fills in the submission form.
 
 ### Fixed
 

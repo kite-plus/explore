@@ -69,7 +69,7 @@ func (s *Server) ping(c *gin.Context) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	hosts, ok := pingHosts(req.URL)
+	hosts, ok := hostVariants(req.URL)
 	if !ok {
 		s.fail(c, http.StatusBadRequest, codeInvalidURL)
 		return
@@ -99,7 +99,7 @@ func (s *Server) pingXMLRPC(c *gin.Context, body []byte) {
 		xmlrpcFault(c, faultParams, "expected the site name and address")
 		return
 	}
-	site, ok := pingHosts(call.Params[1].string())
+	site, ok := hostVariants(call.Params[1].string())
 	if !ok {
 		xmlrpcFault(c, faultParams, "the site address is not an http or https URL")
 		return
@@ -107,7 +107,7 @@ func (s *Server) pingXMLRPC(c *gin.Context, body []byte) {
 	candidates := [][]string{site}
 	if method == methodExtendedPing {
 		for _, p := range call.Params[2:] {
-			if hosts, ok := pingHosts(p.string()); ok {
+			if hosts, ok := hostVariants(p.string()); ok {
 				candidates = append(candidates, hosts)
 			}
 		}
@@ -140,9 +140,9 @@ func (s *Server) schedulePing(c *gin.Context, candidates [][]string) bool {
 	return true
 }
 
-// pingHosts is the host of an address, in the ASCII form blogs are listed
+// hostVariants is the host of an address, in the ASCII form blogs are listed
 // under, with and without www.
-func pingHosts(raw string) ([]string, bool) {
+func hostVariants(raw string) ([]string, bool) {
 	u, err := check.ParseURL(raw)
 	if err != nil {
 		return nil, false
