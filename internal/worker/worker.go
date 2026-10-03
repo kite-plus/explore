@@ -260,7 +260,7 @@ func (w *Worker) process(ctx context.Context, b store.Claimed) {
 		LastModified:  resp.LastModified,
 		BodyHash:      sum[:],
 		FetchInterval: nextInterval(b.FetchInterval, true),
-		Generator:     normalize.DetectGenerator(f.Generator),
+		Generator:     feedGenerator(f.Generator),
 	}
 	st.NextFetchAt = w.now().Add(jitter(st.FetchInterval, w.rand()))
 	if resp.PermanentRedirect && resp.URL != b.FeedURL {
@@ -404,4 +404,14 @@ func (w *Worker) log() *slog.Logger {
 		return w.Log
 	}
 	return slog.Default()
+}
+
+// feedGenerator is the system a feed says made it, or nothing when it says
+// none, so the one the blog's pages named when it was listed stays; see
+// docs/design/data-model.md section 2.1.
+func feedGenerator(raw string) model.Generator {
+	if g := normalize.DetectGenerator(raw); g != model.GeneratorUnknown {
+		return g
+	}
+	return ""
 }

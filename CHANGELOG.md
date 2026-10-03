@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- A blog whose feed does not name the system that made it lost the one its pages named when it was listed: every fetch set it back to unknown. Only a feed that names a system changes it now.
+
 ## [0.1.7] - 2026-10-04
 
 A small release for sites behind a CDN and for the submit page: behind Cloudflare, rate limits can count readers instead of Cloudflare's addresses, and a blog that fails the check is told what to fix instead of shown a bare code.

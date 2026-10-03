@@ -271,6 +271,36 @@ func TestDescriptionFallsBackToFeed(t *testing.T) {
 	}
 }
 
+// A feed that names no generator keeps the one the blog's pages named when
+// it was listed; one that names it wins. See docs/design/data-model.md
+// section 2.1.
+func TestFeedWithoutGeneratorKeepsTheListedOne(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	generator := ""
+	s.handle("/rss.xml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = io.WriteString(w, `<rss version="2.0"><channel><title>Blog</title><link>`+s.base()+`/</link>`+generator+`</channel></rss>`)
+	})
+	if _, err := e.s.CreateBlog(context.Background(), store.NewBlog{
+		Host: s.host, Name: s.host, SiteURL: s.base() + "/", FeedURL: s.base() + "/rss.xml", Language: "en", Generator: model.GeneratorKite,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	e.runOnce()
+	if got := e.blog(s.host).Generator; got != model.GeneratorKite {
+		t.Fatalf("generator after a feed naming none = %q, want kite", got)
+	}
+
+	generator = "<generator>Hugo 0.140</generator>"
+	e.due(s.host)
+	e.runOnce()
+	if got := e.blog(s.host).Generator; got != model.GeneratorHugo {
+		t.Errorf("generator after the feed names one = %q, want hugo", got)
+	}
+}
+
 type snapshot struct {
 	Stream    []string
 	Directory []string
