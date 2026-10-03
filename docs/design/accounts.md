@@ -1,6 +1,6 @@
 # 统一身份、订阅与标签
 
-> 状态：本站账号、订阅流和域名认领已实现；OIDC 待接入 · 最近更新：2026-09-25
+> 状态：本站账号、订阅流和域名认领已实现；OIDC 待接入 · 最近更新：2026-09-26
 > 跨站身份和评论的架构见 [identity-and-comments.md](identity-and-comments.md)。
 
 ## 0. 边界
@@ -13,11 +13,11 @@
 
 - OIDC 尚未接入。接入时使用 Authorization Code + PKCE，并校验 `state`、`nonce`、ID Token 签名、`iss`、`aud` 和有效期。
 - 统一身份键是 `(issuer, subject)`；邮箱、昵称、头像只用于展示。不同客户端的 `sub` 若因 pairwise 配置而不同，须在身份服务中配置一致的关联标识，不能按邮箱推断同一用户。
-- 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或密码重置，部署时应说明这个限制。接入统一身份后隐藏账号密码入口，并迁移已有账号的登录方式。
-- OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。数据库只存会话令牌哈希。退出 Explore 删除本站会话；全局退出需单独的 OIDC logout 机制。
+- 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或密码重置，部署时应说明这个限制。接入统一身份后，新注册只用 Kite Plus 账号；已有的本站账号保留密码登录，读者用密码登录一次、关联 Kite Plus 账号之后才关掉。账号不按邮箱自动关联，所以不能提前关掉密码登录，否则没关联的账号就再也登不进来。过渡期何时结束、到期仍未关联的账号怎么处理 `[待定]`。
+- OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。接入 OIDC 时 Cookie 改名为 `__Host-explore_session`，防止 `kite.plus` 下的兄弟子域覆盖它（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）；本地 http 开发环境设不了这个前缀，沿用旧名。数据库只存会话令牌哈希，并记下 ID Token 里的 `sid`。退出 Explore 删除本站会话；读者在身份服务退出时，身份服务发来 back-channel logout，Explore 删除同一 `sid` 的会话。
 - 登录回调只建立会话，不直接做订阅等数据变更。登录后跳回本站相对路径，再由读者确认订阅。
 - 管理员是具有 `is_admin` 的本站账号。第一个管理员由安装向导创建（[project-layout.md §10](project-layout.md#10-部署)），之后由已有管理员在后台授予，或由服务器操作者运行 `explore users promote-admin EMAIL`。普通账号不能访问管理接口。
-- 删除 Explore 资料会删除本站订阅和会话。删除统一身份账号后的跨服务数据清理须有独立流程。
+- 删除 Explore 资料会删除本站订阅和会话。删除统一身份账号后，身份服务推送用户删除事件，Explore 删除对应的本站账号；账号被停用或锁定时，Explore 撤销它的会话、暂停登录，重新启用后恢复。推送可能丢失，Explore 另外定时对账（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）。
 
 ## 2. 订阅
 
@@ -93,4 +93,6 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 
 第一条端到端链路是身份服务 → Explore 登录与订阅；第二条是身份服务 → 统一评论服务 → 通用博客嵌入组件。二者使用同一身份服务，数据与 Cookie 分开。外部博客只有主动嵌入组件或接入兼容适配器，才有统一评论登录体验。
 
-待定：身份和评论服务的最终域名与部署地；全局账号删除后历史评论的处理；订阅上限与是否展示人数；标签落地页与隐私政策文字。
+已定：身份服务 `id.kite.plus`、评论服务 `comments.kite.plus`，都部署在境外（[identity-and-comments.md §2](identity-and-comments.md#2-组件与责任)）；账号删除后历史评论的处理由评论服务负责（[comments login.md §7](https://github.com/kite-plus/comments/blob/main/docs/design/login.md#7-账号删除与停用)）。
+
+待定：订阅上限与是否展示人数；标签落地页与隐私政策文字。
