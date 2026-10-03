@@ -57,11 +57,14 @@ func (s *Server) Handler() (http.Handler, error) {
 	if s.Now == nil {
 		s.Now = time.Now
 	}
-	s.readLimit = newLimiter(300, time.Minute, s.Now)
 	if s.AllowPrivate {
+		// On a development machine every request comes from one address,
+		// a page's own calls and its images among them.
+		s.readLimit = newLimiter(100000, time.Minute, s.Now)
 		s.submitLimit = newLimiter(10000, time.Hour, s.Now)
 		s.previewLimit = newLimiter(10000, time.Hour, s.Now)
 	} else {
+		s.readLimit = newLimiter(300, time.Minute, s.Now)
 		s.submitLimit = newLimiter(5, time.Hour, s.Now)
 		s.previewLimit = newLimiter(60, time.Hour, s.Now)
 	}

@@ -25,6 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Behind a reverse proxy, the API's rate limits counted the site's own server rather than each reader: one busy minute could turn every reader away, and the five submissions an hour were shared by everyone. The site now passes each reader's address on as the proxy gave it; the proxy and the site must be listed in `EXPLORE_TRUSTED_PROXIES`, as before. With `EXPLORE_ALLOW_PRIVATE_NETWORKS` on, for local development where every request comes from one address, reads are limited as loosely as submissions.
+- A page whose data the API turned away for asking too often said the page did not exist. It now says Explore is briefly unavailable, with a 503 that tells search engines to come back.
 - The crawler could crash while reading a post's page when the part before `<body>` held invalid UTF-8 or one of a few special characters, such as the Kelvin sign. This came with 0.1.4.
 
 ## [0.1.5] - 2026-09-25

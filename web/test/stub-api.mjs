@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
+  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -138,8 +138,13 @@ export function startStub() {
       return send(200, { data: tags });
     }
     if (req.method === "GET" && url.pathname === "/api/v1/entries") {
+      state.entryForwards.push(req.headers["x-forwarded-for"]);
       const cursor = url.searchParams.get("cursor");
       if (cursor === "bad") return error(400, "invalid_cursor");
+      if (cursor === "busy") {
+        res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "30" });
+        return res.end(JSON.stringify({ error: { code: "rate_limited", message: "rate_limited" } }));
+      }
       const tag = url.searchParams.get("tag");
       if (tag && !tags.some((t) => t.slug === tag)) return error(400, "invalid_request");
       if (url.searchParams.get("order") === "recommended" && !tag) {

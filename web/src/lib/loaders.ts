@@ -1,7 +1,8 @@
 import type { AstroGlobal } from "astro";
 
 import { dict, localePath, type Lang } from "@/i18n";
-import { api } from "@/lib/api";
+import { api, type Caller, type Result } from "@/lib/api";
+import { forwardedFor } from "@/lib/forwarded";
 import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
 import type { BlogPage, Blog, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
@@ -28,6 +29,15 @@ function unavailable<T>(ctx: AstroGlobal): Loaded<T> {
   return { kind: "unavailable" };
 }
 
+// What a page shows when the API did not give it the data. Being turned
+// away for asking too often (429) passes, so it is no reason to say the
+// page does not exist.
+function failed<T>(ctx: AstroGlobal, r: Result<unknown>): Loaded<T> {
+  return r.kind === "unavailable" || (r.kind === "error" && r.status === 429) ? unavailable(ctx) : notFound(ctx);
+}
+
+const caller = (ctx: AstroGlobal, lang: Lang): Caller => ({ lang, forwardedFor: forwardedFor(ctx.request, ctx.clientAddress) });
+
 const param = (ctx: AstroGlobal, name: string) => ctx.url.searchParams.get(name) ?? undefined;
 
 export interface StreamPage {
@@ -43,9 +53,9 @@ export interface StreamPage {
 
 // The sidebar's recently listed blogs. A later page only feeds the stream
 // script, which keeps the posts alone, so it does without them.
-async function newBlogs(lang: Lang, paged: boolean): Promise<Blog[]> {
+async function newBlogs(from: Caller, paged: boolean): Promise<Blog[]> {
   if (paged) return [];
-  const r = await api.blogs(lang, { order: "newest", limit: 5 });
+  const r = await api.blogs(from, { order: "newest", limit: 5 });
   return r.kind === "ok" ? r.data.data : [];
 }
 
@@ -55,13 +65,13 @@ export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | 
   const filter = param(ctx, "lang");
   const tag = param(ctx, "tag");
   const order = stream === "recommended" ? "recommended" : undefined;
+  const from = caller(ctx, lang);
   const [r, tags, blogs] = await Promise.all([
-    api.entries(lang, { order, cursor, lang: filter, tag, limit: 30 }),
-    tagList(lang),
-    newBlogs(lang, Boolean(cursor)),
+    api.entries(from, { order, cursor, lang: filter, tag, limit: 30 }),
+    tagList(from),
+    newBlogs(from, Boolean(cursor)),
   ]);
-  if (r.kind === "unavailable") return unavailable(ctx);
-  if (r.kind !== "ok") return notFound(ctx);
+  if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=60");
   return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
 }
@@ -71,16 +81,16 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
   const cursor = param(ctx, "cursor");
   const filter = param(ctx, "lang");
   const tag = param(ctx, "tag");
+  const from = caller(ctx, lang);
   const [r, tags, blogs] = await Promise.all([
-    api.following(lang, { cursor, lang: filter, tag, limit: 30 }, ctx.request.headers.get("cookie") ?? ""),
-    tagList(lang),
-    newBlogs(lang, Boolean(cursor)),
+    api.following(from, { cursor, lang: filter, tag, limit: 30 }, ctx.request.headers.get("cookie") ?? ""),
+    tagList(from),
+    newBlogs(from, Boolean(cursor)),
   ]);
   if (r.kind === "error" && r.status === 401) {
     return ctx.redirect(localePath(lang, "/login") + `?next=${encodeURIComponent(localePath(lang, "/following"))}`, 302);
   }
-  if (r.kind === "unavailable") return unavailable(ctx);
-  if (r.kind !== "ok") return notFound(ctx);
+  if (r.kind !== "ok") return failed(ctx, r);
   return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
 }
 
@@ -104,9 +114,8 @@ export interface DirectoryPage {
 export async function loadBlogs(ctx: AstroGlobal, lang: Lang): Promise<Loaded<DirectoryPage>> {
   const cursor = param(ctx, "cursor");
   const filter = param(ctx, "lang");
-  const r = await api.blogs(lang, { cursor, lang: filter, limit: 50 });
-  if (r.kind === "unavailable") return unavailable(ctx);
-  if (r.kind !== "ok") return notFound(ctx);
+  const r = await api.blogs(caller(ctx, lang), { cursor, lang: filter, limit: 50 });
+  if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=300");
   return { kind: "ok", data: { page: r.data, filter, paged: Boolean(cursor) } };
 }
@@ -116,17 +125,16 @@ export type BlogView = BlogPage & { tags: Tag[]; paged: boolean };
 export async function loadBlog(ctx: AstroGlobal, lang: Lang): Promise<Loaded<BlogView>> {
   const host = ctx.params.host ?? "";
   const cursor = param(ctx, "cursor");
-  const [r, tags] = await Promise.all([api.blog(lang, host, { cursor, limit: 30 }), tagList(lang)]);
-  if (r.kind === "unavailable") return unavailable(ctx);
-  if (r.kind !== "ok") return notFound(ctx);
+  const from = caller(ctx, lang);
+  const [r, tags] = await Promise.all([api.blog(from, host, { cursor, limit: 30 }), tagList(from)]);
+  if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=300");
   return { kind: "ok", data: { ...r.data, tags: tags ?? [], paged: Boolean(cursor) } };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {
-  const r = await api.submission(lang, ctx.params.id ?? "");
-  if (r.kind === "unavailable") return unavailable(ctx);
-  if (r.kind !== "ok") return notFound(ctx);
+  const r = await api.submission(caller(ctx, lang), ctx.params.id ?? "");
+  if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "no-store");
   return { kind: "ok", data: r.data };
 }
@@ -167,7 +175,7 @@ export async function loadSubmit(ctx: AstroGlobal, lang: Lang): Promise<SubmitSt
   };
   const t = dict(lang).submit;
 
-  const r = await api.submit(lang, state.values, ctx.clientAddress);
+  const r = await api.submit(caller(ctx, lang), state.values);
   if (r.kind === "ok") {
     return ctx.redirect(localePath(lang, `/submissions/${r.data.id}`), 303);
   }

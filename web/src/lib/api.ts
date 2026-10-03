@@ -14,15 +14,26 @@ export type Result<T> =
   | { kind: "error"; status: number; body: ApiError }
   | { kind: "unavailable" };
 
+/** Whom a call is for: the interface language, and the reader's address (lib/forwarded.ts). */
+export interface Caller {
+  lang: Lang;
+  forwardedFor?: string;
+}
+
 const acceptLanguage = (lang: Lang) => (lang === "zh" ? "zh-CN" : "en");
 
-async function call<T>(path: string, init: RequestInit & { lang: Lang; timeout?: number }): Promise<Result<T>> {
+async function call<T>(path: string, init: RequestInit & { caller: Caller; timeout?: number }): Promise<Result<T>> {
+  const { caller, timeout, ...rest } = init;
   let res: Response;
   try {
     res = await fetch(apiURL() + path, {
-      ...init,
-      headers: { "Accept-Language": acceptLanguage(init.lang), ...(init.headers ?? {}) },
-      signal: AbortSignal.timeout(init.timeout ?? TIMEOUT_MS),
+      ...rest,
+      headers: {
+        "Accept-Language": acceptLanguage(caller.lang),
+        ...(caller.forwardedFor ? { "X-Forwarded-For": caller.forwardedFor } : {}),
+        ...(rest.headers ?? {}),
+      },
+      signal: AbortSignal.timeout(timeout ?? TIMEOUT_MS),
     });
   } catch {
     return { kind: "unavailable" };
@@ -55,46 +66,37 @@ function query(params: Record<string, string | undefined>): string {
 }
 
 export const api = {
-  entries: (lang: Lang, p: { order?: "recommended"; cursor?: string; lang?: string; tag?: string; limit?: number }) =>
+  entries: (caller: Caller, p: { order?: "recommended"; cursor?: string; lang?: string; tag?: string; limit?: number }) =>
     call<Page<Entry>>(
       `/api/v1/entries${query({ order: p.order, cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
-      { lang },
+      { caller },
     ),
 
-  me: (lang: Lang, cookie: string) =>
-    call<{ id: string; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { lang, headers: { Cookie: cookie } }),
+  me: (caller: Caller, cookie: string) =>
+    call<{ id: string; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { caller, headers: { Cookie: cookie } }),
 
-  following: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
+  following: (caller: Caller, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
     call<Page<Entry>>(
       `/api/v1/me/entries${query({ cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
-      { lang, headers: { Cookie: cookie } },
+      { caller, headers: { Cookie: cookie } },
     ),
 
-  tags: (lang: Lang) => call<{ data: Tag[] }>("/api/v1/tags", { lang }),
+  tags: (caller: Caller) => call<{ data: Tag[] }>("/api/v1/tags", { caller }),
 
-  blogs: (lang: Lang, p: { order?: "newest"; cursor?: string; lang?: string; limit?: number }) =>
-    call<Page<Blog>>(`/api/v1/blogs${query({ order: p.order, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),
+  blogs: (caller: Caller, p: { order?: "newest"; cursor?: string; lang?: string; limit?: number }) =>
+    call<Page<Blog>>(`/api/v1/blogs${query({ order: p.order, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { caller }),
 
-  blog: (lang: Lang, host: string, p: { cursor?: string; limit?: number } = {}) =>
-    call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}${query({ cursor: p.cursor, limit: p.limit?.toString() })}`, { lang }),
+  blog: (caller: Caller, host: string, p: { cursor?: string; limit?: number } = {}) =>
+    call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}${query({ cursor: p.cursor, limit: p.limit?.toString() })}`, { caller }),
 
-  submission: (lang: Lang, id: string) => call<Submission>(`/api/v1/submissions/${encodeURIComponent(id)}`, { lang }),
+  submission: (caller: Caller, id: string) => call<Submission>(`/api/v1/submissions/${encodeURIComponent(id)}`, { caller }),
 
-  // The reader's address is passed on so the API's rate limit counts
-  // readers rather than this server.
-  submit: (
-    lang: Lang,
-    body: { site_url: string; feed_url: string; note: string; title?: string; description?: string },
-    clientAddress?: string,
-  ) =>
+  submit: (caller: Caller, body: { site_url: string; feed_url: string; note: string; title?: string; description?: string }) =>
     call<Submission>("/api/v1/submissions", {
-      lang,
+      caller,
       method: "POST",
       timeout: SUBMIT_TIMEOUT_MS,
-      headers: {
-        "Content-Type": "application/json",
-        ...(clientAddress ? { "X-Forwarded-For": clientAddress } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
 };

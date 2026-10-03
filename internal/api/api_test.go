@@ -1031,6 +1031,51 @@ func TestSubmissionsAreRateLimited(t *testing.T) {
 	}
 }
 
+// The site calls the API on every reader's behalf, naming the reader in
+// X-Forwarded-For with the proxy in front of it last; the read limit counts
+// that reader, not the site. See docs/design/frontend.md section 6.
+func TestReadsAreLimitedPerReader(t *testing.T) {
+	handler := func(allowPrivate bool) http.Handler {
+		srv := &api.Server{TrustedProxies: []string{"10.89.0.0/24"}, AllowPrivate: allowPrivate, Log: slog.New(slog.DiscardHandler)}
+		h, err := srv.Handler()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	read := func(h http.Handler, forwarded string) int {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/tags", nil)
+		r.RemoteAddr = "10.89.0.3:40000"
+		r.Header.Set("X-Forwarded-For", forwarded)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+
+	h := handler(false)
+	for i := range 300 {
+		if code := read(h, "198.51.100.7, 10.89.0.2"); code != http.StatusOK {
+			t.Fatalf("read %d = %d", i+1, code)
+		}
+	}
+	if code := read(h, "198.51.100.7, 10.89.0.2"); code != http.StatusTooManyRequests {
+		t.Errorf("read 301 = %d", code)
+	}
+	if code := read(h, "203.0.113.5, 198.51.100.7, 10.89.0.2"); code != http.StatusTooManyRequests {
+		t.Errorf("a reader naming another address of its own = %d", code)
+	}
+	if code := read(h, "198.51.100.8, 10.89.0.2"); code != http.StatusOK {
+		t.Errorf("another reader = %d", code)
+	}
+
+	h = handler(true)
+	for i := range 301 {
+		if code := read(h, "198.51.100.7, 10.89.0.2"); code != http.StatusOK {
+			t.Fatalf("read %d with private networks allowed = %d", i+1, code)
+		}
+	}
+}
+
 func TestTags(t *testing.T) {
 	e := newEnv(t, true)
 	e.seed("tags.example.com", "zh", post("a", 1, ""), post("b", 2, ""))

@@ -1,14 +1,18 @@
 import type { APIRoute } from "astro";
 
 import { apiURL } from "@/lib/config";
+import { forwardedHeaders } from "@/lib/forwarded";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request, clientAddress }) => {
   const id = params.id ?? "";
   if (!/^\d+$/.test(id)) return new Response(null, { status: 404 });
 
   let response: Response;
   try {
-    response = await fetch(`${apiURL()}/api/v1/entries/${id}/image`, { signal: AbortSignal.timeout(10_000) });
+    response = await fetch(`${apiURL()}/api/v1/entries/${id}/image`, {
+      headers: forwardedHeaders(request, clientAddress),
+      signal: AbortSignal.timeout(10_000),
+    });
   } catch {
     return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
   }

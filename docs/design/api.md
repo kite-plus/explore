@@ -13,7 +13,7 @@
 - **列表**：统一返回 `{"data": [...], "next_cursor": "..."}`，`next_cursor` 为 `null` 表示没有更多。`limit` 默认 30，最大 100。游标是不透明字符串（`(published_at, id)` 的 base64url 编码），客户端原样传回，不要解析。
 - **错误**：HTTP 状态码加 `{"error": {"code": "...", "message": "..."}}`。`code` 是稳定的机器可读值（§5），`message` 给人看。
 - **缓存**：公开的 GET 接口返回 `Cache-Control: public, max-age=60` 和弱 `ETag`，支持 `If-None-Match`，前端和 CDN 可以直接缓存。
-- **限流**：按客户端地址在内存里计数，超出返回 `429` 和 `Retry-After`。地址不写日志、不入库。
+- **限流**：按客户端地址在内存里计数，超出返回 `429` 和 `Retry-After`。地址不写日志、不入库。前端代读者调用时把读者地址放在 `X-Forwarded-For` 里（§7）。`EXPLORE_ALLOW_PRIVATE_NETWORKS` 打开时（只用于测试和本地开发），提交和读取接口的限流都放宽：开发机上页面、头像和缩略图的请求都来自同一个地址。
 - **匿名读者不设 Cookie**；登录后 API 设置 `HttpOnly`、`SameSite=Lax` 会话 Cookie，由同源前端代理透传。已登录写操作需要从 `GET /api/v1/me` 获取 `csrf_token` 并放入 `X-CSRF-Token`。CORS 不开放。
 - **语言**：给人看的文字只有错误的 `message` 和检查报告的 `hint`，按 `Accept-Language` 返回简体中文或英文，默认英文；含这类文字的响应带 `Vary: Accept-Language`。`code` 与语言无关，客户端只按 `code` 做判断。时间流、目录、博客页的响应不含这类文字，与语言无关（[frontend.md §3.5](frontend.md#35-接口返回的文字)）。
 
@@ -314,5 +314,5 @@
 - 页面和接口一一对应：`/` 对应 §2.1，`/blogs` 对应 §2.2，`/blogs/{host}` 对应 §2.3，提交页对应 §2.4 和 §2.5。
 - **没有单篇文章的接口，也就没有文章页**（[architecture.md §8](architecture.md#8-前端与-seo)）。
 - 前端（Astro，见 [frontend.md](frontend.md)）只在服务端调用接口；接口的缓存头让前端和 CDN 可以直接复用响应。
-- 前端代读者调用提交接口时带上 `X-Forwarded-For`；`web` 服务要列在 `EXPLORE_TRUSTED_PROXIES` 里，限流才能拿到读者的真实地址。
+- 前端在服务端代读者调用接口时都带上 `X-Forwarded-For`（[frontend.md §6](frontend.md#6-提交流程) 第 5 条）；反向代理和 `web` 服务都要列在 `EXPLORE_TRUSTED_PROXIES` 里，限流才能按读者计数。
 - 接口还没有写成 OpenAPI 3.1（`api/openapi.yaml`）`[待定]`。在那之前，前端的类型手写在 `web/src/lib/types.ts`，与本文保持一致；写好后改为生成，与本文冲突时先改本文。

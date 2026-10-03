@@ -205,7 +205,7 @@ import SubmitForm from "@/components/submit-form";
 - **前端不做任何数据规则**：摘要截断、过滤、每日上限都在后端（[architecture.md §6](architecture.md#6-抓取与展示规则)），前端只负责展示。
 - 错误处理：
   - API 返回 `404` 时，页面也返回真正的 `404`，而不是一个显示"没找到"的 `200` 页面（搜索引擎称之为"软 404"）。
-  - API 超时（3 秒 `[待定]`）或返回 `5xx` 时，页面返回 `503` 并带 `Retry-After`，不缓存。故障期间，搜索引擎会稍后重试，而不会以为内容消失了。
+  - API 超时（3 秒 `[待定]`）、返回 `5xx`，或因限流返回 `429` 时，页面返回 `503` 并带 `Retry-After`，不缓存，显示“暂时无法访问”。故障期间，搜索引擎会稍后重试，而不会以为内容消失了；读者也不会把一时的限流当成页面不存在。
 
 ---
 
@@ -224,7 +224,7 @@ import SubmitForm from "@/components/submit-form";
 | `403 excluded` | 说明该博客已退出或被屏蔽，以及如何联系维护者 |
 
 4. **防跨站提交**：Astro 的 `security.checkOrigin` 默认开启，会检查按需渲染页面收到的表单 `POST` 的 `Origin` 头。
-5. **限流**：前端服务代读者调用接口时带上 `X-Forwarded-For`，并把 `web` 服务加进 Gin 的 `EXPLORE_TRUSTED_PROXIES`，这样提交接口的限流拿到的是读者的真实地址（仍然只在内存里用，[api.md §1](api.md#1-约定)）。
+5. **限流**：前端服务在服务端代读者调用的每个接口（页面数据、登录状态、提交，以及本地开发时转发的接口）都带上 `X-Forwarded-For`：先是反向代理传来的值，最后加上连到前端的地址（`src/lib/forwarded.ts`）。Astro 只在配置了 `security.allowedDomains` 时才读 `X-Forwarded-For`，Explore 不配置它，所以 `clientAddress` 就是这条连接的地址。API 从右往左跳过 `EXPLORE_TRUSTED_PROXIES` 里的地址，第一个不受信任的就是读者，所以反向代理和 `web` 服务都要列在里面；读者自己伪造的值只会排在前面，不起作用。这样每个读者有自己的限流额度，而不是所有读者共用前端服务器一个地址的额度（地址仍然只在内存里用，[api.md §1](api.md#1-约定)）。
 
 ---
 

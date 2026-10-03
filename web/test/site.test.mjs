@@ -474,6 +474,27 @@ describe("status codes", () => {
       stub.state.down = false;
     }
   });
+
+  test("a page the API turns away for asking too often is a 503, not a 404", async () => {
+    const res = await get("/?cursor=busy");
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get("retry-after"), "60");
+    assert.equal(res.headers.get("cache-control"), "no-store");
+    const html = await res.text();
+    assert.match(html, /暂时无法访问/);
+    assert.doesNotMatch(html, /页面不存在/);
+  });
+
+  test("calls to the API name the reader, with the proxy in front of the site last", async () => {
+    const self = /^(::ffff:)?127\.0\.0\.1$|^::1$/;
+    await get("/", { headers: { "X-Forwarded-For": "198.51.100.7" } });
+    const [reader, proxy, ...rest] = (stub.state.entryForwards.at(-1) ?? "").split(", ");
+    assert.equal(reader, "198.51.100.7", "the address the proxy passed on comes first");
+    assert.match(proxy ?? "", self, "then the address the site got the request from");
+    assert.deepEqual(rest, []);
+    await get("/");
+    assert.match(stub.state.entryForwards.at(-1) ?? "", self, "without a proxy, the connection's own address");
+  });
 });
 
 describe("submissions", () => {

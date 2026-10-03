@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { apiURL } from "@/lib/config";
+import { forwardedHeaders } from "@/lib/forwarded";
 
 const noStore = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
 
@@ -14,7 +15,8 @@ const forward: APIRoute = async ({ clientAddress, params, request }) => {
       method: request.method,
       headers: {
         "Accept-Language": request.headers.get("Accept-Language") ?? "en",
-        ...(request.method === "POST" ? { "Content-Type": "application/json", "X-Forwarded-For": clientAddress } : {}),
+        ...forwardedHeaders(request, clientAddress),
+        ...(request.method === "POST" ? { "Content-Type": "application/json" } : {}),
       },
       signal: AbortSignal.timeout(15_000),
     });

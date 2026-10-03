@@ -3,11 +3,13 @@ import type { APIRoute } from "astro";
 import { localePath, type Lang } from "@/i18n";
 import { api } from "@/lib/api";
 import { publicURL } from "@/lib/config";
+import { forwardedFor } from "@/lib/forwarded";
 
 // Written by hand: Astro's sitemap integration cannot list pages rendered
 // on demand. See docs/design/frontend.md section 7.
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ request, clientAddress }) => {
   const base = publicURL();
+  const from = { lang: "en" as const, forwardedFor: forwardedFor(request, clientAddress) };
   const langs: Lang[] = ["zh", "en"];
   const urls: { loc: string; lastmod?: string }[] = [];
 
@@ -18,7 +20,7 @@ export const GET: APIRoute = async () => {
 
   let cursor: string | undefined;
   for (;;) {
-    const r = await api.blogs("en", { cursor, limit: 100 });
+    const r = await api.blogs(from, { cursor, limit: 100 });
     if (r.kind !== "ok") {
       return new Response("sitemap unavailable\n", { status: 503, headers: { "Retry-After": "60", "Cache-Control": "no-store" } });
     }

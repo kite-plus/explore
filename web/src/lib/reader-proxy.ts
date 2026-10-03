@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { apiURL } from "@/lib/config";
+import { forwardedFor } from "@/lib/forwarded";
 
 export const readerProxy: APIRoute = async ({ request, params, clientAddress }) => {
   const url = new URL(request.url);
@@ -13,7 +14,8 @@ export const readerProxy: APIRoute = async ({ request, params, clientAddress }) 
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  if (clientAddress) headers.set("X-Forwarded-For", clientAddress);
+  const forwarded = forwardedFor(request, clientAddress);
+  if (forwarded) headers.set("X-Forwarded-For", forwarded);
   try {
     const response = await fetch(target, {
       method: request.method,

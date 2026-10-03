@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 
 import { api } from "@/lib/api";
+import { forwardedFor } from "@/lib/forwarded";
 
 // Pages draw the header from the session the request carries, so a signed-in
 // reader sees their name from the first paint; see docs/design/frontend.md
@@ -14,7 +15,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   const cookie = ctx.request.headers.get("cookie");
   if (cookie) {
-    const me = await api.me(path.startsWith("/en") ? "en" : "zh", cookie);
+    const me = await api.me({ lang: path.startsWith("/en") ? "en" : "zh", forwardedFor: forwardedFor(ctx.request, ctx.clientAddress) }, cookie);
     if (me.kind === "ok") {
       const { id, email, display_name, is_admin } = me.data;
       ctx.locals.reader = { id, email, display_name, is_admin };

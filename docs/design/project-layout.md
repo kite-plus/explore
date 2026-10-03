@@ -97,12 +97,12 @@ explore/
 | `EXPLORE_DATABASE_URL` | 无；`serve`、`worker`、`migrate` 必填 | PostgreSQL 连接串 |
 | `EXPLORE_HTTP_ADDR` | `127.0.0.1:8080` | API 监听地址 |
 | `EXPLORE_PUBLIC_URL` | `https://explore.kite.plus` | 对外地址：User-Agent 里的说明页、`/feed.xml` 里的链接 |
-| `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用提交接口（[frontend.md §6](frontend.md#6-提交流程)） |
+| `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用接口，把读者地址放在 `X-Forwarded-For` 里（[frontend.md §6](frontend.md#6-提交流程)） |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
 | `EXPLORE_TAGGER_MODEL` | 空 | 打标签用的模型，例如 `claude-opus-5`；和下一项一起设置才会打标签（[accounts.md §5.3](accounts.md#53-模型与费用-待定)） |
 | `EXPLORE_ANTHROPIC_API_KEY` | 空 | Claude API 的密钥；只能和上一项一起设置 |
 | `EXPLORE_TAGGER_EFFORT` | 空 | 可选的 `effort`：`low`、`medium`、`high`、`xhigh`、`max`。Claude Opus 5 和 Claude Sonnet 5 建议 `low`；Claude Haiku 4.5 不支持，留空 |
-| `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
+| `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，并放宽提交和读取接口的限流（开发机上所有请求都来自同一个地址），只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 
 **抓取与展示规则的阈值不做成配置**。它们是产品规则，写在 architecture.md §6，代码里定义在 `internal/policy`，改动走文档和 code review，而不是改一个环境变量。
