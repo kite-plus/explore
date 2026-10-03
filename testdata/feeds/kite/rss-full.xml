@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Kite Example</title>
+    <link>https://kite.example.com</link>
+    <description></description>
+    <language>zh-CN</language>
+    <generator>Kite 0.1.9</generator>
+    <lastBuildDate>Sat, 03 Oct 2026 15:45:28 +0000</lastBuildDate>
+    <atom:link href="https://kite.example.com/rss.xml" rel="self" type="application/rss+xml"></atom:link>
+    <item>
+      <title>Notes on reproducible builds</title>
+      <link>https://kite.example.com/posts/notes-on-reproducible-builds/</link>
+      <guid isPermaLink="false">01M41726CRGK4M22NKKX39M7FR</guid>
+      <pubDate>Sat, 03 Oct 2026 15:45:28 +0000</pubDate>
+      <description>Two builds of one site should write the same bytes. Here is how Kite keeps them equal.</description>
+      <category>builds</category>
+    </item>
+    <item>
+      <title>用 Go 写一个订阅源聚合器</title>
+      <link>https://kite.example.com/posts/%E7%94%A8-go-%E5%86%99%E4%B8%80%E4%B8%AA%E8%AE%A2%E9%98%85%E6%BA%90%E8%81%9A%E5%90%88%E5%99%A8/</link>
+      <guid isPermaLink="false">01M41726BQS825714495YB7SSC</guid>
+      <pubDate>Fri, 02 Oct 2026 09:00:00 +0000</pubDate>
+      <description>从抓取、解析到去重，一步步搭一个尊重源站的订阅源聚合器。</description>
+      <category>编程</category>
+      <category>Go</category>
+      <category>RSS</category>
+      <media:content url="https://kite.example.com/posts/%E7%94%A8-go-%E5%86%99%E4%B8%80%E4%B8%AA%E8%AE%A2%E9%98%85%E6%BA%90%E8%81%9A%E5%90%88%E5%99%A8/cover.png" medium="image"></media:content>
+    </item>
+  </channel>
+</rss>

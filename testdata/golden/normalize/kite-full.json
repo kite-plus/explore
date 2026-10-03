@@ -1,0 +1,39 @@
+{
+  "entries": [
+    {
+      "identity": "01M41726CRGK4M22NKKX39M7FR",
+      "url": "https://kite.example.com/posts/notes-on-reproducible-builds/",
+      "title": "Notes on reproducible builds",
+      "excerpt": "Two builds of one site should write the same bytes. Here is how Kite keeps them equal.",
+      "published_at": "2026-10-03T15:45:28Z",
+      "date_trusted": true,
+      "categories": [
+        "builds"
+      ]
+    },
+    {
+      "identity": "01M41726BQS825714495YB7SSC",
+      "url": "https://kite.example.com/posts/%E7%94%A8-go-%E5%86%99%E4%B8%80%E4%B8%AA%E8%AE%A2%E9%98%85%E6%BA%90%E8%81%9A%E5%90%88%E5%99%A8/",
+      "title": "用 Go 写一个订阅源聚合器",
+      "excerpt": "从抓取、解析到去重，一步步搭一个尊重源站的订阅源聚合器。",
+      "published_at": "2026-10-02T09:00:00Z",
+      "date_trusted": true,
+      "categories": [
+        "编程",
+        "Go",
+        "RSS"
+      ]
+    }
+  ],
+  "stats": {
+    "Total": 2,
+    "Valid": 2,
+    "NoLink": 0,
+    "OffDomain": 0,
+    "NoTitle": 0,
+    "Duplicate": 0,
+    "Undated": 0,
+    "Untrusted": 0,
+    "Trusted": 2
+  }
+}

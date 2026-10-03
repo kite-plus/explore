@@ -52,6 +52,7 @@ func TestSnapshotGolden(t *testing.T) {
 		{"hexo-rss2-no-guid", "hexo/rss2-no-guid.xml", "https://hexo.example.com/rss2.xml", "hexo.example.com", nil, false},
 		{"hexo-ci-dates", "hexo/ci-dates.xml", "https://ci.example.com/atom.xml", "ci.example.com", nil, false},
 		{"kite-relative-links", "kite/rss.xml", "https://kite.example.com/rss.xml", "kite.example.com", nil, false},
+		{"kite-full", "kite/rss-full.xml", "https://kite.example.com/rss.xml", "kite.example.com", nil, false},
 		{"gbk", "edge/gbk.xml", "https://gbk.example.com/feed", "gbk.example.com", nil, false},
 		{"json-feed", "edge/feed.json", "https://json.example.com/feed.json", "json.example.com", nil, false},
 		{"tricky", "edge/tricky.xml", "https://blog.tricky.example.com/feed.xml", "blog.tricky.example.com", nil, false},
@@ -175,6 +176,26 @@ func TestSnapshotImage(t *testing.T) {
 	}
 }
 
+// Kite gives a post's cover as Media RSS media:content.
+func TestKiteCoverIsTheImage(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "testdata", "feeds", "kite", "rss-full.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := feed.Parse(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectGenerator(f.Generator); got != model.GeneratorKite {
+		t.Errorf("generator %q detected as %q", f.Generator, got)
+	}
+	got := Snapshot(f, Blog{Host: "kite.example.com", ShowExcerpt: true, FeedURL: "https://kite.example.com/rss.xml"})
+	want := "https://kite.example.com/posts/%E7%94%A8-go-%E5%86%99%E4%B8%80%E4%B8%AA%E8%AE%A2%E9%98%85%E6%BA%90%E8%81%9A%E5%90%88%E5%99%A8/cover.png"
+	if len(got.Entries) != 2 || got.Entries[0].ImageURL != "" || got.Entries[1].ImageURL != want {
+		t.Errorf("images = %q, %q; want none, then the cover", got.Entries[0].ImageURL, got.Entries[1].ImageURL)
+	}
+}
+
 func TestImageCandidate(t *testing.T) {
 	base, _ := url.Parse("https://blog.example.com/post/")
 	for _, c := range []struct {
@@ -253,6 +274,7 @@ func TestDetectGenerator(t *testing.T) {
 		"Jekyll v4.4.1 https://jekyllrb.com/": model.GeneratorJekyll,
 		"Ghost 6.65":                          model.GeneratorGhost,
 		"Kite":                                model.GeneratorKite,
+		"Kite 0.1.9":                          model.GeneratorKite,
 		"Some CMS":                            model.GeneratorOther,
 	}
 	for in, want := range cases {
