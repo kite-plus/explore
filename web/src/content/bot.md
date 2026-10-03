@@ -17,6 +17,7 @@ User-Agent: KiteExplore/<version> (+https://explore.kite.plus/bot)
 为了给文章打标签，我们会把订阅源里的文章标题、短摘要、分类和博客语言发送给模型服务；只保存返回的标签，不发送正文或读者数据。
 
 - **频率**：每个订阅源大约 60 分钟请求一次；连续没有更新时逐步放宽到 6 小时。服务器返回 `429` 或 `503` 时，按 `Retry-After` 推迟。
+- **ping**：你发布后发来的 [ping](/about#发布后更快出现) 会让它提前读一次订阅源，但同一个博客两次请求至少间隔 5 分钟；上一次抓取失败时（包括按 `Retry-After` 推迟期间），ping 不会让它提前。
 - **原文链接**：定时检查每篇最多每 24 小时一次；无法确认时 6 小时后重试。后台每分钟最多检查 8 篇，同一博客每轮最多 1 篇。读者只能提前检查尚未检测的文章，重复点击不会重复访问源站。
 - **文章页**：每篇只读一次，链接变了、或站点地图给出新的修改时间才再读；每 20 秒一轮，同一博客每轮最多 1 篇，也就是每分钟最多 3 篇；出错时 6 小时后重试。
 - **站点地图**：每个博客每天读一次，最多 20 个文件；找不到时 7 天后再试。
@@ -38,6 +39,7 @@ The blog directory also reads a short description from a blog's home page and fe
 To tag posts, we send their feed titles, short excerpts, categories and blog language to a model service. We store only the resulting tags; we do not send full posts or reader data.
 
 - **Frequency**: about one request per feed every 60 minutes, stretching to 6 hours while nothing changes. A `429` or `503` from your server delays it by `Retry-After`.
+- **Pings**: a [ping](/en/about#appearing-sooner-after-you-publish) you send after publishing makes it read your feed early, but never sooner than 5 minutes after the last request; after a failed fetch, including a `Retry-After` delay, a ping does not bring it forward.
 - **Post links**: scheduled checks run at most once every 24 hours per post, or retry after 6 hours when the result is uncertain. The worker checks at most eight links per minute and one per blog in each round. Readers can check an unchecked post early; repeated clicks do not fetch it again.
 - **Post pages**: each is read once, and again only if its link changes or the sitemap gives it a new modification time. Rounds run every 20 seconds with at most one page per blog, so at most three per blog a minute, retrying after 6 hours on errors.
 - **Sitemaps**: read once a day per blog, at most 20 files; when there is none, it tries again after 7 days.

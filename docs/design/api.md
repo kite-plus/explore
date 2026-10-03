@@ -286,10 +286,24 @@
 
 ---
 
-## 6. 发布即出现（E3）`[待定]`
+## 6. 发布即出现（E3）
 
-- `POST /api/v1/ping`，请求体 `{"url": "..."}`，地址可以是博客首页或订阅地址。对应一个已收录的博客时，把它的 `next_fetch_at` 设为现在，同一博客 5 分钟内最多触发一次。无论是否对应已收录的博客都返回 `202`：ping 不能新增博客，也不能写入任何内容。
-- `POST /xmlrpc`：实现 `weblogUpdates.ping` 和 `weblogUpdates.extendedPing`，让 WordPress 的"更新服务"可以直接通知 Explore，效果与上一条相同（E3 验证兼容性）。
+`POST /api/v1/ping` 让已收录的博客一发布就被抓取（[architecture.md §5.4](architecture.md#54-发布即出现)）。同一个地址接受两种请求，按请求体区分：
+
+- **JSON**：`{"url": "https://blog.example.com/"}`，地址可以是博客首页、文章或订阅地址。成功返回 `202`，没有正文。
+- **XML-RPC**：WordPress"更新服务"和 Ping-O-Matic 使用的 `weblogUpdates.ping(name, url)` 与 `weblogUpdates.extendedPing(name, url, ...)`，请求体以 `<` 开头（`Content-Type` 通常是 `text/xml`）。extendedPing 后面的参数各家不同：WordPress 第三个参数是订阅地址，weblogs.com 的格式是 `changesURL, feedURL`。成功返回 HTTP `200` 和标准的 `methodResponse`：`{flerror: false, message: "Thanks for the ping."}`；格式错误返回 XML-RPC `fault`，`faultCode` 为 `-32700`（无法解析）、`-32601`（方法不存在）或 `-32602`（参数不对）。
+
+规则：
+
+- 按地址的主机名找状态为 `active` 的博客：与博客主机名相同、只差 `www.`，或在它的额外域名里。extendedPing 先看站点地址，找不到时再依次看后面能解析成地址的参数。
+- 找到后把下一次抓取提前到"现在"和"上次抓取后 5 分钟"中较晚的一个（`policy.PingSpacing`），只提前、不推迟。所以 ping 之后最多 5 分钟就会抓取，而 ping 再多，也不会让 Explore 每 5 分钟访问同一个网站超过一次。
+- 这个博客正在抓取时不做任何事：同一主机同一时间只有一个请求，ping 不打断进行中抓取的租约（[worker.md §2.1](worker.md#21-领取到期的博客)）。ping 先锁住博客这一行再检查，与 worker 的领取不会交错。
+- 最近一次抓取失败的博客也不做任何事：退避时间可能来自对方的 `Retry-After`，ping 不能让 Explore 提前再去敲门。
+- 无论地址是否对应已收录的博客，响应都一样：ping 不能新增博客、不写入任何内容，也不透露一个博客是否被收录。
+- 地址不是 `http(s)` 时，JSON 返回 `400 invalid_url`，XML-RPC 返回 `-32602`。
+- 按客户端地址每小时最多 60 次 `[待定]`，超出返回 `429`；请求体最大 16 KiB。
+
+用 `/api/v1/` 下的地址而不是单独的 `/xmlrpc`，是为了让反向代理已有的 `/api/*` 规则直接转发，部署不用改。
 
 ---
 

@@ -5,7 +5,7 @@ import { apiURL } from "@/lib/config";
 export const readerProxy: APIRoute = async ({ request, params, clientAddress }) => {
   const url = new URL(request.url);
   const path = params.path ?? "";
-  // The route file's own group: auth, me, reports or setup.
+  // The route file's own group: auth, me, ping, reports or setup.
   const group = url.pathname.split("/")[3];
   const target = `${apiURL()}/api/v1/${group}${path ? `/${path}` : ""}${url.search}`;
   const headers = new Headers();

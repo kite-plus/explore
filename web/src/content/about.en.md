@@ -18,6 +18,20 @@ Authors enter their blog's address on the [submission page](/en/submit). We chec
 
 Marketing, content farms, and generated or copied content are not listed.
 
+## Appearing sooner after you publish
+
+Explore reads each feed about every 60 minutes. To have a new post show up sooner, send a ping to `https://explore.kite.plus/api/v1/ping` after publishing, and Explore reads your feed within a few minutes:
+
+- **WordPress**: add the address under Settings → Writing → Update Services, and every post you publish sends it.
+- **Kite**: new sites send it after each deploy by default; the setting is `publish.ping`.
+- **Anything else**: add one line at the end of your deploy script:
+
+```sh
+curl -X POST https://explore.kite.plus/api/v1/ping -H 'Content-Type: application/json' -d '{"url":"https://blog.example.com/"}'
+```
+
+A ping only makes Explore read a listed blog's feed early, never sooner than 5 minutes after the last read. It cannot list a new blog and changes nothing else.
+
 ## How to leave
 
 Leaving is always easier than joining. [Open an issue](https://github.com/kite-plus/explore/issues) to be removed, or have your site answer our crawler with `410 Gone`, or disallow `KiteExplore` in robots.txt; any of these counts as leaving. The crawler is described [here](/bot).

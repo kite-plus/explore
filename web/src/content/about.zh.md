@@ -18,6 +18,20 @@ Explore **不保存文章正文，也不保存图片**。页面上的文章只�
 
 商业营销、内容农场、批量生成或搬运的内容不在收录范围内。
 
+## 发布后更快出现
+
+Explore 大约每 60 分钟读一次订阅源。想让新文章更快出现，发布后向 `https://explore.kite.plus/api/v1/ping` 发一次 ping，Explore 会在几分钟内读取你的订阅源：
+
+- **WordPress**：在"设置 → 撰写 → 更新服务"里加上这个地址，以后每次发布都会自动通知。
+- **Kite**：新建的站点默认在每次部署后自动通知，配置项是 `publish.ping`。
+- **其他系统**：在部署脚本的最后加一行：
+
+```sh
+curl -X POST https://explore.kite.plus/api/v1/ping -H 'Content-Type: application/json' -d '{"url":"https://blog.example.com/"}'
+```
+
+ping 只会让 Explore 提前读一次已收录博客的订阅源，同一个博客两次读取至少间隔 5 分钟。它不能收录新博客，也不会改动任何内容。
+
 ## 怎样退出
 
 退出永远比加入容易。你可以[提交一个 Issue](https://github.com/kite-plus/explore/issues) 申请移除；也可以让网站对我们的抓取器返回 `410 Gone`，或者在 robots.txt 里禁止 `KiteExplore`，我们都会视为退出。抓取器的详细说明见[这里](/bot)。

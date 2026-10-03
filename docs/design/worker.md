@@ -61,6 +61,7 @@ RETURNING id, host, site_url, feed_url, description_checked_at, etag, last_modif
 | 失败（第 k 次连续失败） | 不变 | now + min(60 分钟 × 2^(k−1), 24 小时) |
 | `429` / `503` 带 `Retry-After` | 不变 | now + `Retry-After`，限制在 60 分钟到 24 小时之间 |
 | 维护者要求立即抓取 | 不变 | now |
+| 收到 ping（[api.md §6](api.md#6-发布即出现e3)） | 不变 | 只提前到 max(now, 上次抓取 + 5 分钟)；正在抓取或上次失败时不变 |
 
 所有延迟都乘一个 0.9 到 1.1 之间的随机系数，避免大批博客在同一时刻被请求。
 

@@ -42,6 +42,7 @@ type Server struct {
 	imageMu       sync.Mutex
 	registerLimit *limiter
 	loginLimit    *limiter
+	pingLimit     *limiter
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage
@@ -66,6 +67,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	s.linkLimit = newLimiter(10, time.Hour, s.Now)
 	s.registerLimit = newLimiter(5, time.Hour, s.Now)
 	s.loginLimit = newLimiter(10, time.Minute, s.Now)
+	s.pingLimit = newLimiter(60, time.Hour, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -96,6 +98,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.POST("/submissions", s.limit(s.submitLimit), s.submit)
 	v1.POST("/submissions/preview", s.limit(s.previewLimit), s.previewSubmission)
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)
+	v1.POST("/ping", s.limit(s.pingLimit), s.ping)
 	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
 	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
 	v1.GET("/setup", s.limit(s.readLimit), s.setupState)

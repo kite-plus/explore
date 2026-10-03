@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -201,6 +202,43 @@ func (s *Store) FetchNow(ctx context.Context, host string) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+// PingBlog brings forward the next fetch of the active blog listed under any
+// of hosts, to now or spacing after its last fetch, whichever is later.
+// It leaves alone a blog being fetched, whose lease must hold, and one
+// whose last fetch failed, whose backoff may be the server's Retry-After.
+// found reports whether a blog matched; scheduled whether its fetch moved.
+func (s *Store) PingBlog(ctx context.Context, hosts []string, spacing, lease time.Duration) (found, scheduled bool, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// Waiting for the row lets a claim in progress commit first, and the
+		// next statement's snapshot then sees its running attempt.
+		rows, err := tx.Query(ctx, `
+			SELECT id FROM blogs
+			WHERE status = 'active' AND (host = ANY (@hosts::text[]) OR extra_domains && @hosts::text[])
+			FOR UPDATE`, pgx.NamedArgs{"hosts": hosts})
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil || len(ids) == 0 {
+			return err
+		}
+		found = true
+		tag, err := tx.Exec(ctx, `
+			UPDATE blogs b
+			SET next_fetch_at = greatest(now(), coalesce(b.last_fetched_at + @spacing * interval '1 second', now()))
+			WHERE b.id = ANY (@ids::bigint[]) AND b.consecutive_failures = 0
+			  AND b.next_fetch_at > greatest(now(), coalesce(b.last_fetched_at + @spacing * interval '1 second', now()))
+			  AND NOT EXISTS (
+			      SELECT 1 FROM fetch_attempts a
+			      WHERE a.blog_id = b.id AND a.outcome = 'running'
+			        AND a.started_at > now() - @lease * interval '1 second')`,
+			pgx.NamedArgs{"ids": ids, "spacing": seconds(spacing), "lease": seconds(lease)})
+		scheduled = tag.RowsAffected() > 0
+		return err
+	})
+	return found, scheduled, err
 }
 
 // SetDescription records a metadata check. An empty result leaves the last

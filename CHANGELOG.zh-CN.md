@@ -8,6 +8,10 @@
 
 ## [未发布]
 
+### 新增
+
+- 博客发布后可以让 Explore 立即抓取。`POST /api/v1/ping` 接受 JSON `{"url": ...}`，也接受 WordPress 向"更新服务"发送的 XML-RPC `weblogUpdates.ping` 和 `weblogUpdates.extendedPing`，把已收录博客的下一次抓取提前，但离上次抓取至少 5 分钟。ping 不能收录博客，对任何地址的响应都一样。关于页写了作者怎样设置。
+
 ### 修复
 
 - 抓取器读文章页时，如果 `<body>` 之前有无效的 UTF-8 字节或少数特殊字符（例如开尔文符号 K），会崩溃退出。这个问题从 0.1.4 开始存在，现已修复。

@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A blog can have Explore fetch it right after publishing. `POST /api/v1/ping` takes a JSON `{"url": ...}`, or the XML-RPC `weblogUpdates.ping` and `weblogUpdates.extendedPing` that WordPress sends to its update services, and brings a listed blog's next fetch forward to no sooner than 5 minutes after its last one. A ping cannot list a blog, and the answer is the same for any address. The About page shows authors how to set it up.
+
 ### Fixed
 
 - The crawler could crash while reading a post's page when the part before `<body>` held invalid UTF-8 or one of a few special characters, such as the Kelvin sign. This came with 0.1.4.

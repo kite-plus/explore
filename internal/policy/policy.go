@@ -51,6 +51,10 @@ const (
 	MaxBackoff       = 24 * time.Hour
 	FetchLease       = 10 * time.Minute
 
+	// A ping brings a listed blog's next fetch forward, but never to less
+	// than this after its last fetch.
+	PingSpacing = 5 * time.Minute
+
 	ConnectTimeout = 5 * time.Second
 	TLSTimeout     = 5 * time.Second
 	HeaderTimeout  = 10 * time.Second

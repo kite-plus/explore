@@ -860,3 +860,118 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 		t.Errorf("untagged after new default tags = %+v, %v", jobs, err)
 	}
 }
+
+func TestPingBlog(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	b := listBlog(t, s, "ping.example.com", "en")
+	s.exec(t, `UPDATE blogs SET extra_domains = '{ping.example.net}' WHERE id = $1`, b.ID)
+	set := func(lastFetched, nextFetch string, failures int) {
+		t.Helper()
+		s.exec(t, `UPDATE blogs SET last_fetched_at = now() + $2::interval, next_fetch_at = now() + $3::interval,
+			consecutive_failures = $4 WHERE id = $1`, b.ID, lastFetched, nextFetch, failures)
+	}
+	// dueIn is measured by the database's clock, which wrote next_fetch_at.
+	dueIn := func() time.Duration {
+		t.Helper()
+		var seconds float64
+		if err := s.pool.QueryRow(ctx, `SELECT extract(epoch FROM next_fetch_at - now()) FROM blogs WHERE id = $1`, b.ID).Scan(&seconds); err != nil {
+			t.Fatal(err)
+		}
+		return time.Duration(seconds * float64(time.Second))
+	}
+	ping := func(want string, hosts ...string) {
+		t.Helper()
+		found, scheduled, err := s.PingBlog(ctx, hosts, policy.PingSpacing, policy.FetchLease)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprintf("found=%v scheduled=%v", found, scheduled); got != want {
+			t.Fatalf("ping %v: %s, want %s", hosts, got, want)
+		}
+	}
+
+	set("-1 hour", "1 hour", 0)
+	ping("found=true scheduled=true", "www.ping.example.com", "ping.example.com")
+	if d := dueIn(); d > time.Second {
+		t.Errorf("a blog fetched an hour ago is due in %v, want now", d)
+	}
+
+	set("-1 minute", "1 hour", 0)
+	ping("found=true scheduled=true", "ping.example.net")
+	if d := dueIn(); d < 4*time.Minute-time.Second || d > 4*time.Minute+time.Second {
+		t.Errorf("a blog fetched a minute ago is due in %v, want 4m", d)
+	}
+	ping("found=true scheduled=false", "ping.example.com")
+	if d := dueIn(); d < 4*time.Minute-time.Second {
+		t.Errorf("a second ping moved the fetch to %v", d)
+	}
+
+	ping("found=false scheduled=false", "other.example.com", "www.other.example.com")
+
+	set("-1 hour", "1 hour", 2)
+	ping("found=true scheduled=false", "ping.example.com")
+	if d := dueIn(); d < 59*time.Minute {
+		t.Errorf("a ping shortened the backoff of a failing blog to %v", d)
+	}
+
+	set("-1 hour", "0 seconds", 0)
+	if claimed, err := s.ClaimDue(ctx, 10, policy.FetchLease); err != nil || len(claimed) != 1 {
+		t.Fatalf("claim = %v, %v", claimed, err)
+	}
+	ping("found=true scheduled=false", "ping.example.com")
+	if d := dueIn(); d < policy.FetchLease-time.Minute {
+		t.Errorf("a ping during a fetch cut its lease to %v", d)
+	}
+
+	s.exec(t, `UPDATE blogs SET status = 'paused' WHERE id = $1`, b.ID)
+	ping("found=false scheduled=false", "ping.example.com")
+}
+
+func TestPingWaitsForAClaimInProgress(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	b := listBlog(t, s, "race.example.com", "en")
+	s.exec(t, `UPDATE blogs SET last_fetched_at = now() - interval '1 hour', next_fetch_at = now() WHERE id = $1`, b.ID)
+
+	// What ClaimDue writes, held open while the ping arrives.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `UPDATE blogs SET next_fetch_at = now() + interval '10 minutes' WHERE id = $1`, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO fetch_attempts (blog_id) VALUES ($1)`, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, scheduled, err := s.PingBlog(ctx, []string{"race.example.com"}, policy.PingSpacing, policy.FetchLease)
+		if err == nil && scheduled {
+			err = errors.New("the ping moved the fetch of a claimed blog")
+		}
+		done <- err
+	}()
+	for waited := 0; ; waited++ {
+		var waiting bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+			WHERE wait_event_type = 'Lock' AND query LIKE '%extra_domains &&%FOR UPDATE%')`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		if waited == 100 {
+			t.Fatal("the ping never waited for the claimed row")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
