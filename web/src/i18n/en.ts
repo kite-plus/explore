@@ -44,9 +44,9 @@ export const en: Dict = {
   },
   sidebar: {
     latestTitle: "Write a blog?",
-    latestBody: "Submit it, and once it is reviewed its new posts show up here on their own. Ping Explore after publishing to have them here within minutes.",
+    latestBody: "Submit it. Once it is reviewed, its new posts show up here on their own, and readers click through to your site.",
     submit: "Submit a blog",
-    ping: "How to ping",
+    ping: "Ping after publishing to appear in minutes",
     newTab: "Click a title to read the post on the author's site, in a new tab.",
     recommendedTitle: "How posts are picked",
     followingTitle: "Your follows",

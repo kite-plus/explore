@@ -42,9 +42,9 @@ export const zh = {
   },
   sidebar: {
     latestTitle: "写独立博客？",
-    latestBody: "提交你的博客，审核通过后新文章会自动出现在这里；发布后 ping 一下，几分钟内就能看到。",
+    latestBody: "提交你的博客，审核通过后，新文章会自动出现在这里，读者点开标题回到你的网站阅读。",
     submit: "提交博客",
-    ping: "怎样 ping",
+    ping: "发布后 ping 一下，几分钟内就出现",
     newTab: "点击标题，会在新标签页打开作者的网站阅读原文。",
     recommendedTitle: "推荐是怎么来的",
     followingTitle: "你的订阅",
