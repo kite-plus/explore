@@ -14,6 +14,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Readers can take their subscriptions with them and bring them in. The account page exports the blogs you follow as OPML, and imports an OPML file from another reader: blogs Explore lists are followed at once, matched by feed or site address, and the rest are listed with a link that fills in the submission form.
 - The Recommended tab has posts. When the tagger files a post under its tags, the same model call now rates the writing as standout, solid, brief or skip, from the title and excerpt alone and never from anyone's reading. Recommended shows solid and standout posts, at most one per blog a day, newest first, with standout posts kept at the top two days longer, and filters by language and tag like Latest. Without a model configured it says why and links to Latest. Upgrading has every cached post tagged again, newest first, so it gets a rating; this costs about as much as tagging the cache did the first time.
 
+### Changed
+
+- The stream pages lead with the posts. The large heading and its fixed text are gone; the tabs and the language filter sit in a toolbar that stays at the top, and posts are grouped by the day they came out. Each post shows its blog and time first, and a link still to be checked is quiet grey text instead of an amber badge. Wide screens get a sidebar with a note on the stream, the tags and the blogs listed last. `GET /api/v1/blogs` takes `order=newest` for the latter.
+- The header shows a signed-in reader's avatar and name, drawn on the server so it no longer flashes Sign in first, and opens a menu with Following, My account, Admin for admins, and Sign out. The language switch and the theme toggle move to the footer.
+- A reader who is signed in already skips the sign-in page, and the page's text has more room.
+
 ### Fixed
 
 - The crawler could crash while reading a post's page when the part before `<body>` held invalid UTF-8 or one of a few special characters, such as the Kelvin sign. This came with 0.1.4.
