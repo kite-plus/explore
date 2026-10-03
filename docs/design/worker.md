@@ -223,12 +223,12 @@ If-Modified-Since: ...
 
 | 代码 | 级别 | 含义 | 提示 |
 |---|---|---|---|
-| `feed_not_found` | error | 找不到订阅源 | Hexo：安装 `hexo-generator-feed`；Halo：确认订阅插件（plugin-feed）已启用；其他：提交时直接填写订阅地址 |
+| `feed_not_found` | error | 找不到订阅源 | Hexo：安装 `hexo-generator-feed`；Halo：确认订阅插件（plugin-feed）已启用；Kite：确认 `build.feed` 没有关闭，用 `kite serve` 运行的站点升级 Kite；其他：提交时直接填写订阅地址 |
 | `robots_disallowed` | error | robots.txt 禁止 `KiteExplore` 抓取订阅地址 | 在 robots.txt 里放行订阅地址 |
 | `http_error` | error | 订阅地址返回非 2xx | —— |
-| `too_large` | error | 订阅源超过 5 MiB | Hugo：设置 `services.rss.limit` |
+| `too_large` | error | 订阅源超过 5 MiB | Hugo：设置 `services.rss.limit`；Kite：调小 `build.feedLimit` |
 | `parse_error` | error | 不是合法的 RSS、Atom 或 JSON Feed | —— |
-| `links_off_domain` | error | 超过一半的文章链接不在博客的域名内，而且订阅源声明的站点地址也不在博客的域名内：站点地址配错了，或者博客搬了家、旧地址没有重定向 | 搬了家就提交新地址；否则 Hexo：改 `_config.yml` 的 `url`；Hugo：改 `baseURL`；Halo：改 `halo.external-url`；WordPress：设置 → 常规 → 站点地址（URL）；Jekyll：改 `_config.yml` 的 `url` |
+| `links_off_domain` | error | 超过一半的文章链接不在博客的域名内，而且订阅源声明的站点地址也不在博客的域名内：站点地址配错了，或者博客搬了家、旧地址没有重定向 | 搬了家就提交新地址；否则 Hexo：改 `_config.yml` 的 `url`；Hugo：改 `baseURL`；Halo：改 `halo.external-url`；WordPress：设置 → 常规 → 站点地址（URL）；Jekyll：改 `_config.yml` 的 `url`；Kite：改 `site.baseURL` 或 `KITE_SITE_BASEURL` |
 | `site_moved` | error | 输入的地址重定向到了另一个网站，超过一半的文章链接也指向那里：博客搬了家，提交的是旧地址。细节里是新地址 | 提交新地址 |
 | `no_valid_items` | error | 没有一篇可用的文章 | —— |
 | `stale` | error | 近 12 个月没有更新 | —— |

@@ -33,6 +33,10 @@ var hints = map[model.ProblemCode]map[model.Generator]hint{
 			"WordPress serves /feed/ by default; check that no plugin disables feeds.",
 			"WordPress 默认提供 /feed/，请检查是否有插件关闭了订阅源。",
 		},
+		model.GeneratorKite: {
+			"Kite writes /rss.xml unless build.feed is false in kite.yaml. If the site runs on kite serve, update Kite: older versions served no feed.",
+			"Kite 默认输出 /rss.xml，除非 kite.yaml 里把 build.feed 设成了 false。如果站点用 kite serve 运行，请升级 Kite：旧版本不提供订阅源。",
+		},
 	},
 	model.ProblemRobotsDisallowed: {
 		"": {
@@ -54,6 +58,10 @@ var hints = map[model.ProblemCode]map[model.Generator]hint{
 		model.GeneratorHugo: {
 			"Hugo puts every page in the feed by default. Set services.rss.limit, for example to 20.",
 			"Hugo 默认把全部页面写进订阅源。请设置 services.rss.limit，例如 20。",
+		},
+		model.GeneratorKite: {
+			"Lower build.feedLimit in kite.yaml; the default is 20.",
+			"请调小 kite.yaml 里的 build.feedLimit，默认是 20。",
 		},
 	},
 	model.ProblemParseError: {
@@ -86,6 +94,10 @@ var hints = map[model.ProblemCode]map[model.Generator]hint{
 		model.GeneratorJekyll: {
 			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set url in _config.yml to the blog's address.",
 			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 _config.yml 里的 url 改成博客的地址。",
+		},
+		model.GeneratorKite: {
+			"If the blog has moved to the domain the links point to, submit its new address. Otherwise set site.baseURL in kite.yaml, or KITE_SITE_BASEURL where the site is built, to the blog's address.",
+			"如果博客已经搬到链接所指的域名，请提交新地址；否则请把 kite.yaml 里的 site.baseURL（或构建环境里的 KITE_SITE_BASEURL）改成博客的地址。",
 		},
 	},
 	model.ProblemLinksElsewhere: {
