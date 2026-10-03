@@ -24,6 +24,7 @@ services:
       - "443:443/udp"
     environment:
       EXPLORE_PUBLIC_URL: ${EXPLORE_PUBLIC_URL:?set EXPLORE_PUBLIC_URL in .env}
+      EXPLORE_CDN_RANGES: ${EXPLORE_CDN_RANGES:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

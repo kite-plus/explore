@@ -1,14 +1,29 @@
 # Caddy in front of Explore: HTTPS for EXPLORE_PUBLIC_URL, the API and feed
 # paths to serve and everything else to web. There is no log directive, so
 # readers' addresses stay out of access logs.
+{
+	servers {
+		# Only a CDN in EXPLORE_CDN_RANGES may name the reader, read right to
+		# left; with none listed, the reader is whoever connects. See
+		# docs/design/project-layout.md section 10.
+		trusted_proxies static {$EXPLORE_CDN_RANGES}
+		trusted_proxies_strict
+	}
+}
+
 {$EXPLORE_PUBLIC_URL} {
 	encode zstd gzip
 
+	# serve and web get the reader's address alone, as found above.
 	@api path /api/* /feed.xml /blogs.opml /healthz /readyz
 	handle @api {
-		reverse_proxy serve:8080
+		reverse_proxy serve:8080 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 	handle {
-		reverse_proxy web:4321
+		reverse_proxy web:4321 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 }

@@ -201,7 +201,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 | 服务 | 镜像与命令 | 说明 |
 |---|---|---|
-| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP |
+| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
 | `postgres` | `postgres:16-alpine` | 数据卷持久化；备份时排除 `entries` 的数据（[data-model.md §5](data-model.md#5-数据保留)） |
 | `migrate` | `ghcr.io/kite-plus/explore`，`explore migrate up` | 每次 `up` 先跑一次，跑完退出 |
 | `serve` | 同一镜像，`explore serve` | API；可以多实例 |
@@ -217,6 +217,8 @@ docker compose up -d
 ```
 
 `EXPLORE_PUBLIC_URL` 的域名要先解析到服务器，Caddy 才能拿到证书。`EXPLORE_VERSION` 固定运行的版本；升级时改掉它，再运行 `docker compose pull && docker compose up -d`，`migrate` 会先把数据库迁移到新版本。服务器上已经有别的反向代理时，去掉 `caddy` 服务，按上表的路径把请求转给 `127.0.0.1:8080`（serve）和 `127.0.0.1:4321`（web）。页面自带 `Cache-Control`，前面再加 CDN 时可以直接按它缓存。
+
+**前面有 CDN 时**（例如 Cloudflare 代理了域名）：连到 Caddy 的是 CDN 的地址，不是读者。把 CDN 的地址段写进 `.env` 的 `EXPLORE_CDN_RANGES`（空格分隔；Cloudflare 的地址段已写在 `.env.example` 里），Caddy 只信任来自这些地址的 `X-Forwarded-For`，从右往左取第一个不在其中的地址作为读者（`trusted_proxies_strict`），再把这个地址作为 `X-Forwarded-For` 转给 `serve` 和 `web`。CDN 会把连到它的地址追加在这个头的最后，读者自己写进去的值都在它左边，取不到。没有设置时，读者就是连到 Caddy 的地址，请求带来的 `X-Forwarded-For` 一律不用。不设置的话限流按 CDN 的节点计数，许多读者共用一份额度。
 
 **首次安装**：还没有管理员账号时，打开 `/admin` 进入安装向导：创建第一个管理员账号，再选择是否开放注册和投稿。向导不要求安装码，第一个完成安装的人就成为管理员，所以 `docker compose up -d` 之后要马上完成这一步；安装完成前，`serve` 每次启动都会在日志里提醒。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
 
