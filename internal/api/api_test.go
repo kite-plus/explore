@@ -1143,3 +1143,20 @@ func TestRecommendedEntries(t *testing.T) {
 		t.Errorf("unknown order = %d", w.Code)
 	}
 }
+
+func TestBlogsNewestFirst(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("old.example.com", "en", post("o", 1, ""))
+	e.seed("new.example.com", "en", post("n", 50, ""))
+	page := decode[struct {
+		Data []struct {
+			Host string `json:"host"`
+		} `json:"data"`
+	}](t, e.get("/api/v1/blogs?order=newest"))
+	if len(page.Data) != 2 || page.Data[0].Host != "new.example.com" {
+		t.Errorf("newest first = %+v", page.Data)
+	}
+	if w := e.get("/api/v1/blogs?order=random"); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown order = %d", w.Code)
+	}
+}

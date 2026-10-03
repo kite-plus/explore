@@ -1036,3 +1036,38 @@ func TestRecommendedStream(t *testing.T) {
 		t.Errorf("zh = %s", got)
 	}
 }
+
+func TestDirectoryNewestFirst(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	// Listed in this order, but the first has the newest post.
+	first := listBlog(t, s, "first.example.com", "en")
+	sync(t, s, first.ID, entry("f1", at(now.Add(-time.Hour)), true))
+	second := listBlog(t, s, "second.example.com", "en")
+	sync(t, s, second.ID, entry("s1", at(now.Add(-72*time.Hour)), true))
+	third := listBlog(t, s, "third.example.com", "zh-CN")
+	sync(t, s, third.ID, entry("t1", nil, false))
+	s.exec(t, `UPDATE blogs SET created_at = now() - make_interval(days => 10 - id::int) WHERE id IN ($1, $2, $3)`, first.ID, second.ID, third.ID)
+
+	var paged []string
+	var cursor *Cursor
+	for {
+		page, err := s.Directory(ctx, DirectoryQuery{Limit: 1, Cursor: cursor, Newest: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		paged = append(paged, page[0].Host)
+		cursor = &Cursor{At: page[0].SortAt, ID: page[0].ID}
+	}
+	if got := strings.Join(paged, ","); got != "third.example.com,second.example.com,first.example.com" {
+		t.Errorf("newest first, paged = %s", got)
+	}
+	updated, err := s.Directory(ctx, DirectoryQuery{Limit: 10})
+	if err != nil || len(updated) != 3 || updated[0].Host != "first.example.com" {
+		t.Errorf("by last post = %v, %v", identities(updated, func(b ListedBlog) string { return b.Host }), err)
+	}
+}

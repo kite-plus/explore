@@ -94,7 +94,7 @@
 
 ### 2.2 `GET /api/v1/blogs`
 
-博客目录，只含可见的博客，排序见 [data-model.md §4.2](data-model.md#42-博客目录与博客页)。参数同 §2.1。
+博客目录，只含可见的博客，排序见 [data-model.md §4.2](data-model.md#42-博客目录与博客页)。参数同 §2.1，另有 `order`：`updated`（默认）按最近一篇文章倒序，`newest` 按收录时间倒序，首页边栏的"最近收录"用它；其他值返回 `400 invalid_request`。游标只在同一个 `order` 里有效。
 
 ```json
 {

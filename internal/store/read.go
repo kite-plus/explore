@@ -168,17 +168,23 @@ type ListedBlog struct {
 	Language        string
 	Generator       model.Generator
 	LastPublishedAt *time.Time
+	// SortAt is the directory's sort key, set by Directory alone: the last
+	// post, the epoch for a blog with none, or when the blog was listed.
+	SortAt time.Time
 }
 
 // DirectoryQuery selects a page of the blog directory.
 type DirectoryQuery struct {
 	Lang   string
 	Limit  int
-	Cursor *Cursor // At is the epoch for blogs with no dated entry
+	Cursor *Cursor // At is a SortAt
+	// Newest orders by when blogs were listed instead of by their last post.
+	Newest bool
 }
 
-// Directory lists visible blogs, most recently published first. Blogs with
-// nothing dated sort last, keyed on the epoch so the cursor stays simple.
+// Directory lists visible blogs, most recently published first, or most
+// recently listed first. Blogs with nothing dated sort last, keyed on the
+// epoch so the cursor stays simple.
 func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, error) {
 	args := pgx.NamedArgs{
 		"unhealthy_after":  seconds(policy.UnhealthyAfter),
@@ -188,13 +194,14 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 		"cursor_at":        time.Time{},
 		"cursor_id":        int64(0),
 		"limit":            q.Limit,
+		"newest":           q.Newest,
 	}
 	if q.Cursor != nil {
 		args["cursor_at"], args["cursor_id"] = q.Cursor.At, q.Cursor.ID
 	}
 	rows, err := s.pool.Query(ctx, `
 		WITH listed AS (
-			SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator,
+			SELECT b.id, b.host, b.name, b.description, b.site_url, b.feed_url, b.language, b.generator, b.created_at,
 			       (SELECT max(e.published_at) FROM entries e
 			        WHERE e.blog_id = b.id AND e.date_trusted
 			          AND `+notSuppressed+`
@@ -202,16 +209,23 @@ func (s *Store) Directory(ctx context.Context, q DirectoryQuery) ([]ListedBlog, 
 			FROM blogs b
 			WHERE `+visible+`
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
+		), keyed AS (
+			SELECT *, CASE WHEN @newest THEN created_at ELSE coalesce(last_published_at, 'epoch') END AS sort_at
+			FROM listed
 		)
-		SELECT id, host, name, description, site_url, feed_url, language, generator, last_published_at
-		FROM listed
-		WHERE NOT @has_cursor OR (coalesce(last_published_at, 'epoch'), id) < (@cursor_at, @cursor_id)
-		ORDER BY coalesce(last_published_at, 'epoch') DESC, id DESC
+		SELECT id, host, name, description, site_url, feed_url, language, generator, last_published_at, sort_at
+		FROM keyed
+		WHERE NOT @has_cursor OR (sort_at, id) < (@cursor_at, @cursor_id)
+		ORDER BY sort_at DESC, id DESC
 		LIMIT @limit`, args)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanListed)
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ListedBlog, error) {
+		var b ListedBlog
+		err := row.Scan(&b.ID, &b.Host, &b.Name, &b.Description, &b.SiteURL, &b.FeedURL, &b.Language, &b.Generator, &b.LastPublishedAt, &b.SortAt)
+		return b, err
+	})
 }
 
 func scanListed(row pgx.CollectableRow) (ListedBlog, error) {

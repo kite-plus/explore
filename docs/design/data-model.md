@@ -285,7 +285,7 @@ LIMIT @page_size;
 
 ### 4.2 博客目录与博客页
 
-- 目录：可见的博客，按最近一篇可信日期的文章倒序（没有文章的排最后），游标为 `(coalesce(last_published_at, '-infinity'), id)`。`last_published_at` 同时供前端生成 `sitemap.xml` 的 `lastmod`。
+- 目录：可见的博客，按最近一篇可信日期的文章倒序（没有文章的排最后），游标为 `(coalesce(last_published_at, '-infinity'), id)`。按收录时间排序时游标为 `(created_at, id)`。`last_published_at` 同时供前端生成 `sitemap.xml` 的 `lastmod`。
 - 博客页：该博客在 `entries` 里的全部文章，包括没有日期和日期不可信的，按发布时间倒序、没有日期的排最后。
 
 ### 4.3 推荐流

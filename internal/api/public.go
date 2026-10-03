@@ -149,7 +149,16 @@ func (s *Server) blogs(c *gin.Context) {
 	if !ok {
 		return
 	}
-	rows, err := s.Store.Directory(c.Request.Context(), store.DirectoryQuery{Lang: language, Limit: limit + 1, Cursor: cur})
+	newest := false
+	switch c.Query("order") {
+	case "", "updated":
+	case "newest":
+		newest = true
+	default:
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
+	rows, err := s.Store.Directory(c.Request.Context(), store.DirectoryQuery{Lang: language, Limit: limit + 1, Cursor: cur, Newest: newest})
 	if err != nil {
 		s.storeError(c, err)
 		return
@@ -169,11 +178,7 @@ func (s *Server) blogs(c *gin.Context) {
 // directoryCursor keys blogs without dated entries on the epoch, as the
 // directory query sorts them.
 func directoryCursor(b store.ListedBlog) store.Cursor {
-	cur := store.Cursor{At: time.Unix(0, 0).UTC(), ID: b.ID}
-	if b.LastPublishedAt != nil {
-		cur.At = *b.LastPublishedAt
-	}
-	return cur
+	return store.Cursor{At: b.SortAt, ID: b.ID}
 }
 
 func (s *Server) blog(c *gin.Context) {
