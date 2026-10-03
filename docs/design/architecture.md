@@ -228,16 +228,20 @@ Typecho、Jekyll、Ghost 同样开箱输出标准订阅源。E0 顺带实测，�
 | Jekyll（jekyll-feed） | `/feed.xml` | Atom | 10 | `jekyll new` 生成的 `url` 为空，链接是相对路径 |
 | Ghost 6 | `/rss/` | RSS 2.0 | 15 | 付费文章在订阅源里被截断或为空；私有模式下没有订阅源 |
 
-### 5.3 Kite（开发中）
+### 5.3 Kite
 
-Kite 还在开发，接入排在主流系统之后（E4）。按 §0.2，Explore 不为它写专属代码，Kite 要做的是成为一个标准的好样本。按当前代码实测 `[EV]`：
+按 §0.2，Explore 不为 Kite 写专属代码，Kite 要做的是成为一个标准的好样本。下表按 2026-10-03 Kite 开发分支实测 `[EV]`，这些改动随 Kite 的下一个版本发布：
 
-| 项 | 现状 | 影响 | 需要 Kite 做的 |
-|---|---|---|---|
-| `kite build` 静态站 | 输出 RSS 2.0 `/rss.xml`，页面带 `<link rel="alternate">` | 已经可以接入 | —— |
-| `kite serve` / `kite run` 部署 | 页面声明了 `/rss.xml`，请求却返回 404，`/sitemap.xml` 也一样 | 用服务器运行的 Kite 站点无法接入 | 服务端运行时也提供订阅源 |
-| `<guid>` | 稳定的 ULID，但没有标 `isPermaLink="false"` | Explore 只当身份键，不受影响；RSS 2.0 规定缺省即视为链接，其他阅读器可能误用 | 加上 `isPermaLink="false"` |
-| 未配置 `baseURL` | 条目链接是相对路径 | Explore 会按订阅地址解析；其他阅读器可能出错 | 构建时给出警告 |
+| 项 | 现状 | 对 Explore 的影响 |
+|---|---|---|
+| `kite build` 静态站 | RSS 2.0 `/rss.xml`，页面带 `<link rel="alternate">` 和 `<meta name="generator" content="Kite 版本">`，订阅源带 `<generator>` | 检查通过，识别为 `kite` |
+| `kite serve` / `kite run` | `/rss.xml`、`/sitemap.xml` 正常返回；不支持条件请求 | 检查通过，只多一条 `no_conditional_get` 提示，每次抓取下载完整订阅源 |
+| 文章顺序 | 最新在前，再截到 `build.feedLimit`（默认 20） | 不受影响，Explore 自己排序；其他阅读器不再漏掉新文章 |
+| `<guid>` | 稳定的 ULID，标了 `isPermaLink="false"` | 只当身份键 |
+| 摘要与封面 | 有 `description` 的文章用它作 `<description>`；封面以 Media RSS `media:content` 给出 | 摘要直接用作者写的描述，封面成为缩略图，不必再读文章页 |
+| 分类 | 文章的分类和标签作为 `<category>` | 作为打标签的线索 |
+| 未配置 `baseURL` | 构建时警告；条目链接是相对路径 | Explore 会按订阅地址解析 |
+| 发布即出现 | `kite ping` 向 `publish.ping` 列出的地址发送 `weblogUpdates.extendedPing`；`kite init` 默认把 Explore 的地址写进去，部署工作流在部署后执行 | 新文章几分钟内出现（§5.4） |
 
 ### 5.4 发布即出现
 
@@ -389,7 +393,7 @@ Gin 提供 `/api/v1` 下的公开接口（首页时间流、博客目录、博�
 | **E1 后端** | 数据库与迁移、worker、API、提交与审核接口、`/feed.xml`、`/blogs.opml`、Docker Compose | 四个系统的默认订阅源端到端可用（Hexo 装了订阅插件）；清空 `entries` 后一个周期内恢复（自动化测试）；新文章 ≤ 60 分钟出现在 API |
 | **E2 上线** | Astro 前端（[frontend.md](frontend.md)），满足 §8；读者账号、订阅、三条信息流（最新、推荐、订阅）、文章标签（[accounts.md](accounts.md)）；邀请首批约 100 个博客 | explore.kite.plus 公开上线；匿名页面零 Cookie、零第三方请求；读者能登录、订阅、按标签筛选 |
 | **E3 治理与扩展** | 博客健康页、屏蔽清单、举报与下架流程、自适应轮询；接入更多系统（§5.2）；发布即出现（§5.4） | 健康博客占比 ≥ 95%；下架请求当天处理 |
-| **E4 Kite 接入** | 跟随 Kite 的进度：Kite 补齐订阅源缺口（§5.3）后接入 | 用 `kite build` 和 `kite serve` 部署的站点都能通过检查 |
+| **E4 Kite 接入** | 跟随 Kite 的进度：Kite 补齐订阅源缺口（§5.3）后接入 | 用 `kite build` 和 `kite serve` 部署的站点都能通过检查；2026-10-03 用 Kite 开发分支实测通过 `[EV]` |
 | E5 平台化 `[待定]` | 搜索、主题分类、开放 API | —— |
 
 ---
