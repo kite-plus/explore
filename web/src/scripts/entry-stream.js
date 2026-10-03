@@ -31,9 +31,13 @@
       const newStream = doc.querySelector("[data-entry-stream]");
       if (!newStream) throw new Error("missing entry stream in response");
 
-      const newArticles = Array.from(newStream.children);
-      for (const article of newArticles) {
-        stream.appendChild(article);
+      // A page that starts on the day the last one ended with repeats that
+      // day's heading; the group simply goes on.
+      const headings = stream.querySelectorAll("[data-day]");
+      const lastDay = headings.length ? headings[headings.length - 1].getAttribute("data-day") : null;
+      for (const child of Array.from(newStream.children)) {
+        if (lastDay && child.getAttribute("data-day") === lastDay) continue;
+        stream.appendChild(child);
       }
 
       const newButton = doc.querySelector("[data-load-more-btn]");

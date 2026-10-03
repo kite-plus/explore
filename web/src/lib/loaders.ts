@@ -37,6 +37,16 @@ export interface StreamPage {
   /** Empty when the list could not be had; pages then show no tags. */
   tags: Tag[];
   paged: boolean;
+  /** The blogs listed last, for the sidebar; not asked for past page one. */
+  newBlogs: Blog[];
+}
+
+// The sidebar's recently listed blogs. A later page only feeds the stream
+// script, which keeps the posts alone, so it does without them.
+async function newBlogs(lang: Lang, paged: boolean): Promise<Blog[]> {
+  if (paged) return [];
+  const r = await api.blogs(lang, { order: "newest", limit: 5 });
+  return r.kind === "ok" ? r.data.data : [];
 }
 
 /** loadHome loads a page of the latest stream, or of the recommended one. */
@@ -45,11 +55,15 @@ export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | 
   const filter = param(ctx, "lang");
   const tag = param(ctx, "tag");
   const order = stream === "recommended" ? "recommended" : undefined;
-  const [r, tags] = await Promise.all([api.entries(lang, { order, cursor, lang: filter, tag, limit: 30 }), tagList(lang)]);
+  const [r, tags, blogs] = await Promise.all([
+    api.entries(lang, { order, cursor, lang: filter, tag, limit: 30 }),
+    tagList(lang),
+    newBlogs(lang, Boolean(cursor)),
+  ]);
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   cacheControl(ctx, "public, max-age=60");
-  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
 }
 
 export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loaded<StreamPage> | Response> {
@@ -57,16 +71,17 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
   const cursor = param(ctx, "cursor");
   const filter = param(ctx, "lang");
   const tag = param(ctx, "tag");
-  const [r, tags] = await Promise.all([
+  const [r, tags, blogs] = await Promise.all([
     api.following(lang, { cursor, lang: filter, tag, limit: 30 }, ctx.request.headers.get("cookie") ?? ""),
     tagList(lang),
+    newBlogs(lang, Boolean(cursor)),
   ]);
   if (r.kind === "error" && r.status === 401) {
     return ctx.redirect(localePath(lang, "/login") + `?next=${encodeURIComponent(localePath(lang, "/following"))}`, 302);
   }
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
-  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
 }
 
 /**

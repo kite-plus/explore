@@ -1,0 +1,32 @@
+---
+import LangFilter from "@/components/LangFilter.astro";
+import StreamTabs from "@/components/StreamTabs.astro";
+import TagFilter from "@/components/TagFilter.astro";
+import type { Lang } from "@/i18n";
+import type { Tag } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  stream: "latest" | "recommended" | "following";
+  path: string;
+  filter?: string;
+  tag?: string;
+  tags: Tag[];
+}
+
+// The streams' tabs and filters, held at the top of the window while the
+// posts scroll by. Wide screens list the tags in the sidebar instead.
+const { lang, stream, path, filter, tag, tags } = Astro.props;
+---
+
+<div class="sticky top-0 z-20 -mx-4 border-b bg-background px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+  <div class="flex flex-wrap items-end justify-between gap-x-5 pt-2">
+    <StreamTabs lang={lang} current={stream} query={{ lang: filter, tag }} />
+    <div class="flex flex-wrap items-center gap-2 pb-2">
+      <LangFilter lang={lang} path={path} current={filter} tag={tag} variant="segmented" />
+      <div class="lg:hidden">
+        <TagFilter lang={lang} path={path} tags={tags} current={tag} filter={filter} />
+      </div>
+    </div>
+  </div>
+</div>

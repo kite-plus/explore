@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
+  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0 };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -150,6 +150,7 @@ export function startStub() {
       return send(200, cursor === "page-two" ? entries.second : entries.first);
     }
     if (req.method === "GET" && url.pathname === "/api/v1/blogs") {
+      state.blogOrders.push(url.searchParams.get("order"));
       return send(200, { data: blogs, next_cursor: null });
     }
     if (req.method === "GET" && url.pathname === "/api/v1/blogs/zh.example.com/favicon") {

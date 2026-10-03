@@ -65,7 +65,7 @@ const description = data
         {data.entries.length === 0 ? (
           <p class="py-10 text-muted-foreground">{t.blog.empty}</p>
         ) : (
-          <div class="divide-y" data-entry-stream>
+          <div class="border-t" data-entry-stream>
             {data.entries.map((entry) => (
               <EntryItem lang={lang} entry={entry} blogLanguage={data.blog.language} tagNames={names} />
             ))}

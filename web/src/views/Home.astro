@@ -1,9 +1,8 @@
 ---
-import EntryItem from "@/components/EntryItem.astro";
-import LangFilter from "@/components/LangFilter.astro";
+import EntryStream from "@/components/EntryStream.astro";
 import Message from "@/components/Message.astro";
-import StreamTabs from "@/components/StreamTabs.astro";
-import TagFilter from "@/components/TagFilter.astro";
+import StreamSidebar from "@/components/StreamSidebar.astro";
+import StreamToolbar from "@/components/StreamToolbar.astro";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
@@ -38,52 +37,28 @@ const unrated = recommended && !data?.paged && !data?.filter && !data?.tag;
   description={recommended ? t.recommended.intro : t.site.description}
   path={path}
   entryChecks
+  wide
   noindex={Boolean(data?.paged || data?.filter || data?.tag)}
 >
   {
     data ? (
-      <>
-        <div>
-          <h1 class="text-[1.75rem] font-semibold tracking-tight">{t.home.heading}</h1>
-          <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">{recommended ? t.recommended.intro : t.home.intro}</p>
+      <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-start lg:gap-12">
+        <div class="min-w-0">
+          <h1 class="sr-only">{t.home.heading}</h1>
+          <StreamToolbar lang={lang} stream={stream} path={path} filter={data.filter} tag={data.tag} tags={data.tags} />
+          {data.page.data.length === 0 && unrated ? (
+            <div class="flex flex-col items-center gap-4 py-16 text-center">
+              <p class="max-w-prose text-muted-foreground">{t.recommended.empty}</p>
+              <ButtonLink href={localePath(lang, "/")} variant="outline">{t.recommended.latest}</ButtonLink>
+            </div>
+          ) : data.page.data.length === 0 ? (
+            <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
+          ) : (
+            <EntryStream lang={lang} entries={data.page.data} tagNames={names} tagPath={path} older={older} />
+          )}
         </div>
-        <div class="mt-5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b">
-          <StreamTabs lang={lang} current={stream} query={{ lang: data.filter, tag: data.tag }} />
-          <div class="flex flex-wrap items-center gap-2 pb-2">
-            <LangFilter lang={lang} path={path} current={data.filter} tag={data.tag} variant="segmented" />
-            <TagFilter lang={lang} path={path} tags={data.tags} current={data.tag} filter={data.filter} />
-          </div>
-        </div>
-        {data.page.data.length === 0 && unrated ? (
-          <div class="flex flex-col items-center gap-4 py-16 text-center">
-            <p class="max-w-prose text-muted-foreground">{t.recommended.empty}</p>
-            <ButtonLink href={localePath(lang, "/")} variant="outline">{t.recommended.latest}</ButtonLink>
-          </div>
-        ) : data.page.data.length === 0 ? (
-          <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
-        ) : (
-          <div class="divide-y" data-entry-stream>
-            {data.page.data.map((entry) => (
-              <EntryItem lang={lang} entry={entry} tagNames={names} />
-            ))}
-          </div>
-        )}
-        {older && (
-          <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
-            <ButtonLink
-              href={older}
-              variant="outline"
-              data-load-more-btn
-              data-label-older={t.home.older}
-              data-label-loading={t.home.loading}
-              data-label-retry={t.home.retry}
-            >
-              <span data-load-more-text>{t.home.older}</span>
-            </ButtonLink>
-            <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
-          </div>
-        )}
-      </>
+        <StreamSidebar lang={lang} stream={stream} path={path} filter={data.filter} tag={data.tag} tags={data.tags} newBlogs={data.newBlogs} />
+      </div>
     ) : (
       <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
     )

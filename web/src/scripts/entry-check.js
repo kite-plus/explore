@@ -22,7 +22,7 @@
     button.hidden = true;
     result.classList.remove("hidden");
     result.classList.add("inline-flex", `entry-status-${status}`);
-    if (status !== "available") result.classList.add("px-2", "py-0.5");
+    if (status === "unavailable") result.classList.add("px-2", "py-0.5");
     result.title = description;
     result.querySelector(`[data-link-icon="${status}"]`).classList.remove("hidden");
     const text = result.querySelector("[data-link-label]");

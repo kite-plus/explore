@@ -45,10 +45,9 @@
     color: var(--destructive);
     background-color: color-mix(in srgb, currentColor 10%, transparent);
   }
+  /* Most links are still to be checked; that is no news, so it stays quiet. */
   .entry-status-unknown {
-    color: oklch(0.5 0.12 75);
-    color: light-dark(oklch(0.5 0.12 75), oklch(0.79 0.12 75));
-    background-color: color-mix(in srgb, currentColor 10%, transparent);
+    color: var(--muted-foreground);
   }
   .entry-check-button {
     display: none;

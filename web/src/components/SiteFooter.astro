@@ -8,18 +8,19 @@ interface Props {
   lang: Lang;
   path: string;
   bilingual: boolean;
+  wide?: boolean;
 }
 
 // The language switch and the theme toggle sit here rather than in the
 // header: every page has them, few readers need them.
-const { lang, path, bilingual } = Astro.props;
+const { lang, path, bilingual, wide = false } = Astro.props;
 const all = dict(lang);
 const t = all.footer;
 const switchTo = other(lang);
 ---
 
 <footer class="border-t">
-  <div class="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground sm:px-6">
+  <div class:list={["mx-auto flex w-full flex-col gap-3 px-4 py-6 text-sm text-muted-foreground sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
     <p>{t.note}</p>
     <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
       <nav class="flex flex-wrap gap-x-4 gap-y-1">

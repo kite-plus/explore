@@ -1,0 +1,69 @@
+---
+import EntryItem from "@/components/EntryItem.astro";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, type Lang } from "@/i18n";
+import { dayHeading, dayKey } from "@/lib/format";
+import type { Entry } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  entries: Entry[];
+  tagNames: Record<string, string>;
+  tagPath: string;
+  /** The next page's address, when there is one. */
+  older?: string | false | null;
+}
+
+// Posts grouped by the day they were published, in the page's time zone
+// (lib/format.ts). The stream script drops a group's heading when the next
+// page starts on the day this one ended with. Today's posts say how long ago
+// they came out; older ones give the time of day, as their heading has the
+// date.
+const { lang, entries, tagNames, tagPath, older } = Astro.props;
+const t = dict(lang);
+const words = { today: t.home.today, yesterday: t.home.yesterday };
+const today = dayKey(new Date().toISOString(), lang);
+const groups: { key: string; entries: Entry[] }[] = [];
+for (const entry of entries) {
+  const key = entry.published_at ? dayKey(entry.published_at, lang) : "undated";
+  const last = groups.at(-1);
+  if (last?.key === key) last.entries.push(entry);
+  else groups.push({ key, entries: [entry] });
+}
+---
+
+<div data-entry-stream>
+  {
+    groups.map((group) => {
+      const heading = group.key === "undated" ? { name: t.blog.undated, date: undefined } : dayHeading(group.key, lang, words);
+      return (
+        <>
+          <h2 data-day={group.key} class="flex items-baseline gap-2 pt-8 pb-1 text-sm font-semibold first:pt-5">
+            {heading.name}
+            {heading.date && <span class="text-xs font-normal text-muted-foreground">{heading.date}</span>}
+          </h2>
+          {group.entries.map((entry) => (
+            <EntryItem lang={lang} entry={entry} tagNames={tagNames} tagPath={tagPath} time={group.key === today || group.key === "undated" ? "relative" : "clock"} />
+          ))}
+        </>
+      );
+    })
+  }
+</div>
+{
+  older && (
+    <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
+      <ButtonLink
+        href={older}
+        variant="outline"
+        data-load-more-btn
+        data-label-older={t.home.older}
+        data-label-loading={t.home.loading}
+        data-label-retry={t.home.retry}
+      >
+        <span data-load-more-text>{t.home.older}</span>
+      </ButtonLink>
+      <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
+    </div>
+  )
+}

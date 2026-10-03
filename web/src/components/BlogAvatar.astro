@@ -5,11 +5,10 @@ import { cn } from "@/lib/utils";
 interface Props {
   host: string;
   name: string;
-  size?: "sm" | "lg";
+  size?: "sm" | "md" | "lg";
 }
 
 const { host, name, size = "sm" } = Astro.props;
-const large = size === "lg";
 ---
 
 <span
@@ -17,7 +16,7 @@ const large = size === "lg";
   class={cn(
     "group/avatar relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white",
     avatarColor(host),
-    large ? "size-12 text-xl" : "size-5 text-[0.65rem]",
+    { sm: "size-5 text-[0.65rem]", md: "size-8 text-sm", lg: "size-12 text-xl" }[size],
   )}
 >
   <span class="group-[.has-favicon]/avatar:hidden">{initial(name)}</span>
@@ -29,7 +28,7 @@ const large = size === "lg";
     data-blog-favicon
     class={cn(
       "absolute inset-0 size-full object-contain group-[.has-favicon]/avatar:bg-white",
-      large ? "p-1" : "p-0.5",
+      size === "sm" ? "p-0.5" : "p-1",
     )}
   />
 </span>

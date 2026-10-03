@@ -72,8 +72,8 @@ export const api = {
 
   tags: (lang: Lang) => call<{ data: Tag[] }>("/api/v1/tags", { lang }),
 
-  blogs: (lang: Lang, p: { cursor?: string; lang?: string; limit?: number }) =>
-    call<Page<Blog>>(`/api/v1/blogs${query({ cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),
+  blogs: (lang: Lang, p: { order?: "newest"; cursor?: string; lang?: string; limit?: number }) =>
+    call<Page<Blog>>(`/api/v1/blogs${query({ order: p.order, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { lang }),
 
   blog: (lang: Lang, host: string, p: { cursor?: string; limit?: number } = {}) =>
     call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}${query({ cursor: p.cursor, limit: p.limit?.toString() })}`, { lang }),

@@ -212,6 +212,34 @@ describe("content", () => {
     }
   });
 
+  test("the streams group posts by day under a toolbar, with no fixed intro", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<h1 class="sr-only">发现<\/h1>/);
+    assert.doesNotMatch(html, /来自已收录博客的公开订阅源/);
+    assert.match(html, /<h2 data-day="\d{4}-\d{2}-\d{2}"/);
+    const older = (await page("/?cursor=page-two")).html;
+    assert.match(older, /<time datetime="[^"]+">\d{2}:\d{2}<\/time>/, "a dated group gives the time of day");
+  });
+
+  test("the sidebar speaks to the stream and lists the blogs listed last", async () => {
+    const before = stub.state.blogOrders.length;
+    const { html } = await page("/");
+    const aside = html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+    assert.match(aside, /写独立博客？/);
+    assert.match(aside, /href="\/submit"/);
+    assert.match(aside, /href="\/\?tag=backend"/);
+    assert.match(aside, /最近收录/);
+    assert.match(aside, /href="\/blogs\/zh\.example\.com"/);
+    assert.ok(stub.state.blogOrders.slice(before).includes("newest"));
+
+    const recommended = (await page("/recommended")).html;
+    assert.match(recommended.slice(recommended.indexOf("<aside")), /推荐是怎么来的/);
+    assert.match(recommended, /href="\/recommended\?tag=backend"/, "tags stay on the stream");
+
+    const older = (await page("/?cursor=page-two")).html;
+    assert.doesNotMatch(older, /最近收录/, "a later page does without the sidebar's blogs");
+  });
+
   test("entries keep their own language and link to the original", async () => {
     const { html } = await page("/en/");
     assert.match(html, /<article class="[^"]*" lang="zh-CN">/);
