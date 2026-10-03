@@ -1,18 +1,16 @@
 ---
 import Logo from "@/components/Logo.astro";
-import { AccountNav } from "@/components/reader/AccountNav";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { AccountMenu } from "@/components/reader/AccountMenu";
 
-import { dict, localePath, other, type Lang } from "@/i18n";
+import { dict, localePath, type Lang } from "@/i18n";
 
 interface Props {
   lang: Lang;
   path: string;
-  bilingual: boolean;
   wide?: boolean;
 }
 
-const { lang, path, bilingual, wide = false } = Astro.props;
+const { lang, path, wide = false } = Astro.props;
 const t = dict(lang);
 // The three post streams are tabs on their pages (StreamTabs), so one item
 // stands for all of them.
@@ -22,7 +20,6 @@ const links = [
   { href: localePath(lang, "/submit"), label: t.nav.submit, current: path === "/submit" },
   { href: localePath(lang, "/about"), label: t.nav.about, current: path === "/about" },
 ];
-const switchTo = other(lang);
 ---
 
 <header class="border-b">
@@ -44,29 +41,6 @@ const switchTo = other(lang);
         ))
       }
     </nav>
-    <AccountNav client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
-    <a
-      href={localePath(switchTo, bilingual ? path : "/")}
-      hreflang={switchTo}
-      lang={switchTo === "zh" ? "zh-CN" : "en"}
-      class="text-sm text-muted-foreground hover:text-foreground"
-    >
-      {t.otherLangName}
-    </a>
-    <button
-      type="button"
-      data-theme-toggle
-      data-auto={t.theme.auto}
-      data-dark={t.theme.dark}
-      data-light={t.theme.light}
-      data-switch-to={t.theme.switchTo}
-      aria-label={`${t.theme.auto} · ${t.theme.switchTo}${t.theme.dark}`}
-      title={`${t.theme.auto} · ${t.theme.switchTo}${t.theme.dark}`}
-      class="theme-toggle items-center justify-center rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground active:scale-90"
-    >
-      <Monitor data-theme-icon="auto" className="size-4" aria-hidden="true" />
-      <Moon data-theme-icon="dark" className="size-4" aria-hidden="true" />
-      <Sun data-theme-icon="light" className="size-4" aria-hidden="true" />
-    </button>
+    <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
   </div>
 </header>

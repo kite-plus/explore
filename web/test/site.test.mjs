@@ -558,21 +558,41 @@ describe("reader accounts", () => {
     }
   });
 
-  test("the header names a signed-in reader from the server", async () => {
+  test("the header draws a signed-in reader's menu from the server", async () => {
     const signedIn = await get("/", { headers: { Cookie: "explore_session=test-session" } });
     assert.equal(signedIn.status, 200);
     assert.equal(signedIn.headers.get("cache-control"), "private, no-store", "a page with a name in it is the reader's alone");
     assert.match(signedIn.headers.get("vary") ?? "", /Cookie/);
-    assert.match(await signedIn.text(), /href="\/account">Reader<\/a>/);
+    const html = await signedIn.text();
+    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    assert.match(header, /<summary aria-label="Reader，账号菜单"/);
+    assert.match(header, />R<\/span>/, "the avatar is the name's first letter");
+    assert.match(header, /reader@example\.com/);
+    assert.match(header, /href="\/following"[^>]*>.*订阅流/s);
+    assert.match(header, /href="\/account"[^>]*>.*我的账号/s);
+    assert.match(header, /退出登录/);
+    assert.doesNotMatch(header, /href="\/admin"/, "only admins see the admin link");
+    assert.doesNotMatch(header, /href="\/login"/);
 
     const anonymous = await get("/");
     assert.equal(anonymous.headers.get("cache-control"), "public, max-age=60");
     assert.match(anonymous.headers.get("vary") ?? "", /Cookie/);
-    assert.match(await anonymous.text(), /href="\/login">登录<\/a>/);
+    assert.match(await anonymous.text(), /href="\/login"[^>]*>登录<\/a>/);
 
     const stale = await get("/", { headers: { Cookie: "explore_session=stale" } });
     assert.equal(stale.headers.get("cache-control"), "public, max-age=60");
-    assert.match(await stale.text(), /href="\/login">登录<\/a>/);
+    assert.match(await stale.text(), /href="\/login"[^>]*>登录<\/a>/);
+  });
+
+  test("the language switch and the theme toggle sit in the footer", async () => {
+    for (const [path, switchTo] of [["/blogs", "/en/blogs"], ["/en/blogs", "/blogs"]]) {
+      const { html } = await page(path);
+      const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+      const footer = html.slice(html.indexOf("<footer"), html.indexOf("</footer>"));
+      assert.doesNotMatch(header, /data-theme-toggle|hreflang=/, path);
+      assert.match(footer, /data-theme-toggle/, path);
+      assert.match(footer, new RegExp(`<a href="${switchTo}" hreflang="(zh|en)"`), path);
+    }
   });
 
   test("a signed-in reader skips the sign-in page", async () => {

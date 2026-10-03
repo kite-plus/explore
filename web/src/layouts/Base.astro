@@ -68,12 +68,12 @@ const verification = {
     {verification.google && <meta name="google-site-verification" content={verification.google} />}
   </head>
   <body class="flex min-h-dvh flex-col">
-    <SiteHeader lang={lang} path={path} bilingual={bilingual} wide={wide} />
+    <SiteHeader lang={lang} path={path} wide={wide} />
     <div id="site-notice" hidden class="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"></div>
     <main class:list={["mx-auto w-full flex-1 px-4 py-8 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl", center && "flex flex-col justify-center"]}>
       <slot />
     </main>
-    <SiteFooter lang={lang} />
+    <SiteFooter lang={lang} path={path} bilingual={bilingual} />
     <!-- Bundled rather than inline, so Astro adds it to the CSP. -->
     <script>
       fetch("/api/v1/site-config")

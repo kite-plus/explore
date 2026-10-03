@@ -1,8 +1,12 @@
-export interface ReaderUser {
+/** Who is signed in, as the header shows it. */
+export interface Reader {
   id: string;
   email: string;
   display_name: string;
   is_admin: boolean;
+}
+
+export interface ReaderUser extends Reader {
   csrf_token: string;
 }
 

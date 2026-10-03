@@ -62,7 +62,7 @@ export const api = {
     ),
 
   me: (lang: Lang, cookie: string) =>
-    call<{ display_name: string }>("/api/v1/me", { lang, headers: { Cookie: cookie } }),
+    call<{ id: string; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { lang, headers: { Cookie: cookie } }),
 
   following: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
     call<Page<Entry>>(

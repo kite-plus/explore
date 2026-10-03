@@ -1,6 +1,7 @@
-// Blog avatars are the first letter of the name on a color picked from the
-// host. Fixed classes rather than a computed color keep inline style
-// attributes out of the page, which the CSP would have to allow.
+// Avatars are the first letter of a name on a color picked from a key: a
+// blog's host, or a reader's account id. Fixed classes rather than a computed
+// color keep inline style attributes out of the page, which the CSP would
+// have to allow.
 const palette = [
   "bg-rose-600",
   "bg-orange-600",
@@ -14,9 +15,9 @@ const palette = [
   "bg-slate-600",
 ];
 
-export function avatarColor(host: string): string {
+export function avatarColor(key: string): string {
   let h = 0;
-  for (const ch of host) {
+  for (const ch of key) {
     h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
   }
   return palette[h % palette.length];
