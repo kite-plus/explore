@@ -8,9 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-04
+
+A small release for sites behind a CDN and for the submit page: behind Cloudflare, rate limits can count readers instead of Cloudflare's addresses, and a blog that fails the check is told what to fix instead of shown a bare code.
+
 ### Added
 
-- Explore can run behind a CDN such as Cloudflare without its rate limits counting the CDN instead of readers: list the CDN's address ranges in `EXPLORE_CDN_RANGES`, and Caddy takes the reader's address from the `X-Forwarded-For` the CDN sends, ignoring whatever a reader wrote there. `.env.example` carries Cloudflare's ranges ready to uncomment.
+- Explore can run behind a CDN such as Cloudflare without its rate limits counting the CDN instead of readers: list the CDN's address ranges in `EXPLORE_CDN_RANGES`, and Caddy takes the reader's address from the `X-Forwarded-For` the CDN sends, ignoring whatever a reader wrote there. `.env.example` carries Cloudflare's ranges ready to uncomment. It needs this version's `docker-compose.yaml` and `Caddyfile`: fetch them again as in the README's first step, then set the variable in `.env`.
 
 ### Fixed
 

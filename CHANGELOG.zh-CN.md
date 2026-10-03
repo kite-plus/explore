@@ -8,9 +8,13 @@
 
 ## [未发布]
 
+## [0.1.7] - 2026-10-04
+
+这是个小版本，照顾放在 CDN 后面的站点和提交页：在 Cloudflare 后面运行时，限流可以按读者计数，不再按 Cloudflare 的地址；博客没通过检查时，提交页会说明该怎么改，不再只显示一个代码。
+
 ### 新增
 
-- Explore 可以放在 Cloudflare 这类 CDN 后面，限流不会再把 CDN 当成读者：把 CDN 的地址段写进 `EXPLORE_CDN_RANGES`，Caddy 就从 CDN 传来的 `X-Forwarded-For` 里取读者的地址，读者自己写进去的值不起作用。`.env.example` 里已经写好 Cloudflare 的地址段，取消注释即可。
+- Explore 可以放在 Cloudflare 这类 CDN 后面，限流不会再把 CDN 当成读者：把 CDN 的地址段写进 `EXPLORE_CDN_RANGES`，Caddy 就从 CDN 传来的 `X-Forwarded-For` 里取读者的地址，读者自己写进去的值不起作用。`.env.example` 里已经写好 Cloudflare 的地址段，取消注释即可。这需要这个版本的 `docker-compose.yaml` 和 `Caddyfile`：照 README 第一步重新下载这两个文件，再在 `.env` 里设置这个变量。
 
 ### 修复
 
