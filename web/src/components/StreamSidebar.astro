@@ -2,7 +2,7 @@
 import { ArrowRight, ArrowUpRight, PenLine, Rss, Sparkles, Zap } from "lucide-react";
 
 import BlogAvatar from "@/components/BlogAvatar.astro";
-import { TagIcon } from "@/components/TagIcon";
+import TagGrid from "@/components/TagGrid.astro";
 import { ButtonLink } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import type { Blog, Tag } from "@/lib/types";
@@ -26,11 +26,9 @@ const t = dict(lang);
 const s = t.sidebar;
 const base = localePath(lang, path);
 const pingHelp = lang === "zh" ? "/about#发布后更快出现" : "/en/about#appearing-sooner-after-you-publish";
-const tile =
-  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&>svg]:opacity-70 aria-[current=page]:bg-brand/10 aria-[current=page]:font-medium aria-[current=page]:text-brand aria-[current=page]:[&>svg]:opacity-100";
 ---
 
-<aside class="hidden space-y-8 pt-5 lg:sticky lg:top-4 lg:block lg:self-start">
+<aside class="hidden space-y-8 pt-4 lg:sticky lg:top-14 lg:block lg:self-start">
   <section class="rounded-2xl border border-brand/20 bg-linear-to-b from-brand/12 to-brand/2 p-5">
     <div class="flex items-center gap-3">
       <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-brand shadow-xs ring-1 ring-brand/15 [&>svg]:size-4.5">
@@ -78,14 +76,7 @@ const tile =
             </a>
           )}
         </div>
-        <nav aria-label={s.tags} class="mt-2 grid grid-cols-2 gap-0.5">
-          {tags.map((item) => (
-            <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === tag ? "page" : undefined} class={tile} data-swap>
-              <TagIcon slug={item.slug} className="size-4 shrink-0" />
-              <span class="leading-snug">{item.name[lang]}</span>
-            </a>
-          ))}
-        </nav>
+        <TagGrid lang={lang} path={path} tags={tags} current={tag} filter={filter} class="mt-2 grid-cols-2" />
       </section>
     )
   }

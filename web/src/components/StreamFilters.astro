@@ -1,0 +1,60 @@
+---
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
+
+import LangFilter from "@/components/LangFilter.astro";
+import TagGrid from "@/components/TagGrid.astro";
+import { dict, type Lang } from "@/i18n";
+import type { Tag } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  tags: Tag[];
+  /** The filters in use: an article tag and a blog language. */
+  tag?: string;
+  filter?: string;
+}
+
+// The stream filters below the wide layout, as one menu. Phones get a
+// Filter button whose full-width panel holds both filters, dotted while one
+// is in use; the posts behind dim, and a tap there only closes the panel.
+// Mid-size screens keep the language switch in the toolbar, so the menu
+// holds the tags alone. Wide screens list the tags in the sidebar.
+const { lang, path, tags, tag, filter } = Astro.props;
+const t = dict(lang).filter;
+const selected = tags.find((item) => item.slug === tag)?.name[lang] ?? t.all;
+const active = Boolean(tag || filter);
+---
+
+<details data-menu class:list={["group/filters md:relative lg:hidden", tags.length === 0 && "md:hidden"]}>
+  <summary
+    id="stream-filters"
+    class="flex h-8.5 cursor-pointer list-none items-center gap-1.5 rounded-lg border px-2.5 text-sm whitespace-nowrap text-muted-foreground outline-offset-2 hover:bg-accent hover:text-foreground group-open/filters:bg-accent group-open/filters:text-foreground [&::-webkit-details-marker]:hidden"
+  >
+    <span class="relative md:hidden">
+      <SlidersHorizontal className="size-4" aria-hidden="true" />
+      {active && <span class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-brand ring-2 ring-background" />}
+    </span>
+    <span class="md:hidden">{t.button}{active && <span class="sr-only">{t.active}</span>}</span>
+    <span class="hidden md:inline">{t.tags}</span>
+    <span class="hidden max-w-24 truncate font-medium text-foreground md:inline">{selected}</span>
+    <ChevronDown className="hidden size-3.5 transition-transform group-open/filters:rotate-180 md:block" aria-hidden="true" />
+  </summary>
+  <div data-menu-backdrop class="absolute inset-x-0 top-[calc(100%+1px)] z-20 h-dvh bg-black/25 md:hidden dark:bg-black/50"></div>
+  <div
+    class="absolute inset-x-0 top-[calc(100%+1px)] z-20 max-h-[calc(100dvh-7rem)] overflow-y-auto border-b bg-background px-4 pt-4 pb-5 shadow-lg sm:px-6 md:inset-x-auto md:top-full md:right-0 md:mt-2 md:w-72 md:rounded-lg md:border md:p-2"
+  >
+    <section class="md:hidden">
+      <h2 class="mb-2 text-xs font-medium text-muted-foreground">{t.label}</h2>
+      <LangFilter lang={lang} path={path} current={filter} tag={tag} />
+    </section>
+    {
+      tags.length > 0 && (
+        <section class="mt-5 md:mt-0">
+          <h2 class="mb-2 text-xs font-medium text-muted-foreground md:hidden">{t.tags}</h2>
+          <TagGrid lang={lang} path={path} tags={tags} current={tag} filter={filter} all class="grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-2" />
+        </section>
+      )
+    }
+  </div>
+</details>

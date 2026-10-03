@@ -24,7 +24,7 @@ const older =
   withQuery(localePath(lang, "/following"), { cursor: data.page.next_cursor, lang: data.filter, tag: data.tag });
 ---
 
-<Base lang={lang} title={t.home.subscriptions} description={t.home.subscriptions} path="/following" noindex entryChecks wide>
+<Base lang={lang} title={t.home.subscriptions} description={t.home.subscriptions} path="/following" noindex entryChecks wide flush={Boolean(data)}>
   {
     data ? (
       <SwapRoot class="lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-12">

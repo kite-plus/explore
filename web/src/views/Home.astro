@@ -39,6 +39,7 @@ const unrated = recommended && !data?.paged && !data?.filter && !data?.tag;
   path={path}
   entryChecks
   wide
+  flush={Boolean(data)}
   noindex={Boolean(data?.paged || data?.filter || data?.tag)}
 >
   {

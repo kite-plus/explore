@@ -1,7 +1,7 @@
 ---
 import LangFilter from "@/components/LangFilter.astro";
+import StreamFilters from "@/components/StreamFilters.astro";
 import StreamTabs from "@/components/StreamTabs.astro";
-import TagFilter from "@/components/TagFilter.astro";
 import type { Lang } from "@/i18n";
 import type { Tag } from "@/lib/types";
 
@@ -14,19 +14,23 @@ interface Props {
   tags: Tag[];
 }
 
-// The streams' tabs and filters, held at the top of the window while the
-// posts scroll by. Wide screens list the tags in the sidebar instead.
+// The streams' tabs and filters in one row of fixed height, held under the
+// header while the posts scroll by. The row sits one pixel over the bottom
+// line, so the current tab's underline covers it.
 const { lang, stream, path, filter, tag, tags } = Astro.props;
 ---
 
-<div class="sticky top-0 z-20 -mx-4 border-b bg-background px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
-  <div class="flex flex-wrap items-end justify-between gap-x-5 pt-2">
+<div
+  data-stream-toolbar
+  class="sticky top-14 z-20 -mx-4 border-b bg-background/85 px-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0"
+>
+  <div class="-mb-px flex h-12 items-stretch justify-between gap-2">
     <StreamTabs lang={lang} current={stream} query={{ lang: filter, tag }} />
-    <div class="flex flex-wrap items-center gap-2 pb-2">
-      <LangFilter lang={lang} path={path} current={filter} tag={tag} />
-      <div class="lg:hidden">
-        <TagFilter lang={lang} path={path} tags={tags} current={tag} filter={filter} />
+    <div class="flex shrink-0 items-center gap-2">
+      <div class="hidden md:block">
+        <LangFilter lang={lang} path={path} current={filter} tag={tag} />
       </div>
+      <StreamFilters lang={lang} path={path} tags={tags} tag={tag} filter={filter} />
     </div>
   </div>
 </div>

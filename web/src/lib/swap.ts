@@ -46,7 +46,7 @@ export async function swap(href: string, { push = true, after }: Options = {}): 
     return;
   }
 
-  const hadFocus = root.contains(document.activeElement);
+  const focused = root.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
   root.replaceWith(next);
   pending = null;
   document.title = doc.title;
@@ -57,14 +57,32 @@ export async function swap(href: string, { push = true, after }: Options = {}): 
     if (fresh) mirror.href = fresh.getAttribute("href") ?? mirror.href;
   }
   if (push) history.pushState({ swap: true }, "", url.href);
-  if (hadFocus) {
-    const here = url.pathname + url.search;
-    next.querySelector<HTMLElement>(`a[aria-current="page"][href="${CSS.escape(here)}"]`)?.focus({ preventScroll: true });
-  }
-  // A reader who had scrolled down the old list starts the new one at its top.
-  const top = next.getBoundingClientRect().top;
-  if (top < 0) window.scrollBy({ top: top - 16 });
+  if (focused) refocus(next, focused, url);
+  // A reader who had scrolled down the old list starts the new one at its
+  // top, below the header that stays at the top of the window.
+  const header = document.querySelector("body > header")?.getBoundingClientRect().bottom ?? 0;
+  const top = next.getBoundingClientRect().top - header - 16;
+  if (top < 0) window.scrollBy({ top });
   document.dispatchEvent(new CustomEvent("explore:swap"));
+}
+
+// Focus returns to the control that had it: the same element by id, else
+// the chosen link in the same navigation, else in any. Copies hidden at
+// this width cannot take it, and a choice inside a menu, which the new
+// content brings closed, hands it to the menu's button.
+function refocus(next: HTMLElement, focused: HTMLElement, url: URL): void {
+  const chosen = `a[aria-current="page"][href="${CSS.escape(url.pathname + url.search)}"]`;
+  const nav = focused.closest("nav[aria-label]")?.getAttribute("aria-label");
+  const candidates = [
+    ...(focused.id ? next.querySelectorAll<HTMLElement>(`#${CSS.escape(focused.id)}`) : []),
+    ...(nav ? next.querySelectorAll<HTMLElement>(`nav[aria-label="${CSS.escape(nav)}"] ${chosen}`) : []),
+    ...next.querySelectorAll<HTMLElement>(chosen),
+  ];
+  for (const candidate of candidates) {
+    const target = candidate.closest("details:not([open])")?.querySelector("summary") ?? candidate;
+    target.focus({ preventScroll: true });
+    if (document.activeElement === target) return;
+  }
 }
 
 /** listen swaps on plain clicks on a[data-swap], and on back and forward. */
@@ -79,7 +97,14 @@ export function listen(): void {
     const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[data-swap]") : null;
     if (!link) return;
     event.preventDefault();
-    link.closest("details")?.removeAttribute("open");
+    // A choice in a menu closes it at once, and the focus it had goes back
+    // to the menu's button rather than to nowhere.
+    const menu = link.closest("details");
+    if (menu?.open) {
+      const focused = menu.contains(document.activeElement);
+      menu.open = false;
+      if (focused) menu.querySelector("summary")?.focus();
+    }
     void swap(link.href);
   });
   addEventListener("popstate", (event) => {

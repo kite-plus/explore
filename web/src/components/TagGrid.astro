@@ -1,0 +1,49 @@
+---
+import { LayoutGrid } from "lucide-react";
+
+import { TagIcon } from "@/components/TagIcon";
+import { dict, localePath, type Lang } from "@/i18n";
+import type { Tag } from "@/lib/types";
+import { withQuery } from "@/lib/utils";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  tags: Tag[];
+  current?: string;
+  /** The blog-language filter in use, kept when the tag changes. */
+  filter?: string;
+  /** Leads with a tile for all tags. */
+  all?: boolean;
+  /** The columns, as grid classes. */
+  class?: string;
+}
+
+// The tags as tiles of icon and name, each a link that filters the stream
+// in place (lib/swap.ts).
+const { lang, path, tags, current, filter, all = false, class: className } = Astro.props;
+const t = dict(lang).filter;
+const base = localePath(lang, path);
+const tile =
+  "group/tile flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors outline-offset-1 hover:bg-accent hover:text-foreground aria-[current=page]:bg-brand/10 aria-[current=page]:font-medium aria-[current=page]:text-brand";
+const icon = "size-4 shrink-0 opacity-70 group-aria-[current=page]/tile:opacity-100";
+---
+
+<nav aria-label={t.tags} class:list={["grid gap-0.5", className]}>
+  {
+    all && (
+      <a href={withQuery(base, { lang: filter })} aria-current={current ? undefined : "page"} class={tile} data-swap>
+        <LayoutGrid className={icon} aria-hidden="true" />
+        <span class="leading-snug">{t.all}</span>
+      </a>
+    )
+  }
+  {
+    tags.map((item) => (
+      <a href={withQuery(base, { lang: filter, tag: item.slug })} aria-current={item.slug === current ? "page" : undefined} class={tile} data-swap>
+        <TagIcon slug={item.slug} className={icon} />
+        <span class="leading-snug">{item.name[lang]}</span>
+      </a>
+    ))
+  }
+</nav>

@@ -9,7 +9,7 @@ export const en: Dict = {
     name: "Explore",
     description: "New posts from the public feeds of independent blogs. Every link takes you to the author's own site.",
   },
-  nav: { home: "Discover", blogs: "Blogs", submit: "Submit a blog", about: "About" },
+  nav: { home: "Discover", blogs: "Blogs", submit: "Submit a blog", about: "About", label: "Site", menu: "Menu" },
   theme: { auto: "Automatic mode", dark: "Dark mode", light: "Light mode", switchTo: "Switch to " },
   newTab: " (opens in a new tab)",
   entryStatus: {
@@ -25,7 +25,7 @@ export const en: Dict = {
     checkedAt: (when: string) => `checked ${when}`,
     hint: "Checked by Explore; your browser may get a different result.",
   },
-  filter: { label: "Blog language", tags: "Tags", all: "All", zh: "Chinese", en: "English" },
+  filter: { label: "Blog language", tags: "Tags", all: "All", zh: "Chinese", en: "English", button: "Filter", active: " (in use)" },
   home: {
     title: "New posts from independent blogs",
     heading: "Discover",

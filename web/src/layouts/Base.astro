@@ -23,9 +23,12 @@ interface Props {
   wide?: boolean;
   /** Centers the content vertically between the header and the footer. */
   center?: boolean;
+  /** The page starts with a bar of its own right under the header. */
+  flush?: boolean;
 }
 
-const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false, center = false } = Astro.props;
+const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false, center = false, flush = false } =
+  Astro.props;
 const t = dict(lang);
 const base = publicURL();
 const canonical = base + localePath(lang, path);
@@ -70,7 +73,14 @@ const verification = {
   <body class="flex min-h-dvh flex-col">
     <SiteHeader lang={lang} path={path} wide={wide} />
     <div id="site-notice" hidden class="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"></div>
-    <main class:list={["mx-auto w-full flex-1 px-4 py-8 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl", center && "flex flex-col justify-center"]}>
+    <main
+      class:list={[
+        "mx-auto w-full flex-1 px-4 pb-8 sm:px-6",
+        !flush && "pt-8",
+        wide ? "max-w-6xl" : "max-w-3xl",
+        center && "flex flex-col justify-center",
+      ]}
+    >
       <slot />
     </main>
     <SiteFooter lang={lang} path={path} bilingual={bilingual} wide={wide} />
@@ -86,6 +96,24 @@ const verification = {
           }
         })
         .catch(() => {});
+    </script>
+    <script>
+      // A <details data-menu> is a menu: it also closes on a click elsewhere,
+      // on its backdrop if it has one, or on Escape, which <details> alone
+      // does not.
+      document.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        for (const menu of document.querySelectorAll<HTMLDetailsElement>("details[data-menu][open]")) {
+          if (!target || !menu.contains(target) || target.closest("[data-menu-backdrop]")) menu.open = false;
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        for (const menu of document.querySelectorAll<HTMLDetailsElement>("details[data-menu][open]")) {
+          menu.open = false;
+          menu.querySelector("summary")?.focus();
+        }
+      });
     </script>
     {entryChecks && <script is:inline set:html={entryCheckScript} />}
     {entryChecks && <script is:inline set:html={entryStreamScript} />}

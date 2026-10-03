@@ -1,4 +1,6 @@
 ---
+import { CirclePlus, Compass, Info, Library, Menu, X } from "lucide-react";
+
 import Logo from "@/components/Logo.astro";
 import { AccountMenu } from "@/components/reader/AccountMenu";
 
@@ -10,25 +12,28 @@ interface Props {
   wide?: boolean;
 }
 
+// Held at the top of the window on every page. Its height is fixed because
+// the stream toolbar sticks right under it (top-14) and global.css keeps
+// anchors clear of it. Narrow screens fold the links into a menu.
 const { lang, path, wide = false } = Astro.props;
 const t = dict(lang);
 // The three post streams are tabs on their pages (StreamTabs), so one item
 // stands for all of them.
 const links = [
-  { href: localePath(lang, "/"), label: t.nav.home, current: ["/", "/recommended", "/following"].includes(path) },
-  { href: localePath(lang, "/blogs"), label: t.nav.blogs, current: path.startsWith("/blogs") },
-  { href: localePath(lang, "/submit"), label: t.nav.submit, current: path === "/submit" },
-  { href: localePath(lang, "/about"), label: t.nav.about, current: path === "/about" },
+  { href: localePath(lang, "/"), label: t.nav.home, icon: Compass, current: ["/", "/recommended", "/following"].includes(path) },
+  { href: localePath(lang, "/blogs"), label: t.nav.blogs, icon: Library, current: path.startsWith("/blogs") },
+  { href: localePath(lang, "/submit"), label: t.nav.submit, icon: CirclePlus, current: path === "/submit" },
+  { href: localePath(lang, "/about"), label: t.nav.about, icon: Info, current: path === "/about" },
 ];
 ---
 
-<header class="border-b">
-  <div class:list={["mx-auto flex w-full flex-wrap items-center gap-x-4 gap-y-4 px-4 py-4 sm:gap-x-6 sm:gap-y-2 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
-    <a href={localePath(lang, "/")} class="mr-auto inline-flex items-center gap-2 text-lg font-semibold tracking-tight sm:mr-0">
+<header class="sticky top-0 z-30 h-14 border-b bg-background/85 backdrop-blur-md">
+  <div class:list={["mx-auto flex h-full w-full items-center gap-6 px-4 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
+    <a href={localePath(lang, "/")} class="inline-flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
       <Logo class="h-6 w-auto" />
       <span>Explore</span>
     </a>
-    <nav class="order-last flex w-full flex-none flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:order-none sm:w-auto sm:flex-1">
+    <nav aria-label={t.nav.label} class="hidden flex-1 items-center gap-6 text-sm sm:flex">
       {
         links.map((l) => (
           <a
@@ -41,6 +46,31 @@ const links = [
         ))
       }
     </nav>
-    <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
+    <div class="ml-auto flex items-center gap-1.5 sm:ml-0">
+      <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
+      <details data-menu class="group relative sm:hidden">
+        <summary
+          aria-label={t.nav.menu}
+          class="flex size-9 cursor-pointer list-none items-center justify-center rounded-lg text-muted-foreground outline-offset-2 hover:bg-accent hover:text-foreground group-open:bg-accent group-open:text-foreground [&::-webkit-details-marker]:hidden"
+        >
+          <Menu className="size-5 group-open:hidden" aria-hidden="true" />
+          <X className="hidden size-5 group-open:block" aria-hidden="true" />
+        </summary>
+        <nav aria-label={t.nav.label} class="absolute right-0 top-full z-30 mt-2 w-52 rounded-lg border bg-background p-1.5 shadow-lg">
+          {
+            links.map(({ icon: Icon, ...l }) => (
+              <a
+                href={l.href}
+                aria-current={l.current ? "page" : undefined}
+                class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm outline-offset-1 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium"
+              >
+                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                {l.label}
+              </a>
+            ))
+          }
+        </nav>
+      </details>
+    </div>
   </div>
 </header>

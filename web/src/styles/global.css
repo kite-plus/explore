@@ -5,6 +5,18 @@
    the reader's. */
 @source not "../admin";
 
+/* The header stays at the top of the window (SiteHeader.astro), and on the
+   stream pages so does the toolbar under it, so a jump to an anchor or a
+   focused element stops below them. */
+@layer base {
+  html {
+    scroll-padding-top: 4.5rem;
+  }
+  html:has([data-stream-toolbar]) {
+    scroll-padding-top: 7.5rem;
+  }
+}
+
 /* Without light-dark() the pages stay light, so the toggle has nothing to do. */
 @supports not (color: light-dark(white, black)) {
   .theme-toggle {

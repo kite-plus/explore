@@ -159,14 +159,15 @@ describe("search engines", () => {
 describe("content", () => {
   test("the stream tabs lead to latest, recommended and following", async () => {
     const cases = [
-      ["/", "/", ["最新", "推荐", "订阅"]],
-      ["/recommended", "/recommended", ["最新", "推荐", "订阅"]],
-      ["/en/", "/en/", ["Latest", "Recommended", "Following"]],
-      ["/en/recommended", "/en/recommended", ["Latest", "Recommended", "Following"]],
+      ["/", "/", "文章流", ["最新", "推荐", "订阅"]],
+      ["/recommended", "/recommended", "文章流", ["最新", "推荐", "订阅"]],
+      ["/en/", "/en/", "Post feeds", ["Latest", "Recommended", "Following"]],
+      ["/en/recommended", "/en/recommended", "Post feeds", ["Latest", "Recommended", "Following"]],
     ];
-    for (const [path, own, labels] of cases) {
+    for (const [path, own, name, labels] of cases) {
       const { html } = await page(path);
-      const tabs = [...html.matchAll(/<a href="([^"]*)"( aria-current="page")? class="-mb-px[^"]*"[^>]*>([^<]*)<\/a>/g)].map(
+      const nav = html.slice(html.indexOf(`<nav aria-label="${name}"`), html.indexOf("</nav>", html.indexOf(`<nav aria-label="${name}"`)));
+      const tabs = [...nav.matchAll(/<a href="([^"]*)"( aria-current="page")?[^>]*>([^<]*)<\/a>/g)].map(
         ([, href, current, label]) => ({ href, current: Boolean(current), label: label.trim() }),
       );
       assert.deepEqual(tabs.map((tab) => tab.label), labels, path);
@@ -182,6 +183,37 @@ describe("content", () => {
       assert.doesNotMatch(header, /href="(\/en)?\/following"/, "following is a tab, not a nav item");
       assert.match(html, new RegExp(`<h1[^>]*>${label}</h1>`), `${path} keeps the heading`);
     }
+  });
+
+  test("the header stays at the top and folds its links into a menu on phones", async () => {
+    for (const path of ["/", "/about", "/blogs"]) {
+      const { html } = await page(path);
+      const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+      assert.match(header, /^<header class="sticky top-0 [^"]*h-14/, `${path} keeps the header in view`);
+      const menu = header.slice(header.indexOf("<details data-menu"));
+      assert.match(menu, /<summary aria-label="菜单"/, path);
+      for (const href of ["/", "/blogs", "/submit", "/about"]) assert.match(menu, new RegExp(`<a href="${href}"`), `${path} menu links ${href}`);
+    }
+  });
+
+  test("the stream toolbar keeps to one row, its filters in one menu on phones", async () => {
+    const { html } = await page("/");
+    assert.match(html, /<main class="[^"]*pb-8[^"]*">/, "the toolbar starts right under the header");
+    assert.doesNotMatch(html.slice(html.indexOf("<main"), html.indexOf(">", html.indexOf("<main"))), /pt-8/);
+    const toolbar = html.slice(html.indexOf("data-stream-toolbar"), html.indexOf("data-entry-stream"));
+    assert.match(toolbar, /class="sticky top-14 /, "it stays under the header");
+    const menu = toolbar.slice(toolbar.indexOf("<details data-menu"), toolbar.indexOf("</details>"));
+    assert.match(menu, /<span class="md:hidden">筛选<\/span>/, "phones get one Filter button");
+    assert.match(menu, /<nav aria-label="博客语言" data-switch/, "whose panel holds the language switch");
+    assert.match(menu, /<a href="\/" aria-current="page"[^>]*><svg[^>]*>.*?<\/svg><span[^>]*>全部</s, "and the tags, all of them first");
+    assert.match(menu, /<a href="\/\?tag=backend"[^>]*data-swap>/);
+    assert.match(menu, /data-menu-backdrop/, "the posts dim behind it");
+    assert.doesNotMatch(menu, /（已筛选）/, "nothing is filtered yet");
+
+    const filtered = (await page("/?lang=en&tag=backend")).html;
+    const busy = filtered.slice(filtered.indexOf("<details data-menu", filtered.indexOf("data-stream-toolbar")));
+    assert.match(busy.slice(0, busy.indexOf("</summary>")), /筛选<span class="sr-only">（已筛选）<\/span>/, "the button says a filter is in use");
+    assert.match(busy, /<a href="\/\?lang=en&amp;tag=backend" aria-current="page"/, "the panel marks the tag and keeps the language");
   });
 
   test("the footer links the source code with GitHub's mark", async () => {

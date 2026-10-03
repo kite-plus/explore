@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, LogOut, Rss, ShieldCheck, UserRound } from "lucide-react";
 
 import { avatarColor, initial } from "@/lib/avatar";
@@ -11,35 +11,12 @@ import { cn } from "@/lib/utils";
 export function AccountMenu({ lang, reader, checked }: { lang: "zh" | "en"; reader: Reader | null; checked: boolean }) {
   const [user, setUser] = useState<Reader | null>(reader);
   const [leaving, setLeaving] = useState(false);
-  const menu = useRef<HTMLDetailsElement>(null);
   const zh = lang === "zh";
   const prefix = zh ? "" : "/en";
 
   useEffect(() => {
     if (!checked) void currentReader().then(setUser);
   }, [checked]);
-
-  // An open <details> stays open on its own; a click elsewhere or Escape
-  // closes it, as a menu should.
-  useEffect(() => {
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      const details = menu.current;
-      if (!details?.open) return;
-      if (event instanceof KeyboardEvent) {
-        if (event.key !== "Escape") return;
-        details.open = false;
-        details.querySelector("summary")?.focus();
-      } else if (!details.contains(event.target as Node)) {
-        details.open = false;
-      }
-    };
-    document.addEventListener("click", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("click", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, []);
 
   if (!user) {
     return (
@@ -61,7 +38,7 @@ export function AccountMenu({ lang, reader, checked }: { lang: "zh" | "en"; read
 
   const item = "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground outline-offset-1 hover:bg-accent hover:text-accent-foreground [&>svg]:size-4 [&>svg]:text-muted-foreground";
   return (
-    <details ref={menu} className="group relative">
+    <details data-menu="" className="group relative">
       <summary
         aria-label={zh ? `${user.display_name}，账号菜单` : `${user.display_name}, account menu`}
         className="flex cursor-pointer list-none items-center gap-2 rounded-full p-0.5 outline-offset-2 hover:bg-accent sm:pe-2 [&::-webkit-details-marker]:hidden"
