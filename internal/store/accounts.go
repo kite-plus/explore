@@ -168,23 +168,24 @@ func (s *Store) FollowingStream(ctx context.Context, userID string, q StreamQuer
 	if q.Cursor != nil {
 		args["cursor_at"], args["cursor_id"] = q.Cursor.At, q.Cursor.ID
 	}
+	// As in Stream, the page is picked before what readers see is worked out.
 	rows, err := s.pool.Query(ctx, `WITH followed AS (
-		SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, '') AS excerpt,
-			coalesce(`+shownImage+`, '') AS image_url,
-			CASE WHEN e.date_trusted THEN e.published_at END AS published_at,
-			CASE WHEN e.date_trusted THEN e.published_at ELSE 'epoch'::timestamptz END AS sort_at,
-			e.tags, e.link_status, e.link_checked_at, b.host, b.name, b.site_url, b.feed_url, b.language
+		SELECT e.id, CASE WHEN e.date_trusted THEN e.published_at ELSE 'epoch'::timestamptz END AS sort_at
 		FROM subscriptions sub JOIN blogs b ON b.id = sub.blog_id JOIN entries e ON e.blog_id = b.id
 		WHERE sub.user_id = @user_id AND `+visible+`
 		AND `+notSuppressed+`
 		AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
 		AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 		AND (@tag::text = '' OR @tag = ANY(e.tags))
+		), page AS (
+		SELECT id, sort_at FROM followed WHERE NOT @has_cursor OR (sort_at, id) < (@cursor_at, @cursor_id)
+		ORDER BY sort_at DESC, id DESC LIMIT @limit
 		)
-		SELECT id, blog_id, identity, url, title, excerpt, image_url, published_at, tags, link_status,
-			link_checked_at, host, name, site_url, feed_url, language, sort_at
-		FROM followed WHERE NOT @has_cursor OR (sort_at, id) < (@cursor_at, @cursor_id)
-		ORDER BY sort_at DESC, id DESC LIMIT @limit`, args)
+		SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, ''), coalesce(`+shownImage+`, ''),
+			CASE WHEN e.date_trusted THEN e.published_at END,
+			e.tags, e.link_status, e.link_checked_at, b.host, b.name, b.site_url, b.feed_url, b.language, p.sort_at
+		FROM page p JOIN entries e ON e.id = p.id JOIN blogs b ON b.id = e.blog_id
+		ORDER BY p.sort_at DESC, p.id DESC`, args)
 	if err != nil {
 		return nil, err
 	}
