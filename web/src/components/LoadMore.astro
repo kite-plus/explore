@@ -1,0 +1,45 @@
+---
+import { ArrowDown, LoaderCircle } from "lucide-react";
+
+import { dict, type Lang } from "@/i18n";
+
+interface Props {
+  lang: Lang;
+  /** The next page's address; without one, the list has ended. */
+  href?: string | false | null;
+}
+
+// The foot of a list of posts. With a next page it is a link to it, which
+// the stream script (scripts/entry-stream.js) turns into loading in place:
+// it sets aria-busy while a page loads, which swaps the arrow for a spinner,
+// and shows the end line once the last page is in. A list with no next
+// page shows that line from the start.
+const { lang, href } = Astro.props;
+const t = dict(lang).home;
+const end =
+  "flex items-center gap-4 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border";
+---
+
+{
+  href ? (
+    <div class="mt-8 flex flex-col items-center gap-4" data-entry-pagination>
+      <a
+        href={href}
+        data-load-more-btn
+        data-label-older={t.older}
+        data-label-loading={t.loading}
+        data-label-retry={t.retry}
+        class="group/more inline-flex h-10 w-full max-w-xs items-center justify-center gap-2 rounded-full border bg-background text-sm font-medium text-muted-foreground shadow-xs transition-colors outline-offset-2 hover:bg-accent hover:text-foreground aria-busy:cursor-wait aria-busy:text-foreground"
+      >
+        <ArrowDown className="size-4 transition-transform group-hover/more:translate-y-0.5 group-aria-busy/more:hidden" aria-hidden="true" />
+        <LoaderCircle className="hidden size-4 animate-spin group-aria-busy/more:block" aria-hidden="true" />
+        <span data-load-more-text>{t.older}</span>
+      </a>
+      <div data-load-more-end class="hidden w-full">
+        <p class={end}>{t.end}</p>
+      </div>
+    </div>
+  ) : (
+    <p class:list={[end, "mt-8"]}>{t.end}</p>
+  )
+}

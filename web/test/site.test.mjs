@@ -321,6 +321,8 @@ describe("content", () => {
     const tagged = (await page("/?tag=backend")).html;
     assert.match(tagged, /缓存可以随时删掉/);
     assert.doesNotMatch(tagged, /Notes on feeds/, "only entries with the tag");
+    assert.doesNotMatch(tagged, /<a\b[^>]*data-load-more-btn/, "one page holds them all");
+    assert.match(tagged, /已经看完了所有最新文章/, "so the list says it has ended");
     assert.match(tagged, /<a href="\/\?lang=zh&amp;tag=backend"[^>]*>中文<\/a>/);
     assert.match(tagged, /<a href="\/\?tag=backend" aria-current="page"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?后端</s);
     const zh = (await page("/?lang=zh")).html;

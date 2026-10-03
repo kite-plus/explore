@@ -1,6 +1,6 @@
 ---
 import EntryItem from "@/components/EntryItem.astro";
-import { ButtonLink } from "@/components/ui/button";
+import LoadMore from "@/components/LoadMore.astro";
 import { dict, type Lang } from "@/i18n";
 import { dayHeading, dayKey } from "@/lib/format";
 import type { Entry } from "@/lib/types";
@@ -50,20 +50,4 @@ for (const entry of entries) {
     })
   }
 </div>
-{
-  older && (
-    <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
-      <ButtonLink
-        href={older}
-        variant="outline"
-        data-load-more-btn
-        data-label-older={t.home.older}
-        data-label-loading={t.home.loading}
-        data-label-retry={t.home.retry}
-      >
-        <span data-load-more-text>{t.home.older}</span>
-      </ButtonLink>
-      <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
-    </div>
-  )
-}
+<LoadMore lang={lang} href={older} />

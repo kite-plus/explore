@@ -3,10 +3,11 @@ import BlogAvatar from "@/components/BlogAvatar.astro";
 import { SubscribeButton } from "@/components/reader/SubscribeButton";
 import { ReportButton } from "@/components/reader/ReportButton";
 import EntryItem from "@/components/EntryItem.astro";
+import LoadMore from "@/components/LoadMore.astro";
 import ExternalLink from "@/components/ExternalLink.astro";
 import Message from "@/components/Message.astro";
 import { Badge } from "@/components/ui/badge";
-import { ButtonLink, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
 import { withSource } from "@/lib/config";
@@ -71,21 +72,7 @@ const description = data
             ))}
           </div>
         )}
-        {older && (
-          <div class="mt-6 flex flex-col items-start gap-3" data-entry-pagination>
-            <ButtonLink
-              href={older}
-              variant="outline"
-              data-load-more-btn
-              data-label-older={t.home.older}
-              data-label-loading={t.home.loading}
-              data-label-retry={t.home.retry}
-            >
-              <span data-load-more-text>{t.home.older}</span>
-            </ButtonLink>
-            <p data-load-more-end class="hidden text-sm text-muted-foreground">{t.home.end}</p>
-          </div>
-        )}
+        {data.entries.length > 0 && <LoadMore lang={lang} href={older} />}
       </>
     ) : (
       <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "blogNotFound"} />
