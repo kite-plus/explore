@@ -558,6 +558,24 @@ describe("reader accounts", () => {
     }
   });
 
+  test("a signed-in reader skips the sign-in page", async () => {
+    const signedIn = { headers: { Cookie: "explore_session=test-session" } };
+    for (const [path, location] of [
+      ["/login?next=%2Faccount", "/account"],
+      ["/login", "/following"],
+      ["/en/login", "/en/following"],
+      ["/login?next=%2F%2Fevil.example", "/following"],
+      ["/login?next=%2F%5Cevil.example", "/following"],
+      ["/login?next=%2Flogin", "/following"],
+    ]) {
+      const res = await get(path, signedIn);
+      assert.equal(res.status, 302, path);
+      assert.equal(res.headers.get("location"), location, path);
+    }
+    const stale = await get("/login", { headers: { Cookie: "explore_session=stale" } });
+    assert.equal(stale.status, 200, "a session the API no longer knows still gets the form");
+  });
+
   test("following redirects anonymous readers and renders authenticated entries", async () => {
     const anonymous = await get("/following");
     assert.equal(anonymous.status, 302);

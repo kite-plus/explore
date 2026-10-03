@@ -1,9 +1,11 @@
 ---
 import { AuthForm } from "@/components/reader/AuthForm";
 import Base from "@/layouts/Base.astro";
-Astro.response.headers.set("Cache-Control", "private, no-store");
-const next = Astro.url.searchParams.get("next") ?? "/following";
+import { loadLogin } from "@/lib/loaders";
+
+const state = await loadLogin(Astro, "zh");
+if (state instanceof Response) return state;
 ---
 <Base lang="zh" title="登录" description="登录 Explore" path="/login" noindex center>
-  <AuthForm client:load lang="zh" next={next} />
+  <AuthForm client:load lang="zh" next={state.next} />
 </Base>

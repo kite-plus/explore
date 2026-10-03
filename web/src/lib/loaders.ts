@@ -2,6 +2,7 @@ import type { AstroGlobal } from "astro";
 
 import { dict, localePath, type Lang } from "@/i18n";
 import { api } from "@/lib/api";
+import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
 import type { BlogPage, Blog, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
 
@@ -66,6 +67,19 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
   if (r.kind === "unavailable") return unavailable(ctx);
   if (r.kind !== "ok") return notFound(ctx);
   return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor) } };
+}
+
+/**
+ * loadLogin sends a reader who is signed in already on to where they were
+ * going. Anonymous readers carry no cookie at all, so asking costs them
+ * nothing.
+ */
+export async function loadLogin(ctx: AstroGlobal, lang: Lang): Promise<{ next: string } | Response> {
+  cacheControl(ctx, "private, no-store");
+  const next = safeNext(param(ctx, "next"), localePath(lang, "/following"));
+  const cookie = ctx.request.headers.get("cookie");
+  if (cookie && (await api.me(lang, cookie)).kind === "ok") return ctx.redirect(next, 302);
+  return { next };
 }
 
 export interface DirectoryPage {

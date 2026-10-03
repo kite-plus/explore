@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { safeNext } from "@/lib/next";
 import { readerRequest, type ReaderUser } from "@/lib/reader-api";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -73,8 +74,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
         headers: { "Accept-Language": zh ? "zh-CN" : "en" },
         body: JSON.stringify({ email: email.trim(), password, ...(register ? { display_name: name.trim() } : {}) }),
       });
-      const fallback = zh ? "/following" : "/en/following";
-      window.location.assign(next.startsWith("/") && !next.startsWith("//") ? next : fallback);
+      window.location.assign(safeNext(next, zh ? "/following" : "/en/following"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : zh ? "暂时无法登录，请重试。" : "Unable to sign in. Please try again.");
     } finally {

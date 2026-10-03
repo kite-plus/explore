@@ -61,6 +61,9 @@ export const api = {
       { lang },
     ),
 
+  me: (lang: Lang, cookie: string) =>
+    call<{ display_name: string }>("/api/v1/me", { lang, headers: { Cookie: cookie } }),
+
   following: (lang: Lang, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
     call<Page<Entry>>(
       `/api/v1/me/entries${query({ cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
