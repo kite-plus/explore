@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-04
+
+A small fix: the blog system Explore found on a blog's pages when listing it, such as Astro or Kite, is no longer reset to unknown by later fetches.
+
 ### Fixed
 
 - A blog whose feed does not name the system that made it lost the one its pages named when it was listed: every fetch set it back to unknown. Only a feed that names a system changes it now.
