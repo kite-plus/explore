@@ -23,7 +23,7 @@ const { lang, stream, path, filter, tag, tags } = Astro.props;
   <div class="flex flex-wrap items-end justify-between gap-x-5 pt-2">
     <StreamTabs lang={lang} current={stream} query={{ lang: filter, tag }} />
     <div class="flex flex-wrap items-center gap-2 pb-2">
-      <LangFilter lang={lang} path={path} current={filter} tag={tag} variant="segmented" />
+      <LangFilter lang={lang} path={path} current={filter} tag={tag} />
       <div class="lg:hidden">
         <TagFilter lang={lang} path={path} tags={tags} current={tag} filter={filter} />
       </div>

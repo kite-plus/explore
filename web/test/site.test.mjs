@@ -327,6 +327,13 @@ describe("content", () => {
     assert.match(zh, /<a href="\/\?lang=zh&amp;tag=life"[^>]*><svg[^>]*>.*?<\/svg>(<span[^>]*>)?生活随笔</s);
   });
 
+  test("the blog language is a switch whose thumb starts under the current choice", async () => {
+    for (const [path, current] of [["/", "0"], ["/?lang=zh", "1"], ["/?lang=en", "2"], ["/blogs?lang=en", "2"]]) {
+      const { html } = await page(path);
+      assert.match(html, new RegExp(`<nav aria-label="博客语言" data-switch data-current="${current}"`), path);
+    }
+  });
+
   test("the tag list is asked for once, not on every page", async () => {
     await page("/");
     const before = stub.state.tagLists;
