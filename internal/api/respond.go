@@ -43,6 +43,7 @@ const (
 	codeKeepAdmin          = "keep_admin"
 	codeAccountDisabled    = "account_disabled"
 	codeOwnAccount         = "own_account"
+	codeEmailTaken         = "email_taken"
 	codeWrongPassword      = "wrong_password"
 )
 
@@ -70,6 +71,7 @@ var messages = map[string]struct{ en, zh string }{
 	codeKeepAdmin:          {"This is the only active admin. Give admin access to another account first.", "这是唯一可用的管理员，请先把后台权限交给另一个账号。"},
 	codeAccountDisabled:    {"This account is disabled; restore it first.", "这个账号已停用，请先恢复。"},
 	codeOwnAccount:         {"You cannot do this to your own account.", "不能对自己的账号执行这个操作。"},
+	codeEmailTaken:         {"Another account already uses this email.", "这个邮箱已被其他账号使用。"},
 }
 
 type errorBody struct {
@@ -122,6 +124,8 @@ func (s *Server) storeError(c *gin.Context, err error) {
 		s.fail(c, http.StatusConflict, codeKeepAdmin)
 	case errors.Is(err, store.ErrUserDisabled):
 		s.fail(c, http.StatusConflict, codeAccountDisabled)
+	case errors.Is(err, store.ErrEmailTaken):
+		s.fail(c, http.StatusConflict, codeEmailTaken)
 	default:
 		s.Log.Error("store", "route", c.FullPath(), "error", err)
 		s.fail(c, http.StatusInternalServerError, codeInternal)

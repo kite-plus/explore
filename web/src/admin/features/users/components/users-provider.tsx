@@ -3,7 +3,15 @@ import { useAuth } from '@/admin/context/auth-provider'
 import { useNavigate, useSearch } from '@/admin/router'
 import type { AdminUserRow } from '@/lib/admin-types'
 
-export type UsersDialogType = 'disable' | 'restore' | 'admin' | 'rename' | 'sign-out' | 'delete' | 'release'
+export type UsersDialogType =
+  | 'disable'
+  | 'restore'
+  | 'admin'
+  | 'edit'
+  | 'reset-password'
+  | 'sign-out'
+  | 'delete'
+  | 'release'
 
 type UsersContextType = {
   open: UsersDialogType | null

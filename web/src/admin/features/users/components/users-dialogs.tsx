@@ -8,7 +8,8 @@ import type { AdminUserRow } from '@/lib/admin-types'
 import { useUserActions } from '../api'
 import { adminCopy } from '../data/data'
 import { DisableDialog } from './disable-dialog'
-import { RenameDialog } from './rename-dialog'
+import { EditDialog } from './edit-dialog'
+import { ResetPasswordDialog } from './reset-password-dialog'
 import { UserDetailDrawer } from './user-detail-drawer'
 import { useUsers } from './users-provider'
 
@@ -75,7 +76,13 @@ export function UsersDialogs() {
       {user && (
         <>
           <DisableDialog open={open === 'disable'} onOpenChange={(state) => !state && close()} users={targets} onDone={done} />
-          <RenameDialog open={open === 'rename'} onOpenChange={(state) => !state && close()} user={user} onDone={done} />
+          <EditDialog open={open === 'edit'} onOpenChange={(state) => !state && close()} user={user} onDone={done} />
+          <ResetPasswordDialog
+            open={open === 'reset-password'}
+            onOpenChange={(state) => !state && close()}
+            user={user}
+            onDone={done}
+          />
           {confirm('restore', {
             title: targets.length === 1 ? '恢复账号' : `恢复 ${targets.length} 个账号`,
             desc: <>{who(targets)}<br />恢复后可以重新登录，停用原因会被清除。</>,

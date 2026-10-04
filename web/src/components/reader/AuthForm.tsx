@@ -69,12 +69,15 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
     setBusy(true);
     setError("");
     try {
-      await readerRequest<ReaderUser>("auth/" + (register ? "register" : "login"), {
+      const account = await readerRequest<ReaderUser>("auth/" + (register ? "register" : "login"), {
         method: "POST",
         headers: { "Accept-Language": zh ? "zh-CN" : "en" },
         body: JSON.stringify({ email: email.trim(), password, ...(register ? { display_name: name.trim() } : {}) }),
       });
-      window.location.assign(safeNext(next, zh ? "/following" : "/en/following"));
+      // A password an admin reset is changed first, before going on.
+      window.location.assign(account.temporary_password
+        ? (zh ? "/account#password" : "/en/account#password")
+        : safeNext(next, zh ? "/following" : "/en/following"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : zh ? "暂时无法登录，请重试。" : "Unable to sign in. Please try again.");
     } finally {

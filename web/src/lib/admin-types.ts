@@ -155,6 +155,9 @@ export interface AdminUserRow {
   disabled_by: string;
   created_at: string;
   last_seen_at: string | null;
+  /** Set while a password an admin reset is unchanged by the account's owner. */
+  password_reset_at: string | null;
+  password_reset_by: string;
   subscription_count: number;
   owned_blog_count: number;
 }

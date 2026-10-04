@@ -61,11 +61,11 @@ export function startStub() {
 
     if (url.pathname === "/api/v1/auth/login" && req.method === "POST") {
       res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=test-session; Path=/; HttpOnly; SameSite=Lax" });
-      return res.end(JSON.stringify({ id: "reader", number: 2, created_at: "2026-09-05T02:47:00Z", email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" }));
+      return res.end(JSON.stringify({ id: "reader", number: 2, created_at: "2026-09-05T02:47:00Z", temporary_password: false, email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" }));
     }
     if (url.pathname === "/api/v1/me" && req.method === "GET") {
       if (req.headers.cookie !== "explore_session=test-session") return error(401, "unauthorized");
-      return send(200, { id: "reader", number: 2, created_at: "2026-09-05T02:47:00Z", email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" });
+      return send(200, { id: "reader", number: 2, created_at: "2026-09-05T02:47:00Z", temporary_password: false, email: "reader@example.com", display_name: "Reader", is_admin: false, csrf_token: "test-csrf" });
     }
     if (url.pathname === "/api/v1/me" && req.method === "DELETE") {
       if (req.headers.cookie !== "explore_session=test-session" || req.headers["x-csrf-token"] !== "test-csrf") {
@@ -97,7 +97,7 @@ export function startStub() {
       if (url.pathname === "/api/v1/setup" && req.method === "GET") return send(200, { required: true, min_password_length: 12 });
       if (url.pathname === "/api/v1/setup" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=admin-session; Path=/; HttpOnly; SameSite=Lax" });
-        return res.end(JSON.stringify({ id: "owner", number: 1, created_at: "2026-08-26T02:47:00Z", email: "owner@example.com", display_name: "Owner", is_admin: true, csrf_token: "admin-csrf" }));
+        return res.end(JSON.stringify({ id: "owner", number: 1, created_at: "2026-08-26T02:47:00Z", temporary_password: false, email: "owner@example.com", display_name: "Owner", is_admin: true, csrf_token: "admin-csrf" }));
       }
       return error(404, "not_found");
     }

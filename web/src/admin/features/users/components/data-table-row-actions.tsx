@@ -1,4 +1,4 @@
-import { Ban, Eye, LogOut, MoreHorizontal, Pencil, RotateCcw, ShieldCheck, ShieldOff, Trash2 } from 'lucide-react'
+import { Ban, Eye, KeyRound, LogOut, MoreHorizontal, Pencil, RotateCcw, ShieldCheck, ShieldOff, Trash2 } from 'lucide-react'
 import { Button } from '@/admin/components/ui/button'
 import {
   DropdownMenu,
@@ -29,14 +29,20 @@ export function UserActionsMenu({ user, children }: { user: AdminUserRow; childr
             </DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={() => act('rename', [user])}>
-          修改名称
+        <DropdownMenuItem onClick={() => act('edit', [user])}>
+          编辑资料
           <DropdownMenuShortcut>
             <Pencil size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         {!self && (
           <>
+            <DropdownMenuItem onClick={() => act('reset-password', [user])}>
+              重置密码
+              <DropdownMenuShortcut>
+                <KeyRound size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
             <DropdownMenuItem disabled={disabled} onClick={() => act('admin', [user])}>
               {user.is_admin ? '取消后台权限' : '授予后台权限'}
               <DropdownMenuShortcut>

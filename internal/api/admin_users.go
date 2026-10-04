@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/kite-plus/explore/internal/store"
 )
@@ -47,48 +48,88 @@ func (s *Server) ownAccount(c *gin.Context) bool {
 	return true
 }
 
-// adminUpdateUser changes one thing per request: disabled (with a reason when
-// disabling), is_admin or display_name.
+// adminUpdateUser changes either the profile (display_name, email or both)
+// or exactly one of disabled (with a reason when disabling) and is_admin.
 func (s *Server) adminUpdateUser(c *gin.Context) {
 	var body struct {
 		Disabled    *bool   `json:"disabled"`
 		Reason      string  `json:"reason"`
 		IsAdmin     *bool   `json:"is_admin"`
 		DisplayName *string `json:"display_name"`
+		Email       *string `json:"email"`
 	}
 	if c.ShouldBindJSON(&body) != nil {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	fields := 0
-	for _, set := range []bool{body.Disabled != nil, body.IsAdmin != nil, body.DisplayName != nil} {
+	profile := body.DisplayName != nil || body.Email != nil
+	switches := 0
+	for _, set := range []bool{body.Disabled != nil, body.IsAdmin != nil} {
 		if set {
-			fields++
+			switches++
 		}
 	}
 	reason := strings.TrimSpace(body.Reason)
-	if fields != 1 || (body.Disabled != nil && *body.Disabled && (reason == "" || utf8.RuneCountInString(reason) > 500)) {
+	if (profile && switches > 0) || (!profile && switches != 1) ||
+		(body.Disabled != nil && *body.Disabled && (reason == "" || utf8.RuneCountInString(reason) > 500)) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	if body.DisplayName == nil && s.ownAccount(c) {
+	if !profile && s.ownAccount(c) {
 		return
 	}
 	var err error
 	switch {
-	case body.DisplayName != nil:
-		name := strings.TrimSpace(*body.DisplayName)
-		if n := utf8.RuneCountInString(name); n < 1 || n > 80 {
-			s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-			return
+	case profile:
+		var name, email *string
+		if body.DisplayName != nil {
+			n := strings.TrimSpace(*body.DisplayName)
+			if runes := utf8.RuneCountInString(n); runes < 1 || runes > 80 {
+				s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+				return
+			}
+			name = &n
 		}
-		err = s.Store.RenameUser(c.Request.Context(), c.Param("id"), name)
+		if body.Email != nil {
+			e := validEmail(*body.Email)
+			if e == "" {
+				s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+				return
+			}
+			email = &e
+		}
+		err = s.Store.UpdateUserProfile(c.Request.Context(), c.Param("id"), name, email)
 	case body.Disabled != nil:
 		err = s.Store.SetUserDisabled(c.Request.Context(), c.Param("id"), *body.Disabled, reason, reviewer(c))
 	default:
 		err = s.Store.SetUserAdminByID(c.Request.Context(), c.Param("id"), *body.IsAdmin)
 	}
 	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// adminResetPassword sets a password the admin passes on to the account's
+// owner, for someone who cannot sign in; there is no self-service reset.
+func (s *Server) adminResetPassword(c *gin.Context) {
+	if s.ownAccount(c) {
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+	}
+	if c.ShouldBindJSON(&body) != nil || len(body.Password) < minPasswordLength || len(body.Password) > maxPasswordLength {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	if err := s.Store.ResetPassword(c.Request.Context(), c.Param("id"), string(hash), reviewer(c)); err != nil {
 		s.storeError(c, err)
 		return
 	}

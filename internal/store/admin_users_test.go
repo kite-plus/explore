@@ -128,7 +128,8 @@ func TestAdminUserDetailAndCleanup(t *testing.T) {
 	if _, err := s.RevokeSessions(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("revoke unknown: %v", err)
 	}
-	if err := s.RenameUser(ctx, u.ID, "Renamed"); err != nil {
+	renamed := "Renamed"
+	if err := s.UpdateUserProfile(ctx, u.ID, &renamed, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -246,5 +247,60 @@ func TestTakenEmailKeepsNumbersConsecutive(t *testing.T) {
 	}
 	if first.CreatedAt.IsZero() || time.Since(first.CreatedAt) > time.Minute {
 		t.Fatalf("created at = %v", first.CreatedAt)
+	}
+}
+
+func TestProfileEditAndPasswordReset(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	u, err := s.CreateUser(ctx, "forgot@example.com", "old-hash", "Forgot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUser(ctx, "taken@example.com", "unused-hash", "Taken"); err != nil {
+		t.Fatal(err)
+	}
+	taken, name, email := "taken@example.com", "Remembered", "remembered@example.com"
+	if err := s.UpdateUserProfile(ctx, u.ID, nil, &taken); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("taken email: %v", err)
+	}
+	if err := s.UpdateUserProfile(ctx, u.ID, &name, &email); err != nil {
+		t.Fatal(err)
+	}
+	if loaded, err := s.UserByEmail(ctx, email); err != nil || loaded.DisplayName != name || loaded.Number != u.Number {
+		t.Fatalf("edited profile: %+v, %v", loaded, err)
+	}
+
+	token := sha256.Sum256([]byte("forgot-session"))
+	if err := s.CreateSession(ctx, u.ID, token, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetPassword(ctx, u.ID, "temporary-hash", "admin@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UserBySession(ctx, token); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("session survived a reset: %v", err)
+	}
+	loaded, err := s.UserByEmail(ctx, email)
+	if err != nil || loaded.PasswordHash != "temporary-hash" || !loaded.TemporaryPassword {
+		t.Fatalf("after reset: %+v, %v", loaded, err)
+	}
+	d, err := s.AdminUserDetail(ctx, u.ID)
+	if err != nil || d.PasswordResetAt == nil || d.PasswordResetBy != "admin@example.com" {
+		t.Fatalf("reset detail: %+v, %v", d, err)
+	}
+
+	if err := s.SetPassword(ctx, u.ID, "own-hash", [sha256.Size]byte{}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = s.UserByEmail(ctx, email)
+	if err != nil || loaded.TemporaryPassword {
+		t.Fatalf("own password still temporary: %+v, %v", loaded, err)
+	}
+	if d, err := s.AdminUserDetail(ctx, u.ID); err != nil || d.PasswordResetAt != nil || d.PasswordResetBy != "" {
+		t.Fatalf("reset marker kept: %+v, %v", d, err)
+	}
+	if err := s.ResetPassword(ctx, "00000000-0000-0000-0000-000000000000", "hash", "admin@example.com"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("reset unknown: %v", err)
 	}
 }

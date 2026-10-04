@@ -13,7 +13,7 @@
 
 - OIDC 尚未接入。接入时使用 Authorization Code + PKCE，并校验 `state`、`nonce`、ID Token 签名、`iss`、`aud` 和有效期。
 - 统一身份键是 `(issuer, subject)`；邮箱、昵称、头像只用于展示。不同客户端的 `sub` 若因 pairwise 配置而不同，须在身份服务中配置一致的关联标识，不能按邮箱推断同一用户。
-- 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或密码重置，部署时应说明这个限制。接入统一身份后，新注册只用 Kite Plus 账号；已有的本站账号保留密码登录，读者用密码登录一次、关联 Kite Plus 账号之后才关掉。账号不按邮箱自动关联，所以不能提前关掉密码登录，否则没关联的账号就再也登不进来。过渡期何时结束、到期仍未关联的账号怎么处理 `[待定]`。
+- 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或自助找回密码，部署时应说明这个限制；忘记密码的读者联系站点，由管理员在后台重置为临时密码，读者登录后在账号页改掉（[admin-operations.md](admin-operations.md#数据与权限边界)）。接入统一身份后，新注册只用 Kite Plus 账号；已有的本站账号保留密码登录，读者用密码登录一次、关联 Kite Plus 账号之后才关掉。账号不按邮箱自动关联，所以不能提前关掉密码登录，否则没关联的账号就再也登不进来。过渡期何时结束、到期仍未关联的账号怎么处理 `[待定]`。
 - OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。接入 OIDC 时 Cookie 改名为 `__Host-explore_session`，防止 `kite.plus` 下的兄弟子域覆盖它（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）；本地 http 开发环境设不了这个前缀，沿用旧名。数据库只存会话令牌哈希，并记下 ID Token 里的 `sid`。退出 Explore 删除本站会话；读者在身份服务退出时，身份服务发来 back-channel logout，Explore 删除同一 `sid` 的会话。
 - 登录回调只建立会话，不直接做订阅等数据变更。登录后跳回本站相对路径，再由读者确认订阅。
 - 管理员是具有 `is_admin` 的本站账号。第一个管理员由安装向导创建（[project-layout.md §10](project-layout.md#10-部署)），之后由已有管理员在后台授予，或由服务器操作者运行 `explore users promote-admin EMAIL`。普通账号不能访问管理接口。
@@ -98,7 +98,7 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | POST | `/api/v1/auth/login` | 邮箱密码登录 |
 | POST | `/api/v1/auth/logout` | 删除 Explore 会话 |
 | GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除账号（唯一可用的管理员除外） |
-| PUT | `/api/v1/me/password` | 验证当前密码后修改密码，撤销其他会话 |
+| PUT | `/api/v1/me/password` | 验证当前密码后修改密码，撤销其他会话，清除管理员重置留下的临时标记；账号页「修改密码」使用 |
 | GET | `/api/v1/me/entries` | 订阅流 |
 | GET | `/api/v1/me/subscriptions` | 订阅列表 |
 | GET | `/api/v1/me/subscriptions.opml` | 导出订阅的 OPML |

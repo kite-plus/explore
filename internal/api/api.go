@@ -132,6 +132,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	admin.GET("/users/:id", s.adminUser)
 	admin.PATCH("/users/:id", s.adminUpdateUser)
 	admin.DELETE("/users/:id", s.adminDeleteUser)
+	admin.PUT("/users/:id/password", s.adminResetPassword)
 	admin.DELETE("/users/:id/sessions", s.adminRevokeSessions)
 	admin.DELETE("/users/:id/blogs/:host", s.adminReleaseBlog)
 	admin.GET("/entries", s.adminEntries)

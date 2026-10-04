@@ -28,14 +28,17 @@ type User struct {
 	IsAdmin      bool
 	Disabled     bool
 	CreatedAt    time.Time
+	// TemporaryPassword is set while an admin-reset password is unchanged.
+	TemporaryPassword bool
 }
 
 // userColumns are what scanUser reads, in order.
-const userColumns = `id::text, number, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL, created_at`
+const userColumns = `id::text, number, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL, created_at,
+	password_reset_at IS NOT NULL`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled, &u.CreatedAt, &u.TemporaryPassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -62,14 +65,14 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
 // minutes, so most requests write nothing.
 func (s *Store) UserBySession(ctx context.Context, tokenHash [sha256.Size]byte) (User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `WITH found AS (
-			SELECT u.id, u.number, u.email, u.password_hash, u.display_name, u.is_admin, u.created_at, u.last_seen_at
+			SELECT u.id, u.number, u.email, u.password_hash, u.display_name, u.is_admin, u.created_at, u.last_seen_at, u.password_reset_at
 			FROM sessions s JOIN users u ON u.id = s.user_id
 			WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL
 		), seen AS (
 			UPDATE users SET last_seen_at = now() FROM found
 			WHERE users.id = found.id AND (found.last_seen_at IS NULL OR found.last_seen_at < now() - interval '5 minutes')
 		)
-		SELECT id::text, number, email, password_hash, display_name, is_admin, false, created_at FROM found`, tokenHash[:]))
+		SELECT id::text, number, email, password_hash, display_name, is_admin, false, created_at, password_reset_at IS NOT NULL FROM found`, tokenHash[:]))
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash [sha256.Size]byte, expires time.Time) error {
@@ -90,10 +93,12 @@ func (s *Store) UpdateUserName(ctx context.Context, userID, displayName string) 
 
 // SetPassword replaces an account's password hash and ends every session of
 // it but the one with the token hash keep, so a changed password locks out
-// whoever else was signed in with the old one.
+// whoever else was signed in with the old one. It also ends a temporary
+// password an admin set.
 func (s *Store) SetPassword(ctx context.Context, userID, passwordHash string, keep [sha256.Size]byte) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id::text = $1`, userID, passwordHash)
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, password_reset_at = NULL, password_reset_by = ''
+			WHERE id::text = $1`, userID, passwordHash)
 		if err != nil {
 			return err
 		}

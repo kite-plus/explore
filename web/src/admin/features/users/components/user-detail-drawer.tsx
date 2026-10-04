@@ -110,6 +110,18 @@ function Overview({ user }: { user: AdminUserDetail }) {
       <dd>{formatDateTime(user.created_at)}</dd>
       <dt className='text-muted-foreground'>最近活跃</dt>
       <dd>{user.last_seen_at ? <TimeAgo iso={user.last_seen_at} /> : '从未'}</dd>
+      {user.password_reset_at && (
+        <>
+          <dt className='text-muted-foreground'>密码</dt>
+          <dd>
+            <span className='text-warning'>临时密码，用户还没改</span>
+            <span className='block text-xs text-muted-foreground'>
+              {formatDateTime(user.password_reset_at)}
+              {user.password_reset_by && ` 由 ${user.password_reset_by} 重置`}
+            </span>
+          </dd>
+        </>
+      )}
       <dt className='text-muted-foreground'>登录会话</dt>
       <dd>
         {user.sessions.length ? (
@@ -238,7 +250,7 @@ function Details({ user }: { user: AdminUserDetail }) {
           </Link>
         )}
       </Section>
-      {self && <Empty>这是你自己的账号：停用、权限和强制下线不能在这里操作，密码请在个人资料页修改。</Empty>}
+      {self && <Empty>这是你自己的账号：停用、权限、强制下线和重置密码不能在这里操作，密码请在个人资料页修改。</Empty>}
     </>
   )
 }

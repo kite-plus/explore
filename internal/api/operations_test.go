@@ -3,6 +3,7 @@ package api_test
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -153,6 +154,46 @@ func TestAdminUsersAPI(t *testing.T) {
 		t.Fatalf("release a blog not owned: %d", got.Code)
 	}
 
+	for body, want := range map[string]int{
+		`{"email":"not-an-email"}`:                               http.StatusBadRequest,
+		`{"email":"` + adminEmail + `"}`:                         http.StatusConflict,
+		`{"display_name":"Reader","disabled":true,"reason":"x"}`: http.StatusBadRequest,
+		`{"display_name":"Reader","email":"Moved@Example.org"}`:  http.StatusNoContent,
+	} {
+		if got := e.do(req{method: http.MethodPatch, path: reader, body: body, admin: true}); got.Code != want {
+			t.Fatalf("%s: %d, want %d: %s", body, got.Code, want, got.Body.String())
+		}
+	}
+	if got := e.do(req{method: http.MethodPut, path: reader + "/password", body: `{"password":"short"}`, admin: true}); got.Code != http.StatusBadRequest {
+		t.Fatalf("short temporary password: %d", got.Code)
+	}
+	if got := e.do(req{method: http.MethodPut, path: reader + "/password", body: `{"password":"temporary-pass-123"}`, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("reset password: %d %s", got.Code, got.Body.String())
+	}
+	if d := decode[struct {
+		PasswordResetBy string `json:"password_reset_by"`
+	}](t, e.do(req{method: http.MethodGet, path: reader, admin: true})); d.PasswordResetBy != adminEmail {
+		t.Fatalf("reset by: %+v", d)
+	}
+	login := e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"moved@example.org","password":"temporary-pass-123"}`})
+	signedIn := decode[struct {
+		CSRFToken         string `json:"csrf_token"`
+		TemporaryPassword bool   `json:"temporary_password"`
+	}](t, login)
+	if login.Code != http.StatusOK || !signedIn.TemporaryPassword {
+		t.Fatalf("sign in with the temporary password: %d %s", login.Code, login.Body.String())
+	}
+	readerAuth := map[string]string{"Cookie": strings.Split(login.Header().Get("Set-Cookie"), ";")[0], "X-CSRF-Token": signedIn.CSRFToken}
+	if got := e.do(req{method: http.MethodPut, path: "/api/v1/me/password", header: readerAuth,
+		body: `{"current_password":"temporary-pass-123","new_password":"only-the-reader-knows"}`}); got.Code != http.StatusNoContent {
+		t.Fatalf("own password: %d %s", got.Code, got.Body.String())
+	}
+	if me := decode[struct {
+		TemporaryPassword bool `json:"temporary_password"`
+	}](t, e.do(req{method: http.MethodGet, path: "/api/v1/me", header: readerAuth})); me.TemporaryPassword {
+		t.Fatal("password still temporary after the reader changed it")
+	}
+
 	self := decode[struct{ Data []userOut }](t, e.do(req{method: http.MethodGet, path: "/api/v1/admin/users?role=admin", admin: true}))
 	if len(self.Data) != 1 {
 		t.Fatalf("admins: %+v", self)
@@ -162,6 +203,7 @@ func TestAdminUsersAPI(t *testing.T) {
 		{method: http.MethodPatch, path: own, body: `{"disabled":true,"reason":"oops"}`},
 		{method: http.MethodPatch, path: own, body: `{"is_admin":false}`},
 		{method: http.MethodDelete, path: own + "/sessions"},
+		{method: http.MethodPut, path: own + "/password", body: `{"password":"temporary-pass-123"}`},
 		{method: http.MethodDelete, path: own},
 	} {
 		r.admin = true

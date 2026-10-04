@@ -40,8 +40,8 @@ export function useUserActions() {
     setAdmin: (user: AdminUserRow, isAdmin: boolean) =>
       run([user], (path) => ({ path, method: 'PATCH', body: { is_admin: isAdmin } }),
         isAdmin ? '已授予后台权限' : '已取消后台权限'),
-    rename: (user: AdminUserRow, displayName: string) =>
-      run([user], (path) => ({ path, method: 'PATCH', body: { display_name: displayName } }), '已修改名称'),
+    resetPassword: (user: AdminUserRow, password: string) =>
+      run([user], (path) => ({ path: `${path}/password`, method: 'PUT', body: { password } }), '密码已重置'),
     signOut: (users: AdminUserRow[]) =>
       run(users, (path) => ({ path: `${path}/sessions`, method: 'DELETE' }), '已强制下线'),
     release: (user: AdminUserRow, host: string) =>

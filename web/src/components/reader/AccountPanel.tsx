@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 
 import { currentReader, readerRequest, type ImportResult, type ReaderBlog, type ReaderUser } from "@/lib/reader-api";
 
@@ -32,6 +32,13 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
     setOwned(blogs.data);
   }
   useEffect(() => { void load().catch(reason => setError(String(reason))); }, []);
+  // The section draws only once the account loads, too late for the browser to follow #password.
+  const loaded = Boolean(user);
+  useEffect(() => {
+    if (!loaded || window.location.hash !== "#password") return;
+    document.getElementById("password")?.scrollIntoView({ block: "start" });
+    document.querySelector<HTMLInputElement>("#password input")?.focus({ preventScroll: true });
+  }, [loaded]);
 
   async function remove(blogHost: string) {
     if (!user) return;
@@ -102,6 +109,9 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       <div><h1 className="text-2xl font-semibold">{zh ? "我的账号" : "My account"}</h1><p className="mt-1 text-sm text-muted-foreground">{user ? `${user.display_name} · ${user.email}` : zh ? "正在读取账号…" : "Loading account…"}</p>{user && <AccountID user={user} zh={zh} />}</div>
       <button type="button" onClick={logout} className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{zh ? "退出登录" : "Sign out"}</button>
     </header>
+    {user?.temporary_password && <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">{zh
+      ? <>你现在用的是管理员帮你重置的临时密码，请到下方<a href="#password" className="font-medium underline">改成只有你知道的密码</a>。</>
+      : <>You are using a temporary password an admin set for you. <a href="#password" className="font-medium underline">Change it to one only you know</a>.</>}</p>}
     {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     <section><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{zh ? "订阅的博客" : "Following"}</h2><a className="text-sm underline" href={`${prefix}/following`}>{zh ? "查看订阅流" : "Open feed"}</a></div>
@@ -132,6 +142,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         {challenge && <div className="mt-4 space-y-2 rounded-md bg-muted p-3 text-sm"><p>{zh ? "TXT 主机名" : "TXT name"}: <code className="break-all">{challenge.record}</code></p><p>{zh ? "TXT 内容" : "TXT value"}: <code className="break-all">{challenge.value}</code></p><button className="mt-2 rounded-md border bg-background px-3 py-2 text-sm" onClick={verifyClaim}>{zh ? "验证并认领" : "Verify and claim"}</button></div>}
       </div>
     </section>
+    {user && <ChangePassword user={user} zh={zh} onChanged={async () => setUser(await currentReader())} />}
     <section className="rounded-lg border border-destructive/30 p-4"><h2 className="text-lg font-semibold">{zh ? "删除账号" : "Delete account"}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{zh ? "账号、登录状态、订阅和认领的博客会被永久删除，无法恢复。你提交过的举报会保留，但不再关联到你的账号。" : "Your account, its sign-ins, follows and claimed blogs are deleted for good. Reports you filed stay, no longer linked to you."}</p>
       {confirming && user ? <div className="mt-4 space-y-3">
@@ -144,6 +155,66 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       </div> : <button type="button" className="mt-4 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" disabled={!user} onClick={() => setConfirming(true)}>{zh ? "删除账号" : "Delete account"}</button>}
     </section>
   </div>;
+}
+
+const MIN_PASSWORD = 12;
+const MAX_PASSWORD_BYTES = 72;
+
+/** Changes the reader's password: other devices are signed out, this one stays. */
+function ChangePassword({ user, zh, onChanged }: { user: ReaderUser; zh: boolean; onChanged: () => Promise<void> }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [changed, setChanged] = useState(false);
+
+  function problem() {
+    if (!current) return zh ? "请输入当前密码。" : "Enter your current password.";
+    if (next.length < MIN_PASSWORD) return zh ? `新密码至少 ${MIN_PASSWORD} 位。` : `The new password needs at least ${MIN_PASSWORD} characters.`;
+    if (new TextEncoder().encode(next).length > MAX_PASSWORD_BYTES) return zh ? "新密码太长了，最多 72 个英文字符或 24 个汉字。" : "The new password is too long: at most 72 bytes.";
+    if (next !== confirm) return zh ? "两次输入的新密码不一致。" : "The new passwords do not match.";
+    return "";
+  }
+
+  const submit: NonNullable<ComponentProps<"form">["onSubmit"]> = async event => {
+    event.preventDefault();
+    setChanged(false);
+    const found = problem();
+    setError(found);
+    if (found || busy) return;
+    setBusy(true);
+    try {
+      await readerRequest("me/password", {
+        method: "PUT",
+        headers: { "Accept-Language": zh ? "zh-CN" : "en" },
+        body: JSON.stringify({ current_password: current, new_password: next }),
+      }, user.csrf_token);
+      setCurrent(""); setNext(""); setConfirm("");
+      setChanged(true);
+      await onChanged();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const input = "w-full rounded-md border bg-background px-3 py-2 text-sm";
+  return <section id="password" className="scroll-mt-24"><h2 className="text-lg font-semibold">{zh ? "修改密码" : "Change password"}</h2>
+    <p className="mt-1 text-sm text-muted-foreground">{zh ? "改完后其他设备上的登录会退出，当前设备保持登录。" : "Other devices are signed out; this one stays signed in."}</p>
+    <form className="mt-4 grid max-w-md gap-3" onSubmit={submit} noValidate>
+      <label className="grid gap-1.5 text-sm">{user.temporary_password ? (zh ? "临时密码" : "Temporary password") : (zh ? "当前密码" : "Current password")}
+        <input className={input} type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} /></label>
+      <label className="grid gap-1.5 text-sm">{zh ? "新密码" : "New password"}
+        <input className={input} type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} placeholder={zh ? `至少 ${MIN_PASSWORD} 位` : `At least ${MIN_PASSWORD} characters`} /></label>
+      <label className="grid gap-1.5 text-sm">{zh ? "再次输入新密码" : "New password again"}
+        <input className={input} type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} /></label>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {changed && <p role="status" className="text-sm text-success">{zh ? "密码已修改，其他设备上的登录已退出。" : "Password changed; other devices were signed out."}</p>}
+      <div><button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={busy}>{busy ? (zh ? "正在修改…" : "Changing…") : (zh ? "修改密码" : "Change password")}</button></div>
+    </form>
+  </section>;
 }
 
 /** The reader's ID, which is their place in sign-up order, and when they joined. */

@@ -21,19 +21,21 @@ type AdminUser struct {
 	DisabledBy        string     `json:"disabled_by"`
 	CreatedAt         time.Time  `json:"created_at"`
 	LastSeenAt        *time.Time `json:"last_seen_at"`
+	PasswordResetAt   *time.Time `json:"password_reset_at"`
+	PasswordResetBy   string     `json:"password_reset_by"`
 	SubscriptionCount int64      `json:"subscription_count"`
 	OwnedBlogCount    int64      `json:"owned_blog_count"`
 }
 
 const adminUserColumns = `u.id::text, u.number, u.email, u.display_name, u.is_admin, u.disabled_at, u.disabled_reason, u.disabled_by,
-	u.created_at, u.last_seen_at,
+	u.created_at, u.last_seen_at, u.password_reset_at, u.password_reset_by,
 	(SELECT count(*) FROM subscriptions WHERE user_id = u.id) AS subscription_count,
 	(SELECT count(*) FROM blog_owners WHERE user_id = u.id) AS owned_blog_count`
 
 func scanAdminUser(row pgx.Row) (AdminUser, error) {
 	var u AdminUser
 	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.DisplayName, &u.IsAdmin, &u.DisabledAt, &u.DisabledReason, &u.DisabledBy,
-		&u.CreatedAt, &u.LastSeenAt, &u.SubscriptionCount, &u.OwnedBlogCount)
+		&u.CreatedAt, &u.LastSeenAt, &u.PasswordResetAt, &u.PasswordResetBy, &u.SubscriptionCount, &u.OwnedBlogCount)
 	return u, err
 }
 
@@ -302,8 +304,17 @@ func (s *Store) SetUserAdminByID(ctx context.Context, id string, admin bool) err
 	})
 }
 
-func (s *Store) RenameUser(ctx context.Context, id, displayName string) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE users SET display_name = $2 WHERE id::text = $1`, id, displayName)
+// ErrEmailTaken refuses an email another account already uses.
+var ErrEmailTaken = errors.New("email is taken")
+
+// UpdateUserProfile changes an account's name, email or both; a nil value
+// leaves that field as it is.
+func (s *Store) UpdateUserProfile(ctx context.Context, id string, displayName, email *string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE users SET display_name = coalesce($2, display_name), email = coalesce($3, email)
+		WHERE id::text = $1`, id, displayName, email)
+	if isUniqueViolation(err) {
+		return ErrEmailTaken
+	}
 	if err != nil {
 		return err
 	}
@@ -311,6 +322,23 @@ func (s *Store) RenameUser(ctx context.Context, id, displayName string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ResetPassword gives an account a password an admin chose, marks it as
+// temporary until the owner changes it, and signs the account out everywhere.
+func (s *Store) ResetPassword(ctx context.Context, id, passwordHash, by string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, password_reset_at = now(), password_reset_by = $3
+			WHERE id::text = $1`, id, passwordHash, by)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id::text = $1`, id)
+		return err
+	})
 }
 
 // RevokeSessions signs an account out everywhere and returns how many live

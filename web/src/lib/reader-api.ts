@@ -4,6 +4,8 @@ export interface Reader {
   /** The ID people see: sign-up order, never changes. `id` is internal. */
   number: number;
   created_at: string;
+  /** The password is one an admin reset, not changed by the reader yet. */
+  temporary_password: boolean;
   email: string;
   display_name: string;
   is_admin: boolean;

@@ -25,7 +25,7 @@
 
 `POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；`POST /api/v1/auth/login` 接收邮箱和密码。成功后都设置本站会话 Cookie 并返回用户资料与 `csrf_token`。`POST /api/v1/auth/logout` 撤销当前会话。
 
-`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、`email`、`display_name`、`is_admin`、`csrf_token`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
+`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、密码是否为管理员重置的临时密码 `temporary_password`、`email`、`display_name`、`is_admin`、`csrf_token`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
 
 `GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`。
 
@@ -285,7 +285,8 @@
 | `last_admin` | 409 | 唯一可用的管理员不能删除自己的账号 |
 | `keep_admin` | 409 | 后台操作会停用或降级最后一名可用的管理员 |
 | `account_disabled` | 409 | 给已停用的账号授予后台权限 |
-| `own_account` | 403 | 管理员在后台停用、降级、强制下线或删除自己的账号 |
+| `own_account` | 403 | 管理员在后台停用、降级、强制下线、重置密码或删除自己的账号 |
+| `email_taken` | 409 | 后台修改账号邮箱时，邮箱已被其他账号使用 |
 | `wrong_password` | 403 | 修改密码时当前密码不正确 |
 | `internal` | 500 | 服务端错误，细节只写日志 |
 
