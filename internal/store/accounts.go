@@ -11,7 +11,13 @@ import (
 	"github.com/kite-plus/explore/internal/policy"
 )
 
-var ErrConflict = errors.New("conflict")
+var (
+	ErrConflict = errors.New("conflict")
+	// ErrLastAdmin refuses a change that would leave no active admin.
+	ErrLastAdmin = errors.New("last active admin")
+	// ErrUserDisabled refuses admin access for a disabled account.
+	ErrUserDisabled = errors.New("account is disabled")
+)
 
 type User struct {
 	ID           string
@@ -44,14 +50,23 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `SELECT id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL FROM users WHERE email = $1`, email))
 }
 
+// UserBySession also marks the account as seen, at most once every five
+// minutes, so most requests write nothing.
 func (s *Store) UserBySession(ctx context.Context, tokenHash [sha256.Size]byte) (User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `SELECT u.id::text, u.email, u.password_hash, u.display_name, u.is_admin, u.disabled_at IS NOT NULL
-		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL`, tokenHash[:]))
+	return scanUser(s.pool.QueryRow(ctx, `WITH found AS (
+			SELECT u.id, u.email, u.password_hash, u.display_name, u.is_admin, u.last_seen_at
+			FROM sessions s JOIN users u ON u.id = s.user_id
+			WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL
+		), seen AS (
+			UPDATE users SET last_seen_at = now() FROM found
+			WHERE users.id = found.id AND (found.last_seen_at IS NULL OR found.last_seen_at < now() - interval '5 minutes')
+		)
+		SELECT id::text, email, password_hash, display_name, is_admin, false FROM found`, tokenHash[:]))
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash [sha256.Size]byte, expires time.Time) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO sessions(token_hash, user_id, expires_at) VALUES ($1, $2, $3)`, tokenHash[:], userID, expires)
+	_, err := s.pool.Exec(ctx, `WITH created AS (INSERT INTO sessions(token_hash, user_id, expires_at) VALUES ($1, $2, $3))
+		UPDATE users SET last_seen_at = now() WHERE id = $2`, tokenHash[:], userID, expires)
 	return err
 }
 
@@ -83,28 +98,21 @@ func (s *Store) SetPassword(ctx context.Context, userID, passwordHash string, ke
 }
 
 // DeleteUser deletes an account with its sessions, follows and claims; its
-// reports stay, with no requester. The last active admin gets ErrConflict,
+// reports stay, with no requester. The last active admin gets ErrLastAdmin,
 // since the site would be left with no admin.
 func (s *Store) DeleteUser(ctx context.Context, userID string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1517, 1)`); err != nil {
-			return err
-		}
-		var isAdmin, disabled bool
-		err := tx.QueryRow(ctx, `SELECT is_admin, disabled_at IS NOT NULL FROM users WHERE id::text = $1 FOR UPDATE`, userID).Scan(&isAdmin, &disabled)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
+		isAdmin, disabled, err := lockUser(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
 		if isAdmin && !disabled {
-			var activeAdmins int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE is_admin AND disabled_at IS NULL`).Scan(&activeAdmins); err != nil {
+			last, err := lastActiveAdmin(ctx, tx)
+			if err != nil {
 				return err
 			}
-			if activeAdmins <= 1 {
-				return ErrConflict
+			if last {
+				return ErrLastAdmin
 			}
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM users WHERE id::text = $1`, userID)

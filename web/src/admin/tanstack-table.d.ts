@@ -7,4 +7,9 @@ declare module '@tanstack/react-table' {
     tdClassName?: string
     thClassName?: string
   }
+
+  interface TableMeta<TData> {
+    // Faceted filter counts from the API, by column id and then option value.
+    facetCounts?: Record<string, Record<string, number>>
+  }
 }

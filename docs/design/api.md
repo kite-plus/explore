@@ -283,6 +283,9 @@
 | `rate_limited` | 429 | 超出限流，带 `Retry-After` |
 | `already_set_up` | 409 | 已经有管理员账号，安装已经完成 |
 | `last_admin` | 409 | 唯一可用的管理员不能删除自己的账号 |
+| `keep_admin` | 409 | 后台操作会停用或降级最后一名可用的管理员 |
+| `account_disabled` | 409 | 给已停用的账号授予后台权限 |
+| `own_account` | 403 | 管理员在后台停用、降级、强制下线或删除自己的账号 |
 | `wrong_password` | 403 | 修改密码时当前密码不正确 |
 | `internal` | 500 | 服务端错误，细节只写日志 |
 

@@ -10,7 +10,7 @@ export function Users() {
     <UsersProvider>
       <AppHeader />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <PageTitle title='用户管理' description='读者账号：订阅和博客认领，停用账号或调整后台权限。' />
+        <PageTitle title='用户管理' description='读者账号：查看订阅、认领和举报，停用、强制下线或调整后台权限。' />
         <UsersTable />
       </Main>
       <UsersDialogs />

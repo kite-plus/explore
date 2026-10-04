@@ -47,46 +47,6 @@ func (s *Server) adminOverview(c *gin.Context) {
 	writeJSON(c, http.StatusOK, gin.H{"stats": stats, "worker_online": count > 0, "worker_count": count, "worker_last_seen_at": utc(seen), "crawler_paused": paused == "true"})
 }
 
-func (s *Server) adminUsers(c *gin.Context) {
-	limit, offset, ok := adminPage(c)
-	if !ok {
-		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-		return
-	}
-	users, total, err := s.Store.AdminUsers(c.Request.Context(), c.Query("q"), limit, offset)
-	if err != nil {
-		s.storeError(c, err)
-		return
-	}
-	writeJSON(c, http.StatusOK, gin.H{"data": users, "total": total})
-}
-
-func (s *Server) adminUpdateUser(c *gin.Context) {
-	var body struct {
-		Disabled *bool `json:"disabled"`
-		IsAdmin  *bool `json:"is_admin"`
-	}
-	if c.ShouldBindJSON(&body) != nil || (body.Disabled == nil) == (body.IsAdmin == nil) {
-		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-		return
-	}
-	if c.GetString("admin_user_id") == c.Param("id") {
-		s.fail(c, http.StatusForbidden, codeInvalidRequest)
-		return
-	}
-	var err error
-	if body.Disabled != nil {
-		err = s.Store.SetUserDisabled(c.Request.Context(), c.Param("id"), *body.Disabled)
-	} else {
-		err = s.Store.SetUserAdminByID(c.Request.Context(), c.Param("id"), *body.IsAdmin)
-	}
-	if err != nil {
-		s.storeError(c, err)
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
 func (s *Server) adminEntries(c *gin.Context) {
 	limit, offset, ok := adminPage(c)
 	if !ok {

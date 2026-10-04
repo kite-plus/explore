@@ -56,12 +56,13 @@ export function useAccountRequest() {
 
 export function useAdminQuery<T>(
   path: string,
-  options: { refetchInterval?: number; keepPrevious?: boolean } = {}
+  options: { refetchInterval?: number; keepPrevious?: boolean; enabled?: boolean } = {}
 ) {
   const request = useAdminRequest()
   return useQuery({
     queryKey: ['admin', path],
     queryFn: () => request<T>(path),
+    enabled: options.enabled,
     refetchInterval: options.refetchInterval,
     placeholderData: options.keepPrevious ? (previous) => previous : undefined,
   })

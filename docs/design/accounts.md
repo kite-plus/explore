@@ -73,7 +73,8 @@ Worker 独立循环分类，不阻塞抓取。输入只有标题、短摘要、�
 已新增的读者数据：
 
 ```sql
-users (id, email, password_hash, display_name, is_admin, created_at)
+users (id, email, password_hash, display_name, is_admin, created_at,
+       disabled_at, disabled_reason, disabled_by, last_seen_at)
 user_identities (issuer, subject, user_id, linked_at,
                  primary key (issuer, subject))
 sessions (token_hash primary key, user_id -> users on delete cascade,

@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- User management in the admin is no longer a bare list. Accounts can be filtered by status and role, with counts beside each option, and sorted by sign-up, last activity, follows or claimed blogs; the page remembers all of it in its address. A new last-active column shows when each account was last used, recorded at most once every five minutes and never with an address or device.
+- Clicking an account opens its details: live sessions, the blogs it follows and claims, claims still being verified, and the reports it filed. From there, or from a row's menu, an admin can rename the account, sign it out everywhere, release a blog it claimed, or delete it after typing its email. Disabling now asks for a reason, kept with the admin who did it and shown on the account. Disabling, restoring and signing out work on a selection of accounts too.
+- Reporters in the takedown list link to their accounts in user management.
+
+### Fixed
+
+- Disabling or demoting the only active admin was refused with "This account already exists or the resource is already owned." It now says to give admin access to another account first, and an admin acting on their own account is told so instead of "The request is malformed."
+
 ## [0.1.8] - 2026-10-04
 
 A small fix: the blog system Explore found on a blog's pages when listing it, such as Astro or Kite, is no longer reset to unknown by later fetches.

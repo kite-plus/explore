@@ -117,10 +117,13 @@ user_identities.subject text
 user_identities.user_id uuid
 users.created_at timestamp with time zone
 users.disabled_at timestamp with time zone
+users.disabled_by text
+users.disabled_reason text
 users.display_name text
 users.email text
 users.id uuid
 users.is_admin boolean
+users.last_seen_at timestamp with time zone
 users.password_hash text
 worker_heartbeats.last_seen_at timestamp with time zone
 worker_heartbeats.started_at timestamp with time zone

@@ -149,9 +149,49 @@ export interface AdminUserRow {
   display_name: string;
   is_admin: boolean;
   disabled_at: string | null;
+  disabled_reason: string;
+  disabled_by: string;
   created_at: string;
+  last_seen_at: string | null;
   subscription_count: number;
   owned_blog_count: number;
+}
+
+/** Matches store.AdminUserCounts: each filter's counts skip that filter. */
+export interface AdminUserCounts {
+  active: number;
+  disabled: number;
+  admin: number;
+  reader: number;
+}
+
+export interface AdminUsersPage extends Paged<AdminUserRow> {
+  counts: AdminUserCounts;
+}
+
+/** Matches store.AdminUserBlog. */
+export interface AdminUserBlog {
+  host: string;
+  name: string;
+  status: "active" | "paused";
+  since: string;
+}
+
+/** Matches store.AdminUserDetail; the lists hold at most 200 items. */
+export interface AdminUserDetail extends AdminUserRow {
+  sessions: { created_at: string; expires_at: string }[];
+  subscriptions: AdminUserBlog[];
+  owned_blogs: AdminUserBlog[];
+  pending_claims: { host: string; expires_at: string }[];
+  reports: {
+    id: string;
+    target_type: "blog" | "entry";
+    blog_host: string;
+    entry_title: string;
+    reason: string;
+    status: "pending" | "approved" | "rejected";
+    created_at: string;
+  }[];
 }
 
 /** Matches store.AdminEntry. */

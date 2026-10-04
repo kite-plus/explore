@@ -4,6 +4,7 @@ import { Button } from '@/admin/components/ui/button'
 import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { LongText } from '@/admin/components/long-text'
 import { TimeAgo } from '@/admin/components/time-ago'
+import { Link } from '@/admin/router'
 import type { Takedown } from '@/lib/admin-types'
 import { statusOrder, takedownStatuses, targetTypes } from '../data/data'
 import { targetName, useTakedowns } from './takedowns-provider'
@@ -68,7 +69,17 @@ export const takedownsColumns: ColumnDef<Takedown>[] = [
     id: 'requester',
     accessorFn: (item) => item.requester || '管理员',
     header: ({ column }) => <DataTableColumnHeader column={column} title='发起人' />,
-    cell: ({ row }) => <LongText className='max-w-40 text-muted-foreground'>{row.getValue('requester')}</LongText>,
+    cell: ({ row }) =>
+      row.original.requester ? (
+        <Link
+          to={`/admin/users?filter=${encodeURIComponent(row.original.requester)}`}
+          className='block max-w-40 truncate text-muted-foreground underline-offset-4 hover:text-foreground hover:underline'
+        >
+          {row.original.requester}
+        </Link>
+      ) : (
+        <span className='text-muted-foreground'>管理员</span>
+      ),
     meta: { title: '发起人' },
   },
   {

@@ -49,7 +49,8 @@ export function TakedownsTable({ data, loading }: { data: Takedown[]; loading: b
       return (
         targetName(item).toLowerCase().includes(search) ||
         item.blog_host.includes(search) ||
-        item.reason.toLowerCase().includes(search)
+        item.reason.toLowerCase().includes(search) ||
+        item.requester.toLowerCase().includes(search)
       )
     },
     getCoreRowModel: getCoreRowModel(),

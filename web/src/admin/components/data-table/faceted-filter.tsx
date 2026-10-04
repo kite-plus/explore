@@ -120,7 +120,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                       />
                     )}
                     <span className={option.className}>{option.label}</span>
-                    {facets?.get(option.value) && (
+                    {facets?.has(option.value) && (
                       <span className='ms-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
                         {facets.get(option.value)}
                       </span>

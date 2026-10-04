@@ -40,6 +40,9 @@ const (
 	codeFeatureDisabled    = "feature_disabled"
 	codeSetupDone          = "already_set_up"
 	codeLastAdmin          = "last_admin"
+	codeKeepAdmin          = "keep_admin"
+	codeAccountDisabled    = "account_disabled"
+	codeOwnAccount         = "own_account"
 	codeWrongPassword      = "wrong_password"
 )
 
@@ -64,6 +67,9 @@ var messages = map[string]struct{ en, zh string }{
 	codeWrongPassword:      {"The current password is incorrect.", "当前密码不正确。"},
 	codeLastAdmin:          {"You are the only admin. Give admin access to another account before deleting yours.", "你是唯一的管理员。删除账号前，请先把后台权限交给另一个账号。"},
 	codeSetupDone:          {"This server is already set up; sign in instead.", "已经完成安装，请直接登录。"},
+	codeKeepAdmin:          {"This is the only active admin. Give admin access to another account first.", "这是唯一可用的管理员，请先把后台权限交给另一个账号。"},
+	codeAccountDisabled:    {"This account is disabled; restore it first.", "这个账号已停用，请先恢复。"},
+	codeOwnAccount:         {"You cannot do this to your own account.", "不能对自己的账号执行这个操作。"},
 }
 
 type errorBody struct {
@@ -112,6 +118,10 @@ func (s *Server) storeError(c *gin.Context, err error) {
 		s.fail(c, http.StatusForbidden, codeExcluded)
 	case errors.Is(err, store.ErrConflict):
 		s.fail(c, http.StatusConflict, codeConflict)
+	case errors.Is(err, store.ErrLastAdmin):
+		s.fail(c, http.StatusConflict, codeKeepAdmin)
+	case errors.Is(err, store.ErrUserDisabled):
+		s.fail(c, http.StatusConflict, codeAccountDisabled)
 	default:
 		s.Log.Error("store", "route", c.FullPath(), "error", err)
 		s.fail(c, http.StatusInternalServerError, codeInternal)

@@ -54,7 +54,7 @@ func TestDisabledUserLosesSessions(t *testing.T) {
 	if err := s.CreateSession(ctx, user.ID, token, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserDisabled(ctx, user.ID, true); err != nil {
+	if err := s.SetUserDisabled(ctx, user.ID, true, "spam", "operator"); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := s.UserByEmail(ctx, user.Email)
@@ -64,7 +64,7 @@ func TestDisabledUserLosesSessions(t *testing.T) {
 	if _, err := s.UserBySession(ctx, token); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("session survived disable: %v", err)
 	}
-	if err := s.SetUserDisabled(ctx, user.ID, false); err != nil {
+	if err := s.SetUserDisabled(ctx, user.ID, false, "", "operator"); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err = s.UserByEmail(ctx, user.Email)
@@ -87,10 +87,10 @@ func TestAdminRoleKeepsLastActiveAdministrator(t *testing.T) {
 	if err := s.SetUserAdminByID(ctx, first.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserDisabled(ctx, first.ID, true); !errors.Is(err, ErrConflict) {
+	if err := s.SetUserDisabled(ctx, first.ID, true, "test", "operator"); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("last administrator disabled: %v", err)
 	}
-	if err := s.SetUserAdminByID(ctx, first.ID, false); !errors.Is(err, ErrConflict) {
+	if err := s.SetUserAdminByID(ctx, first.ID, false); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("last administrator demoted: %v", err)
 	}
 	if err := s.SetUserAdminByID(ctx, second.ID, true); err != nil {
@@ -180,7 +180,7 @@ func TestDeleteUserKeepsReportsAndTheLastAdmin(t *testing.T) {
 	if err := s.SetUserAdminByID(ctx, first.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteUser(ctx, first.ID); !errors.Is(err, ErrConflict) {
+	if err := s.DeleteUser(ctx, first.ID); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("last admin deleted: %v", err)
 	}
 	second, err := s.CreateUser(ctx, "second@example.com", "unused-hash", "Second")

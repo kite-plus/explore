@@ -79,3 +79,105 @@ func TestAdminOperationsAPI(t *testing.T) {
 		t.Fatalf("registration was not disabled: %d", registration.Code)
 	}
 }
+
+func TestAdminUsersAPI(t *testing.T) {
+	e := newEnv(t, true)
+	readerCookie, _ := e.session("reader@example.org", false)
+
+	type userOut struct {
+		ID             string  `json:"id"`
+		Email          string  `json:"email"`
+		DisplayName    string  `json:"display_name"`
+		DisabledReason string  `json:"disabled_reason"`
+		DisabledBy     string  `json:"disabled_by"`
+		LastSeenAt     *string `json:"last_seen_at"`
+	}
+	list := e.do(req{method: http.MethodGet, path: "/api/v1/admin/users?status=active&role=reader&sort=seen&order=desc", admin: true})
+	if list.Code != http.StatusOK {
+		t.Fatalf("users: %d %s", list.Code, list.Body.String())
+	}
+	page := decode[struct {
+		Data   []userOut
+		Total  int64
+		Counts struct{ Active, Disabled, Admin, Reader int64 }
+	}](t, list)
+	if page.Total != 1 || len(page.Data) != 1 || page.Data[0].Email != "reader@example.org" || page.Data[0].LastSeenAt == nil ||
+		page.Counts.Active != 1 || page.Counts.Admin != 1 || page.Counts.Reader != 1 {
+		t.Fatalf("active readers: %+v", page)
+	}
+	reader := "/api/v1/admin/users/" + page.Data[0].ID
+	for _, query := range []string{"status=gone", "role=owner", "sort=email", "order=up"} {
+		if got := e.do(req{method: http.MethodGet, path: "/api/v1/admin/users?" + query, admin: true}); got.Code != http.StatusBadRequest {
+			t.Fatalf("%s: %d", query, got.Code)
+		}
+	}
+
+	detail := e.do(req{method: http.MethodGet, path: reader, admin: true})
+	if detail.Code != http.StatusOK {
+		t.Fatalf("detail: %d %s", detail.Code, detail.Body.String())
+	}
+	if d := decode[struct{ Sessions []struct{} }](t, detail); len(d.Sessions) != 1 {
+		t.Fatalf("detail sessions: %s", detail.Body.String())
+	}
+
+	for _, body := range []string{`{"disabled":true}`, `{"disabled":true,"reason":"  "}`, `{"disabled":false,"is_admin":true}`, `{"display_name":""}`, `{}`} {
+		if got := e.do(req{method: http.MethodPatch, path: reader, body: body, admin: true}); got.Code != http.StatusBadRequest {
+			t.Fatalf("%s: %d", body, got.Code)
+		}
+	}
+	if got := e.do(req{method: http.MethodPatch, path: reader, body: `{"disabled":true,"reason":"spam"}`, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("disable: %d %s", got.Code, got.Body.String())
+	}
+	if got := e.do(req{method: http.MethodGet, path: "/api/v1/me", header: map[string]string{"Cookie": readerCookie}}); got.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled reader still signed in: %d", got.Code)
+	}
+	if d := decode[userOut](t, e.do(req{method: http.MethodGet, path: reader, admin: true})); d.DisabledReason != "spam" || d.DisabledBy != adminEmail {
+		t.Fatalf("disabled detail: %+v", d)
+	}
+	if got := e.do(req{method: http.MethodPatch, path: reader, body: `{"is_admin":true}`, admin: true}); got.Code != http.StatusConflict {
+		t.Fatalf("admin access for a disabled account: %d", got.Code)
+	} else if code, _ := errorCode(t, got); code != "account_disabled" {
+		t.Fatalf("admin access for a disabled account: %s", code)
+	}
+	if got := e.do(req{method: http.MethodPatch, path: reader, body: `{"disabled":false}`, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("restore: %d", got.Code)
+	}
+	if got := e.do(req{method: http.MethodPatch, path: reader, body: `{"display_name":" Renamed "}`, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("rename: %d", got.Code)
+	}
+	revoke := e.do(req{method: http.MethodDelete, path: reader + "/sessions", admin: true})
+	if revoke.Code != http.StatusOK || decode[struct{ Revoked int64 }](t, revoke).Revoked != 0 {
+		t.Fatalf("revoke: %d %s", revoke.Code, revoke.Body.String())
+	}
+	if got := e.do(req{method: http.MethodDelete, path: reader + "/blogs/nothing.example", admin: true}); got.Code != http.StatusNotFound {
+		t.Fatalf("release a blog not owned: %d", got.Code)
+	}
+
+	self := decode[struct{ Data []userOut }](t, e.do(req{method: http.MethodGet, path: "/api/v1/admin/users?role=admin", admin: true}))
+	if len(self.Data) != 1 {
+		t.Fatalf("admins: %+v", self)
+	}
+	own := "/api/v1/admin/users/" + self.Data[0].ID
+	for _, r := range []req{
+		{method: http.MethodPatch, path: own, body: `{"disabled":true,"reason":"oops"}`},
+		{method: http.MethodPatch, path: own, body: `{"is_admin":false}`},
+		{method: http.MethodDelete, path: own + "/sessions"},
+		{method: http.MethodDelete, path: own},
+	} {
+		r.admin = true
+		got := e.do(r)
+		if code, _ := errorCode(t, got); got.Code != http.StatusForbidden || code != "own_account" {
+			t.Fatalf("%s %s on own account: %d %s", r.method, r.path, got.Code, code)
+		}
+	}
+	if got := e.do(req{method: http.MethodPatch, path: own, body: `{"display_name":"Me"}`, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("rename own account: %d", got.Code)
+	}
+
+	if got := e.do(req{method: http.MethodDelete, path: reader, admin: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", got.Code, got.Body.String())
+	}
+	if got := e.do(req{method: http.MethodGet, path: reader, admin: true}); got.Code != http.StatusNotFound {
+		t.Fatalf("deleted account: %d", got.Code)
+	}
+}
