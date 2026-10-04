@@ -21,47 +21,55 @@ var (
 
 type User struct {
 	ID           string
+	Number       int64
 	Email        string
 	PasswordHash string
 	DisplayName  string
 	IsAdmin      bool
 	Disabled     bool
+	CreatedAt    time.Time
 }
+
+// userColumns are what scanUser reads, in order.
+const userColumns = `id::text, number, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL, created_at`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled)
+	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled, &u.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
 	return u, err
 }
 
+// CreateUser checks the email before inserting, so a taken email does not
+// use up a member number; only a race between two sign-ups still can.
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash, displayName string) (User, error) {
 	u, err := scanUser(s.pool.QueryRow(ctx, `INSERT INTO users(email, password_hash, display_name)
-		VALUES ($1, $2, $3) RETURNING id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL`, email, passwordHash, displayName))
-	if isUniqueViolation(err) {
+		SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = $1)
+		RETURNING `+userColumns, email, passwordHash, displayName))
+	if errors.Is(err, ErrNotFound) || isUniqueViolation(err) {
 		return User{}, ErrConflict
 	}
 	return u, err
 }
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `SELECT id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL FROM users WHERE email = $1`, email))
+	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE email = $1`, email))
 }
 
 // UserBySession also marks the account as seen, at most once every five
 // minutes, so most requests write nothing.
 func (s *Store) UserBySession(ctx context.Context, tokenHash [sha256.Size]byte) (User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `WITH found AS (
-			SELECT u.id, u.email, u.password_hash, u.display_name, u.is_admin, u.last_seen_at
+			SELECT u.id, u.number, u.email, u.password_hash, u.display_name, u.is_admin, u.created_at, u.last_seen_at
 			FROM sessions s JOIN users u ON u.id = s.user_id
 			WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL
 		), seen AS (
 			UPDATE users SET last_seen_at = now() FROM found
 			WHERE users.id = found.id AND (found.last_seen_at IS NULL OR found.last_seen_at < now() - interval '5 minutes')
 		)
-		SELECT id::text, email, password_hash, display_name, is_admin, false FROM found`, tokenHash[:]))
+		SELECT id::text, number, email, password_hash, display_name, is_admin, false, created_at FROM found`, tokenHash[:]))
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash [sha256.Size]byte, expires time.Time) error {

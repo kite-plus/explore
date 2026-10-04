@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - User management in the admin is no longer a bare list. Accounts can be filtered by status and role, with counts beside each option, and sorted by sign-up, last activity, follows or claimed blogs; the page remembers all of it in its address. A new last-active column shows when each account was last used, recorded at most once every five minutes and never with an address or device.
 - Clicking an account opens its details: live sessions, the blogs it follows and claims, claims still being verified, and the reports it filed. From there, or from a row's menu, an admin can rename the account, sign it out everywhere, release a blog it claimed, or delete it after typing its email. Disabling now asks for a reason, kept with the admin who did it and shown on the account. Disabling, restoring and signing out work on a selection of accounts too.
 - Reporters in the takedown list link to their accounts in user management.
+- Every account has a numeric ID in sign-up order. The account page shows it with the join date, such as "ID 12 · Joined Sep 5, 2026", and `/api/v1/me` returns it as `number` with `created_at`; user management shows it as the ID, sorts by it and finds an account by `12` or `#12`, while the internal uuid is labeled UUID. Existing accounts are numbered by when they signed up. IDs never change, and signing up with an email already taken no longer uses one up, so only deleted accounts leave gaps.
 
 ### Fixed
 

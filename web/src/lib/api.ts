@@ -73,7 +73,7 @@ export const api = {
     ),
 
   me: (caller: Caller, cookie: string) =>
-    call<{ id: string; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { caller, headers: { Cookie: cookie } }),
+    call<{ id: string; number: number; created_at: string; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { caller, headers: { Cookie: cookie } }),
 
   following: (caller: Caller, p: { cursor?: string; lang?: string; tag?: string; limit?: number }, cookie: string) =>
     call<Page<Entry>>(

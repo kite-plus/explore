@@ -145,6 +145,8 @@ export interface AdminOverview {
 /** Matches store.AdminUser. */
 export interface AdminUserRow {
   id: string;
+  /** The ID people see: sign-up order, never reused or changed. `id` is internal. */
+  number: number;
   email: string;
   display_name: string;
   is_admin: boolean;

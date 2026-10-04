@@ -84,6 +84,13 @@ export const usersColumns: ColumnDef<AdminUserRow>[] = [
     meta: { className: 'w-10' },
   },
   {
+    accessorKey: 'number',
+    header: ({ column }) => <DataTableColumnHeader column={column} title='ID' />,
+    cell: ({ row }) => <span className='text-muted-foreground tabular-nums'>{row.original.number}</span>,
+    sortDescFirst: true,
+    meta: { title: 'ID', className: 'w-20' },
+  },
+  {
     id: 'user',
     header: ({ column }) => <DataTableColumnHeader column={column} title='用户' />,
     cell: ({ row }) => <UserCell user={row.original} />,

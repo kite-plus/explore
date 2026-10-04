@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -188,5 +190,61 @@ func TestSessionsMarkTheAccountSeen(t *testing.T) {
 	}
 	if !seen().Equal(recent) {
 		t.Fatal("a recent mark was rewritten")
+	}
+}
+
+func TestUserNumbersFollowSignUpOrder(t *testing.T) {
+	s := newUnmigratedStore(t)
+	ctx := context.Background()
+	s.migrateTo(t, 17)
+	// Inserted out of order, so the numbers must come from created_at.
+	s.exec(t, `INSERT INTO users(email, password_hash, display_name, created_at) VALUES
+		('second@example.com', '!', 'Second', now() - interval '2 days'),
+		('first@example.com', '!', 'First', now() - interval '3 days'),
+		('third@example.com', '!', 'Third', now() - interval '1 day')`)
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUser(ctx, "fourth@example.com", "unused-hash", "Fourth"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _, _, err := s.AdminUsers(ctx, AdminUserQuery{Sort: "number", Asc: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := identities(rows, func(u AdminUser) string { return fmt.Sprintf("%d %s", u.Number, u.DisplayName) })
+	if want := []string{"1 First", "2 Second", "3 Third", "4 Fourth"}; !slices.Equal(got, want) {
+		t.Fatalf("numbers = %v, want %v", got, want)
+	}
+	for _, search := range []string{"3", "#3"} {
+		rows, _, _, err := s.AdminUsers(ctx, AdminUserQuery{Search: search, Sort: "created", Limit: 10})
+		if err != nil || len(rows) != 1 || rows[0].DisplayName != "Third" {
+			t.Fatalf("search %q: %+v, %v", search, rows, err)
+		}
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE users SET number = 99 WHERE email = 'first@example.com'`); err == nil {
+		t.Fatal("a member number was changed")
+	}
+}
+
+func TestTakenEmailKeepsNumbersConsecutive(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	first, err := s.CreateUser(ctx, "first@example.com", "unused-hash", "First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUser(ctx, "first@example.com", "unused-hash", "Again"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("taken email: %v", err)
+	}
+	second, err := s.CreateUser(ctx, "second@example.com", "unused-hash", "Second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Number != 1 || second.Number != 2 {
+		t.Fatalf("numbers = %d, %d; a taken email used one up", first.Number, second.Number)
+	}
+	if first.CreatedAt.IsZero() || time.Since(first.CreatedAt) > time.Minute {
+		t.Fatalf("created at = %v", first.CreatedAt)
 	}
 }

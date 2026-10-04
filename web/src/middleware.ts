@@ -17,8 +17,8 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (cookie) {
     const me = await api.me({ lang: path.startsWith("/en") ? "en" : "zh", forwardedFor: forwardedFor(ctx.request, ctx.clientAddress) }, cookie);
     if (me.kind === "ok") {
-      const { id, email, display_name, is_admin } = me.data;
-      ctx.locals.reader = { id, email, display_name, is_admin };
+      const { id, number, created_at, email, display_name, is_admin } = me.data;
+      ctx.locals.reader = { id, number, created_at, email, display_name, is_admin };
       ctx.locals.readerChecked = true;
     } else if (me.kind === "error" && me.status === 401) {
       ctx.locals.readerChecked = true;

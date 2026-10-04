@@ -193,7 +193,7 @@ func (s *Server) startSession(c *gin.Context, u store.User) {
 }
 
 func userJSON(u store.User, token string) gin.H {
-	return gin.H{"id": u.ID, "email": u.Email, "display_name": u.DisplayName,
+	return gin.H{"id": u.ID, "number": u.Number, "created_at": u.CreatedAt.UTC(), "email": u.Email, "display_name": u.DisplayName,
 		"is_admin": u.IsAdmin, "csrf_token": csrfToken(token)}
 }
 

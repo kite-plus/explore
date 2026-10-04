@@ -11,7 +11,7 @@
 | 博客管理 | 检索、直接收录、编辑、暂停、立即抓取及查看抓取记录；列出每个博客当前缓存的文章数（最多 20 篇，见 `policy.EntriesPerBlog`） |
 | 文章管理 | 检索缓存文章，记录原因后隐藏或恢复 |
 | 下架审批 | 创建内部申请、接收已登录用户举报，审批博客或文章下架 |
-| 用户管理 | 按邮箱、名称或 ID 检索，按状态和角色筛选，按注册时间、最近活跃、订阅数或认领数排序；详情抽屉列出会话、订阅、认领、待验证认领和提交的举报；停用（必须填写原因）或恢复、强制下线、修改名称、授予或取消后台权限、解除认领、删除账号；停用、恢复和强制下线可以批量操作 |
+| 用户管理 | 按邮箱、名称、ID（`12` 或 `#12`）或 UUID 检索，按状态和角色筛选，按 ID、注册时间、最近活跃、订阅数或认领数排序；详情抽屉列出会话、订阅、认领、待验证认领和提交的举报；停用（必须填写原因）或恢复、强制下线、修改名称、授予或取消后台权限、解除认领、删除账号；停用、恢复和强制下线可以批量操作 |
 | 抓取任务 | 查看队列状态、进程心跳、错误和抓取尝试，手动排队 |
 | 系统设置 | 控制注册、投稿、任务领取，以及站点公告 |
 | 个人资料 | 修改自己的名称和密码；改密码要输入当前密码，完成后其他设备上的登录失效，当前设备保持登录 |
@@ -46,7 +46,7 @@
 | 接口 | 用途 |
 | --- | --- |
 | `GET /api/v1/admin/overview` | 工作台统计和抓取进程状态 |
-| `GET /api/v1/admin/users` | 用户分页检索、筛选和排序，返回 `data`、`total` 和 `counts` |
+| `GET /api/v1/admin/users` | 用户分页检索、筛选和排序，返回 `data`、`total` 和 `counts`；每个账号带用户看到的 ID `number`（[accounts.md §5](accounts.md#5-数据模型)） |
 | `GET /api/v1/admin/users/:id` | 用户详情：有效会话、订阅（最近 200 个）、认领、待验证认领、提交的举报（最近 200 条） |
 | `PATCH /api/v1/admin/users/:id` | 每次只改一项：`disabled`（停用时必须带 `reason`）、`is_admin` 或 `display_name` |
 | `DELETE /api/v1/admin/users/:id` | 删除账号 |
@@ -59,7 +59,7 @@
 | `GET /api/v1/setup`、`POST /api/v1/setup` | 安装状态、创建第一个管理员 |
 | `PATCH /api/v1/me`、`PUT /api/v1/me/password` | 个人资料页修改名称和密码，与前台共用账号接口 |
 
-`users` 与 `entries` 使用 `limit`、`offset` 和 `q` 查询参数，每页最多 100 条。`users` 另接受 `status`（`active`、`disabled`）、`role`（`admin`、`reader`）、`sort`（`created`、`seen`、`subscriptions`、`blogs`，默认 `created`）和 `order`（`asc`、`desc`，默认 `desc`）；从未活跃的账号在按最近活跃排序时视为最早。`counts` 是各筛选项的数量，每组只套用检索词和另一组筛选，与筛选弹层的计数一致。下架申请按 `pending`、`approved`、`rejected` 查询。
+`users` 与 `entries` 使用 `limit`、`offset` 和 `q` 查询参数，每页最多 100 条。`users` 另接受 `status`（`active`、`disabled`）、`role`（`admin`、`reader`）、`sort`（`number`、`created`、`seen`、`subscriptions`、`blogs`，默认 `created`）和 `order`（`asc`、`desc`，默认 `desc`）；从未活跃的账号在按最近活跃排序时视为最早。`counts` 是各筛选项的数量，每组只套用检索词和另一组筛选，与筛选弹层的计数一致。下架申请按 `pending`、`approved`、`rejected` 查询。
 
 设置项只允许 `registration_enabled`、`submissions_enabled`、`crawler_paused` 和 `site_notice`。前两项分别在注册与投稿接口校验；抓取暂停在任务领取查询中生效，队列不会被清空；公告展示在前台导航下方。设置页不会修改抓取进程本身，进程离线时仍需按运维方式启动。
 

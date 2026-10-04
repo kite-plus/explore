@@ -73,8 +73,8 @@ Worker 独立循环分类，不阻塞抓取。输入只有标题、短摘要、�
 已新增的读者数据：
 
 ```sql
-users (id, email, password_hash, display_name, is_admin, created_at,
-       disabled_at, disabled_reason, disabled_by, last_seen_at)
+users (id, number unique, email, password_hash, display_name, is_admin,
+       created_at, disabled_at, disabled_reason, disabled_by, last_seen_at)
 user_identities (issuer, subject, user_id, linked_at,
                  primary key (issuer, subject))
 sessions (token_hash primary key, user_id -> users on delete cascade,
@@ -85,6 +85,8 @@ subscriptions (user_id -> users on delete cascade,
 blog_owners (blog_id primary key, user_id -> users on delete cascade, verified_at)
 blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 ```
+
+用户看到的 ID 是 `number`：按注册顺序递增的数字，账号页显示为「ID 12 · 2026年9月5日加入」，后台列表和详情也叫 ID，`/api/v1/me` 返回 `number` 和 `created_at`。`id` 列是 UUID，只在内部使用：其他表和统一身份服务都按它关联账号，接口路径里的账号也用它，后台详情里标为 UUID。`number` 由数据库序列生成（`GENERATED ALWAYS AS IDENTITY`），不能修改，可用于以后按注册先后安排的活动。注册时先确认邮箱没被占用再插入，重复注册不会消耗 ID；空号只来自删除的账号，以及两个人同时用同一邮箱注册这种极少见的情况。迁移 `00018_user_number.sql` 按注册时间给已有账号回填 1、2、3…，新账号从最大值之后继续。
 
 不建 `login_codes` 或 GitHub 凭据表。清空 `entries` 不丢订阅；订阅流用 `subscriptions` 过滤文章并复用游标分页。博客认领要求用户在 `_explore-claim.<host>` 发布随机值对应的 DNS TXT 记录，验证值有效期 30 分钟；一个博客只能有一个已验证归属。
 

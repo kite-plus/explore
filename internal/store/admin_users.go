@@ -12,6 +12,7 @@ import (
 
 type AdminUser struct {
 	ID                string     `json:"id"`
+	Number            int64      `json:"number"`
 	Email             string     `json:"email"`
 	DisplayName       string     `json:"display_name"`
 	IsAdmin           bool       `json:"is_admin"`
@@ -24,14 +25,14 @@ type AdminUser struct {
 	OwnedBlogCount    int64      `json:"owned_blog_count"`
 }
 
-const adminUserColumns = `u.id::text, u.email, u.display_name, u.is_admin, u.disabled_at, u.disabled_reason, u.disabled_by,
+const adminUserColumns = `u.id::text, u.number, u.email, u.display_name, u.is_admin, u.disabled_at, u.disabled_reason, u.disabled_by,
 	u.created_at, u.last_seen_at,
 	(SELECT count(*) FROM subscriptions WHERE user_id = u.id) AS subscription_count,
 	(SELECT count(*) FROM blog_owners WHERE user_id = u.id) AS owned_blog_count`
 
 func scanAdminUser(row pgx.Row) (AdminUser, error) {
 	var u AdminUser
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.IsAdmin, &u.DisabledAt, &u.DisabledReason, &u.DisabledBy,
+	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.DisplayName, &u.IsAdmin, &u.DisabledAt, &u.DisabledReason, &u.DisabledBy,
 		&u.CreatedAt, &u.LastSeenAt, &u.SubscriptionCount, &u.OwnedBlogCount)
 	return u, err
 }
@@ -51,6 +52,7 @@ type AdminUserQuery struct {
 // Never-seen accounts count as the least recently seen.
 var userSorts = map[string][2]string{
 	"created":       {"u.created_at ASC, u.id ASC", "u.created_at DESC, u.id DESC"},
+	"number":        {"u.number ASC", "u.number DESC"},
 	"seen":          {"u.last_seen_at ASC NULLS FIRST", "u.last_seen_at DESC NULLS LAST"},
 	"subscriptions": {"subscription_count ASC", "subscription_count DESC"},
 	"blogs":         {"owned_blog_count ASC", "owned_blog_count DESC"},
@@ -72,7 +74,9 @@ type AdminUserCounts struct {
 }
 
 const (
-	userSearch = `($1 = '' OR u.email ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%' OR u.id::text = $1)`
+	// "12" or "#12" finds the account whose ID (number) is 12, besides any text match.
+	userSearch = `($1 = '' OR u.email ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%'
+		OR u.id::text = $1 OR u.number::text = ltrim($1, '#'))`
 	userStatus = `($2 = '' OR (u.disabled_at IS NOT NULL) = ($2 = 'disabled'))`
 	userRole   = `($3 = '' OR u.is_admin = ($3 = 'admin'))`
 )
@@ -100,7 +104,7 @@ func (s *Store) AdminUsers(ctx context.Context, q AdminUserQuery) ([]AdminUser, 
 	if q.Asc {
 		order = sort[0]
 	}
-	if q.Sort != "created" {
+	if q.Sort != "created" && q.Sort != "number" {
 		order += ", u.created_at DESC, u.id DESC"
 	}
 	rows, err := s.pool.Query(ctx, `SELECT `+adminUserColumns+` FROM users u

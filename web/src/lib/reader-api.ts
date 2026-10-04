@@ -1,6 +1,9 @@
 /** Who is signed in, as the header shows it. */
 export interface Reader {
   id: string;
+  /** The ID people see: sign-up order, never changes. `id` is internal. */
+  number: number;
+  created_at: string;
   email: string;
   display_name: string;
   is_admin: boolean;

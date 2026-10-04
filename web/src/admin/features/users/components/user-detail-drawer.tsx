@@ -76,6 +76,8 @@ function Overview({ user }: { user: AdminUserDetail }) {
 
   return (
     <dl className='grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2.5 text-sm'>
+      <dt className='text-muted-foreground'>ID</dt>
+      <dd className='tabular-nums'>{user.number}</dd>
       <dt className='text-muted-foreground'>状态</dt>
       <dd className={cn('flex items-center gap-2', status.className)}>
         <status.icon className='size-4' />
@@ -86,17 +88,17 @@ function Overview({ user }: { user: AdminUserDetail }) {
         <role.icon className='size-4 text-muted-foreground' />
         {role.label}
       </dd>
-      <dt className='text-muted-foreground'>用户 ID</dt>
+      <dt className='text-muted-foreground'>UUID</dt>
       <dd className='flex min-w-0 items-center gap-1'>
         <span className='truncate font-mono text-xs'>{user.id}</span>
         <Button
           variant='ghost'
           size='icon'
           className='size-6 shrink-0'
-          aria-label='复制用户 ID'
+          aria-label='复制 UUID'
           onClick={() =>
             void navigator.clipboard.writeText(user.id).then(
-              () => toast.success('已复制用户 ID'),
+              () => toast.success('已复制 UUID'),
               () => toast.error('复制失败')
             )
           }

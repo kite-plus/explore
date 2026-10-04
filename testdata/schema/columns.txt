@@ -124,6 +124,7 @@ users.email text
 users.id uuid
 users.is_admin boolean
 users.last_seen_at timestamp with time zone
+users.number bigint
 users.password_hash text
 worker_heartbeats.last_seen_at timestamp with time zone
 worker_heartbeats.started_at timestamp with time zone

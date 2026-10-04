@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kite-plus/explore/internal/model"
 )
@@ -22,9 +23,19 @@ func TestReaderAccountSubscriptionAndClaim(t *testing.T) {
 	}
 	account := decode[struct {
 		CSRFToken string `json:"csrf_token"`
+		Number    int64  `json:"number"`
 	}](t, register)
+	if account.Number != 1 {
+		t.Fatalf("first account's number = %d", account.Number)
+	}
 	cookie := strings.Split(register.Header().Get("Set-Cookie"), ";")[0]
 	auth := map[string]string{"Cookie": cookie, "X-CSRF-Token": account.CSRFToken}
+	if me := decode[struct {
+		Number    int64     `json:"number"`
+		CreatedAt time.Time `json:"created_at"`
+	}](t, e.do(req{method: http.MethodGet, path: "/api/v1/me", header: auth})); me.Number != 1 || time.Since(me.CreatedAt) > time.Minute {
+		t.Fatalf("me = %+v", me)
+	}
 	if w := e.do(req{method: http.MethodGet, path: "/api/v1/admin/session", header: auth}); w.Code != http.StatusUnauthorized {
 		t.Fatalf("reader admin access = %d", w.Code)
 	}

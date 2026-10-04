@@ -21,6 +21,7 @@ export function userRole(user: AdminUserRow) {
 
 /** Columns the API can order by, keyed by column id. */
 export const sortKeys: Record<string, string> = {
+  number: 'number',
   created_at: 'created',
   last_seen_at: 'seen',
   subscription_count: 'subscriptions',

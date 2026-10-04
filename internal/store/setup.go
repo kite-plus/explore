@@ -36,7 +36,7 @@ func (s *Store) CompleteSetup(ctx context.Context, email, passwordHash, displayN
 		}
 		var err error
 		u, err = scanUser(tx.QueryRow(ctx, `INSERT INTO users (email, password_hash, display_name, is_admin)
-			VALUES ($1, $2, $3, true) RETURNING id::text, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL`,
+			VALUES ($1, $2, $3, true) RETURNING `+userColumns,
 			email, passwordHash, displayName))
 		if isUniqueViolation(err) {
 			return ErrConflict

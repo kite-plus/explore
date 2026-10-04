@@ -99,7 +99,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
 
   return <div className="space-y-10">
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-2xl font-semibold">{zh ? "我的账号" : "My account"}</h1><p className="mt-1 text-sm text-muted-foreground">{user ? `${user.display_name} · ${user.email}` : zh ? "正在读取账号…" : "Loading account…"}</p></div>
+      <div><h1 className="text-2xl font-semibold">{zh ? "我的账号" : "My account"}</h1><p className="mt-1 text-sm text-muted-foreground">{user ? `${user.display_name} · ${user.email}` : zh ? "正在读取账号…" : "Loading account…"}</p>{user && <AccountID user={user} zh={zh} />}</div>
       <button type="button" onClick={logout} className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{zh ? "退出登录" : "Sign out"}</button>
     </header>
     {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
@@ -144,4 +144,10 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       </div> : <button type="button" className="mt-4 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" disabled={!user} onClick={() => setConfirming(true)}>{zh ? "删除账号" : "Delete account"}</button>}
     </section>
   </div>;
+}
+
+/** The reader's ID, which is their place in sign-up order, and when they joined. */
+function AccountID({ user, zh }: { user: ReaderUser; zh: boolean }) {
+  const joined = new Date(user.created_at).toLocaleDateString(zh ? "zh-CN" : "en", { dateStyle: zh ? "long" : "medium" });
+  return <p className="mt-1 text-sm text-muted-foreground">ID <span className="font-medium text-foreground tabular-nums">{user.number}</span> · {zh ? `${joined}加入` : `Joined ${joined}`}</p>;
 }
