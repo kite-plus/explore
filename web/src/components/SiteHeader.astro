@@ -1,5 +1,5 @@
 ---
-import { CirclePlus, Compass, Info, Library, Menu, X } from "lucide-react";
+import { CirclePlus, Compass, Info, Library, Menu, Moon, Sun, X } from "lucide-react";
 
 import Logo from "@/components/Logo.astro";
 import { AccountMenu } from "@/components/reader/AccountMenu";
@@ -47,6 +47,19 @@ const links = [
       }
     </nav>
     <div class="ml-auto flex items-center gap-1.5 sm:ml-0">
+      {/* Flips between light and dark; the theme script sets its label. */}
+      <button
+        type="button"
+        data-theme-toggle
+        data-to-dark={t.theme.toDark}
+        data-to-light={t.theme.toLight}
+        aria-label={t.theme.toDark}
+        title={t.theme.toDark}
+        class="theme-toggle size-9 items-center justify-center rounded-lg text-muted-foreground outline-offset-2 transition hover:bg-accent hover:text-foreground active:scale-90"
+      >
+        <Moon data-theme-icon="dark" className="size-[1.125rem]" aria-hidden="true" />
+        <Sun data-theme-icon="light" className="size-[1.125rem]" aria-hidden="true" />
+      </button>
       <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
       <details data-menu class="group relative sm:hidden">
         <summary

@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- The light and dark switch moved from the footer to the header, beside Sign in, where readers can find it. It shows a moon on a light page and a sun on a dark one, and one click flips between the two and remembers the choice. Once a choice is made, the footer offers "Follow the system" to forget it; until then the page follows the system, as before. The old footer button cycled through three states behind an icon few recognized.
 - A notice's page reads like an article: a way back to Discover, who published it with its date and mark, a share button, a larger title and lead, roomier text whose web addresses are links, a card on Kite Plus (or, for an ad, on the advertiser, marked as an ad), and the three latest posts to go on to.
 
 ## [0.1.14] - 2026-10-06

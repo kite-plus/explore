@@ -1,6 +1,6 @@
 ---
 import ExternalLink from "@/components/ExternalLink.astro";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Monitor } from "lucide-react";
 
 import { dict, localePath, other, type Lang } from "@/i18n";
 
@@ -11,8 +11,9 @@ interface Props {
   wide?: boolean;
 }
 
-// The language switch and the theme toggle sit here rather than in the
-// header: every page has them, few readers need them.
+// The language switch sits here rather than in the header: every page has
+// it, few readers need it. So does the way back to the system's theme, which
+// shows only after the reader picked one in the header.
 const { lang, path, bilingual, wide = false } = Astro.props;
 const all = dict(lang);
 const t = all.footer;
@@ -45,18 +46,11 @@ const switchTo = other(lang);
         </a>
         <button
           type="button"
-          data-theme-toggle
-          data-auto={all.theme.auto}
-          data-dark={all.theme.dark}
-          data-light={all.theme.light}
-          data-switch-to={all.theme.switchTo}
-          aria-label={`${all.theme.auto} · ${all.theme.switchTo}${all.theme.dark}`}
-          title={`${all.theme.auto} · ${all.theme.switchTo}${all.theme.dark}`}
-          class="theme-toggle items-center justify-center rounded-md p-1.5 transition hover:bg-accent hover:text-foreground active:scale-90"
+          data-theme-auto
+          class="theme-auto items-center gap-1 rounded-md px-1.5 py-1 transition hover:bg-accent hover:text-foreground"
         >
-          <Monitor data-theme-icon="auto" className="size-4" aria-hidden="true" />
-          <Moon data-theme-icon="dark" className="size-4" aria-hidden="true" />
-          <Sun data-theme-icon="light" className="size-4" aria-hidden="true" />
+          <Monitor className="size-4" aria-hidden="true" />
+          {all.theme.followSystem}
         </button>
       </div>
     </div>

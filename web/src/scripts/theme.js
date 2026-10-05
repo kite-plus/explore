@@ -1,7 +1,9 @@
 // Inlined into every page's head, before the first paint. It applies the
-// reader's theme and runs the theme toggle; without a stored choice the page
-// follows the system setting. The choice stays in this browser's
-// localStorage and never reaches the server. See docs/design/frontend.md.
+// reader's theme and runs the theme buttons: the header's flips between
+// light and dark and remembers the choice, the footer's forgets it. Without
+// a stored choice the page follows the system setting. The choice stays in
+// this browser's localStorage and never reaches the server. See
+// docs/design/frontend.md.
 (() => {
   const root = document.documentElement;
   const read = () => {
@@ -12,15 +14,27 @@
       return null;
     }
   };
+  const store = () => {
+    try {
+      if (theme) localStorage.setItem("theme", theme);
+      else localStorage.removeItem("theme");
+    } catch {
+      // Storage may be blocked; the choice then holds only on this page.
+    }
+  };
+  const media = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+  const prefers = (query) => typeof matchMedia === "function" && matchMedia(query).matches;
   let theme = read();
+  // The theme on screen: the choice, else the system's.
+  const shown = () => theme ?? (prefers("(prefers-color-scheme: dark)") ? "dark" : "light");
   const apply = () => {
     if (theme) root.dataset.theme = theme;
     else delete root.dataset.theme;
-    const mode = theme ?? "auto";
-    root.dataset.themeMode = mode;
-    const next = mode === "auto" ? "dark" : mode === "dark" ? "light" : "auto";
+    root.dataset.themeMode = theme ?? "auto";
+    root.dataset.themeShown = shown();
+    // The header button names the theme a click goes to.
     for (const button of document.querySelectorAll("[data-theme-toggle]")) {
-      const label = `${button.dataset[mode]} · ${button.dataset.switchTo}${button.dataset[next]}`;
+      const label = shown() === "dark" ? button.dataset.toLight : button.dataset.toDark;
       button.setAttribute("aria-label", label);
       button.setAttribute("title", label);
     }
@@ -41,22 +55,20 @@
   addEventListener("pageshow", (event) => {
     if (event.persisted) reload();
   });
-
-  const prefers = (query) => typeof matchMedia === "function" && matchMedia(query).matches;
-  // Automatic mode shows the system's theme.
-  const shown = () => theme ?? (prefers("(prefers-color-scheme: dark)") ? "dark" : "light");
+  // Following the system, the page and its icon change when the system does.
+  media?.addEventListener?.("change", () => {
+    if (!theme) apply();
+  });
 
   document.addEventListener("click", (event) => {
-    const button = event.target instanceof Element ? event.target.closest("[data-theme-toggle]") : null;
+    const target = event.target instanceof Element ? event.target : null;
+    const toggle = target?.closest("[data-theme-toggle]");
+    const auto = target?.closest("[data-theme-auto]");
+    const button = toggle ?? auto;
     if (!button) return;
     const before = shown();
-    theme = theme === null ? "dark" : theme === "dark" ? "light" : null;
-    try {
-      if (theme) localStorage.setItem("theme", theme);
-      else localStorage.removeItem("theme");
-    } catch {
-      // Storage may be blocked; the choice then holds only on this page.
-    }
+    theme = toggle ? (before === "dark" ? "light" : "dark") : null;
+    store();
     // Lets the new icon turn in (global.css) without animating the first paint.
     root.dataset.themeSwitched = "";
     if (
@@ -67,7 +79,7 @@
       apply();
       return;
     }
-    // The new theme spreads from the toggle as a growing circle.
+    // The new theme spreads from the button as a growing circle.
     const box = button.getBoundingClientRect();
     const x = box.left + box.width / 2;
     const y = box.top + box.height / 2;
