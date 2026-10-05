@@ -6,7 +6,7 @@ import { zone } from "@/lib/format";
 import { forwardedFor } from "@/lib/forwarded";
 import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
-import type { BlogPage, Blog, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
+import type { BlogPage, Blog, BlogRef, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
 
 // Loaders run in a page's frontmatter, the only place where the status
 // and headers can still change: Astro streams the body after that.
@@ -132,6 +132,27 @@ export async function loadBlog(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Blo
   if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=300");
   return { kind: "ok", data: { ...r.data, tags: tags ?? [], paged: Boolean(cursor) } };
+}
+
+export type PostView = { entry: Entry & { blog: BlogRef }; more: Entry[]; tags: Tag[] };
+
+/**
+ * loadPost is a post's share page: the post, from the API rather than the
+ * address, and a few more posts from its blog. Only digits name a post.
+ */
+export async function loadPost(ctx: AstroGlobal, lang: Lang): Promise<Loaded<PostView>> {
+  const id = ctx.params.id ?? "";
+  if (!/^\d+$/.test(id)) return notFound(ctx);
+  const from = caller(ctx, lang);
+  const [r, tags] = await Promise.all([api.entry(from, id), tagList(from)]);
+  if (r.kind !== "ok") return failed(ctx, r);
+  const blog = r.data.blog;
+  if (!blog) return notFound(ctx);
+  // The blog's page is only extra: without it the post still shows.
+  const page = await api.blog(from, blog.host, { limit: 4 });
+  const more = page.kind === "ok" ? page.data.entries.filter((e) => e.id !== id).slice(0, 3) : [];
+  cacheControl(ctx, "public, max-age=300");
+  return { kind: "ok", data: { entry: { ...r.data, blog }, more, tags: tags ?? [] } };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {

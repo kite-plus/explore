@@ -25,14 +25,31 @@ interface Props {
   center?: boolean;
   /** The page starts with a bar of its own right under the header. */
   flush?: boolean;
+  /** An absolute image address for link previews; the Explore mark by default. */
+  image?: string;
+  /** The page stands for one post, as the share page does. */
+  article?: boolean;
 }
 
-const { lang, title, description, path, noindex = false, bilingual = true, entryChecks = false, wide = false, center = false, flush = false } =
-  Astro.props;
+const {
+  lang,
+  title,
+  description,
+  path,
+  noindex = false,
+  bilingual = true,
+  entryChecks = false,
+  wide = false,
+  center = false,
+  flush = false,
+  image,
+  article = false,
+} = Astro.props;
 const t = dict(lang);
 const base = publicURL();
 const canonical = base + localePath(lang, path);
 const fullTitle = title === t.site.name ? title : `${title} - ${t.site.name}`;
+const previewImage = image ?? `${base}/og.png`;
 const verification = {
   baidu: process.env.EXPLORE_SITE_VERIFICATION_BAIDU,
   google: process.env.EXPLORE_SITE_VERIFICATION_GOOGLE,
@@ -58,11 +75,13 @@ const verification = {
       )
     }
     {noindex && <meta name="robots" content="noindex, follow" />}
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={article ? "article" : "website"} />
     <meta property="og:site_name" content="Explore" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={previewImage} />
+    <meta name="twitter:card" content="summary" />
     <meta property="og:locale" content={t.ogLocale} />
     {bilingual && <meta property="og:locale:alternate" content={dict(other(lang)).ogLocale} />}
     <link rel="alternate" type="application/rss+xml" title="Explore" href="/feed.xml" />

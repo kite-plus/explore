@@ -4,13 +4,14 @@ import { dict, localePath, type Lang } from "@/i18n";
 
 interface Props {
   lang: Lang;
-  kind: "notFound" | "unavailable" | "blogNotFound";
+  kind: "notFound" | "unavailable" | "blogNotFound" | "postNotFound";
 }
 
 const { lang, kind } = Astro.props;
 const t = dict(lang).errors;
 const heading = kind === "unavailable" ? t.unavailable : t.notFound;
-const body = kind === "unavailable" ? t.unavailableBody : kind === "blogNotFound" ? t.blogNotFound : t.notFoundBody;
+const body =
+  kind === "unavailable" ? t.unavailableBody : kind === "blogNotFound" ? t.blogNotFound : kind === "postNotFound" ? t.postNotFound : t.notFoundBody;
 ---
 
 <section class="py-16 text-center">

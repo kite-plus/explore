@@ -1,0 +1,116 @@
+---
+import BlogAvatar from "@/components/BlogAvatar.astro";
+import EntryItem from "@/components/EntryItem.astro";
+import ExternalLink from "@/components/ExternalLink.astro";
+import Message from "@/components/Message.astro";
+import { TagIcon } from "@/components/TagIcon";
+import { buttonVariants } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import { publicURL, withSource } from "@/lib/config";
+import { formatDate } from "@/lib/format";
+import type { Loaded, PostView } from "@/lib/loaders";
+import { tagNames } from "@/lib/tags";
+import { cn, withQuery } from "@/lib/utils";
+
+interface Props {
+  lang: Lang;
+  id: string;
+  result: Loaded<PostView>;
+}
+
+// The page a shared post opens on: the title and excerpt the lists already
+// show, and a way to the author's site. It is not an article page and stays
+// out of search (docs/design/architecture.md section 8), so a search for
+// the title still finds the author's post first.
+const { lang, id, result } = Astro.props;
+const t = dict(lang);
+const data = result.kind === "ok" ? result.data : undefined;
+const entry = data?.entry;
+const names = data ? tagNames(data.tags, lang) : {};
+const tags = entry ? entry.tags.filter((slug) => names[slug]) : [];
+const title = entry ? entry.title : t.errors.notFound;
+const description = entry ? t.post.description(entry.blog.name, entry.excerpt) : t.errors.postNotFound;
+const blogPath = entry ? localePath(lang, `/blogs/${entry.blog.host}`) : "";
+---
+
+<Base
+  lang={lang}
+  title={title}
+  description={description}
+  path={`/p/${id}`}
+  noindex
+  article={Boolean(entry)}
+  image={entry?.image_url ? publicURL() + entry.image_url : undefined}
+>
+  {
+    entry && data ? (
+      <article class="mx-auto max-w-xl">
+        <a href={blogPath} class="flex items-center gap-3" lang={entry.blog.language}>
+          <BlogAvatar host={entry.blog.host} name={entry.blog.name} size="md" />
+          <span class="min-w-0">
+            <span class="block truncate font-medium">{entry.blog.name}</span>
+            <span class="block truncate text-sm text-muted-foreground">
+              {entry.blog.host}
+              {entry.published_at && <span lang={t.htmlLang}> · {formatDate(entry.published_at, lang)}</span>}
+            </span>
+          </span>
+        </a>
+        <h1 class="mt-5 text-2xl leading-snug font-semibold tracking-tight" lang={entry.blog.language}>
+          {entry.title}
+        </h1>
+        {entry.excerpt && (
+          <p class="mt-3 leading-relaxed text-muted-foreground" lang={entry.blog.language}>
+            {entry.excerpt}
+          </p>
+        )}
+        {entry.image_url && (
+          <div class="mt-5 aspect-video overflow-hidden rounded-lg border bg-muted">
+            <img src={entry.image_url} alt="" decoding="async" data-entry-cover class="h-full w-full object-cover" />
+          </div>
+        )}
+        {tags.length > 0 && (
+          <div class="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            {tags.map((slug) => (
+              <a
+                href={withQuery(localePath(lang, "/"), { tag: slug })}
+                class="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-brand"
+              >
+                <TagIcon slug={slug} className="size-3.5" />
+                {names[slug]}
+              </a>
+            ))}
+          </div>
+        )}
+        <div class="mt-6 flex flex-col gap-2 sm:flex-row">
+          <ExternalLink lang={lang} href={withSource(entry.url)} class={cn(buttonVariants({ size: "lg" }), "sm:flex-1")}>
+            {t.post.read}
+          </ExternalLink>
+          <a href={blogPath} class={cn(buttonVariants({ size: "lg", variant: "outline" }), "sm:flex-1")}>
+            {t.post.blog}
+          </a>
+        </div>
+        <p class="mt-3 text-center text-xs text-muted-foreground">{t.post.note}</p>
+        {data.more.length > 0 && (
+          <section class="mt-12">
+            <h2 class="text-sm font-medium text-muted-foreground">{t.post.more(entry.blog.name)}</h2>
+            <div class="mt-2 border-t" data-entry-stream>
+              {data.more.map((more) => (
+                <EntryItem
+                  lang={lang}
+                  entry={more}
+                  blogLanguage={entry.blog.language}
+                  blogHost={entry.blog.host}
+                  blogName={entry.blog.name}
+                  tagNames={names}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </article>
+    ) : (
+      <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "postNotFound"} />
+    )
+  }
+</Base>

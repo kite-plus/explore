@@ -1,0 +1,8 @@
+---
+import { loadPost } from "@/lib/loaders";
+import Post from "@/views/Post.astro";
+
+const result = await loadPost(Astro, "en");
+---
+
+<Post lang="en" id={Astro.params.id ?? ""} result={result} />

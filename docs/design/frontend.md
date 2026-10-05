@@ -51,6 +51,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/blogs/{host}` | 一个博客的介绍、文章（按页往下翻，带游标的页面 `noindex`）、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
 | `/go` | 打开原文前的过渡页（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）：目的地在 `#` 后面，只在浏览器里读取；由 Explore 页面打开时约 0.7 秒后自动前往，从别处打开时只列出目的地 | —— | 按需，不调用 API | `public, max-age=86400` | `noindex`，robots.txt 禁止 |
+| `/p/{id}` | 文章分享页：App 和网站分享文章时，链接和二维码打开这里。只有列表里已有的博客、日期、标题、摘要、缩略图和标签，"阅读原文"直达原文（带 `utm_source`），下面是同一博客的另外几篇文章。原文地址取自接口而不是链接，所以不必像 `/go` 那样请读者确认去向；不自动跳转 | `GET /api/v1/entries/{id}`、`GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | `noindex`，robots.txt 禁止 |
 | `/submit` | 提交博客的表单 | —— | 按需 | `no-store` | `noindex` |
 | `/submissions/{id}` | 提交进度 | `GET /api/v1/submissions/{id}` | 按需 | `no-store` | `noindex` |
 
@@ -64,7 +65,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 
 - **带筛选或翻页的列表页**（`?lang=`、`?tag=`、`?cursor=`，可以组合）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
 - `/feed.xml`、`/blogs.opml`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
-- **没有文章页**。文章只以指向原文的链接出现（[architecture.md §8](architecture.md#8-前端与-seo)）。
+- **没有可被收录的文章页**。文章只以指向原文的链接出现（[architecture.md §8](architecture.md#8-前端与-seo)）；分享页 `/p/{id}` 是唯一的例外，它不收录，也只有列表里已有的内容。
 - 匿名读者没有 Cookie，公开页面对所有人相同；两种语言又是不同的地址，所以公开页面都可以被反向代理和 CDN 直接缓存。登录后的请求带会话 Cookie，返回个人化的页面，不缓存（[accounts.md §8](accounts.md#8-前端)）。
 
 ---
@@ -230,11 +231,11 @@ import SubmitForm from "@/components/submit-form";
 
 ## 7. SEO
 
-- **每页**：`<title>`、`<meta name="description">`、canonical（基于 `EXPLORE_PUBLIC_URL` 的绝对地址）、Open Graph 信息，都用当前页面的语言。两种语言的对应关系见 §3.2。标题、描述写成纯文本。Open Graph 图片 `[待定]`：放一张站内的静态图即可，还没有做。
+- **每页**：`<title>`、`<meta name="description">`、canonical（基于 `EXPLORE_PUBLIC_URL` 的绝对地址）、Open Graph 信息，都用当前页面的语言。两种语言的对应关系见 §3.2。标题、描述写成纯文本。Open Graph 图片默认是站内的 `/og.png`（Explore 标志，600×600）；分享页有文章缩略图时改用缩略图，`og:type` 为 `article`。
 - **博客页**：标题形如"{博客名} - Explore"；描述由它最近几篇文章的标题组成，内容会随订阅源更新。
 - **状态码**要真实：`404` 就是 `404`，故障就是 `503`（§5）。
 - **sitemap.xml** 由前端写接口生成：Astro 官方的 [sitemap 集成](https://docs.astro.build/en/guides/integrations-guide/sitemap/)不支持按需渲染的动态路由，列不出博客页。每个博客页的 `lastmod` 取接口返回的 `last_published_at`。
-- **robots.txt**：允许抓取，写上 `Sitemap:` 地址，禁止两种语言的提交页和进度页。
+- **robots.txt**：允许抓取，写上 `Sitemap:` 地址，禁止两种语言的提交页、进度页、过渡页和分享页。
 - **外链**：指向原文的链接是普通的 `<a href>`，不加 `nofollow`。
 - **性能**：没有 JS、没有外部字体、只有一个 CSS 文件，Core Web Vitals 基本不用额外优化。
 - **上线后**：把 sitemap 提交到百度搜索资源平台和 Google Search Console；站点验证用的 meta 标签通过环境变量注入。

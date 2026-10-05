@@ -81,6 +81,8 @@ export const api = {
       { caller, headers: { Cookie: cookie } },
     ),
 
+  entry: (caller: Caller, id: string) => call<Entry>(`/api/v1/entries/${encodeURIComponent(id)}`, { caller }),
+
   tags: (caller: Caller) => call<{ data: Tag[] }>("/api/v1/tags", { caller }),
 
   blogs: (caller: Caller, p: { order?: "newest"; cursor?: string; lang?: string; limit?: number }) =>

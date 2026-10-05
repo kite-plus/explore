@@ -88,6 +88,13 @@ export const zh = {
     description: (name: string, titles: string[]) =>
       titles.length ? `${name} 最近的文章：${titles.join("、")}` : `${name} 收录在 Explore。`,
   },
+  post: {
+    read: "阅读原文",
+    blog: "查看这个博客",
+    note: "文章在作者自己的网站上阅读，Explore 只帮你找到它。",
+    more: (name: string) => `更多来自${name}`,
+    description: (blog: string, excerpt: string | null) => (excerpt ? `${blog}：${excerpt}` : `${blog} 的文章，收录在 Explore。`),
+  },
   submit: {
     title: "提交博客",
     intro: "填写博客地址，我们会立即检查它的订阅源。检查通过后由维护者审核，审核通过就开始收录。",
@@ -132,6 +139,7 @@ export const zh = {
     notFound: "页面不存在",
     notFoundBody: "你要找的页面不存在。",
     blogNotFound: "没有找到这个博客。它可能还没有收录，或者暂时不可用。",
+    postNotFound: "没有找到这篇文章。作者可能已经删除了它，或者它暂时不可用。",
     unavailable: "暂时无法访问",
     unavailableBody: "服务暂时不可用，请稍后再试。",
     home: "返回首页",

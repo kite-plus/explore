@@ -133,6 +133,12 @@ export function startStub() {
       return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9cqN8AAAAASUVORK5CYII=", "base64"));
     }
 
+    if (req.method === "GET" && /^\/api\/v1\/entries\/\d+$/.test(url.pathname)) {
+      const id = url.pathname.split("/").pop();
+      const entry = [...entries.first.data, ...entries.second.data].find((e) => e.id === id);
+      return entry ? send(200, entry) : error(404, "not_found");
+    }
+
     if (req.method === "GET" && url.pathname === "/api/v1/tags") {
       state.tagLists++;
       return send(200, { data: tags });

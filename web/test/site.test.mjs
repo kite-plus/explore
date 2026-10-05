@@ -153,7 +153,62 @@ describe("search engines", () => {
     const txt = await (await get("/robots.txt")).text();
     assert.match(txt, new RegExp(`Sitemap: ${PUBLIC}/sitemap.xml`));
     assert.match(txt, /Disallow: \/submit/);
+    assert.match(txt, /Disallow: \/p\//);
+    assert.match(txt, /Disallow: \/en\/p\//);
   });
+
+  test("link previews show the Explore mark unless a page has its own image", async () => {
+    const { html } = await page("/");
+    assert.match(html, new RegExp(`<meta property="og:image" content="${PUBLIC}/og.png">`));
+    assert.match(html, /<meta property="og:type" content="website">/);
+    const res = await get("/og.png");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/png");
+  });
+});
+
+describe("share page", () => {
+  test("a shared post shows what lists show and reads on the author's site", async () => {
+    const { res, html } = await page("/p/2");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=300");
+    assert.match(html, /<title>缓存可以随时删掉 - Explore<\/title>/);
+    assert.match(html, /<h1[^>]*>\s*缓存可以随时删掉\s*<\/h1>/);
+    assert.ok(html.includes("第一段摘要。"));
+    assert.ok(html.includes(`href="https://zh.example.com/posts/cache/?utm_source=explore.example.org"`), "read link");
+    assert.match(html, /阅读原文/);
+    assert.ok(html.includes(`href="/blogs/zh.example.com"`), "blog link");
+    assert.match(html, /<img src="\/api\/v1\/entries\/2\/image"/);
+  });
+
+  test("it stays out of search and previews as the post", async () => {
+    const { html } = await page("/p/2");
+    assert.match(html, /<meta name="robots" content="noindex, follow">/);
+    assert.match(html, new RegExp(`<link rel="canonical" href="${PUBLIC}/p/2">`));
+    assert.match(html, /<meta property="og:type" content="article">/);
+    assert.match(html, new RegExp(`<meta property="og:image" content="${PUBLIC}/api/v1/entries/2/image">`));
+    assert.match(html, /<meta name="description" content="中文博客：第一段摘要。">/);
+  });
+
+  test("the English page lists more from the blog, but not the shared post", async () => {
+    const { html } = await page("/en/p/1");
+    assert.match(html, /<html lang="en">/);
+    assert.match(html, /Read the post/);
+    assert.ok(html.includes(`href="/en/blogs/en.example.com"`), "blog link");
+    assert.match(html, /More from English Blog/);
+    assert.ok(html.includes("缓存可以随时删掉"), "another post from the blog");
+    assert.equal((html.match(/feeds\/\?p=7/g) ?? []).length, 1, "the shared post is linked only by its read button");
+    assert.match(html, new RegExp(`<meta property="og:image" content="${PUBLIC}/og.png">`));
+  });
+
+  for (const path of ["/p/999", "/p/abc", "/en/p/0x1"]) {
+    test(`${path} is not found`, async () => {
+      const { res, html } = await page(path);
+      assert.equal(res.status, 404);
+      assert.equal(res.headers.get("cache-control"), "no-store");
+      assert.ok(html.includes(path.startsWith("/en") ? "This post was not found." : "没有找到这篇文章。"));
+    });
+  }
 });
 
 describe("content", () => {

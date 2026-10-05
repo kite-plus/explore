@@ -90,6 +90,13 @@ export const en: Dict = {
     description: (name: string, titles: string[]) =>
       titles.length ? `Recent posts on ${name}: ${titles.join(", ")}` : `${name} is listed on Explore.`,
   },
+  post: {
+    read: "Read the post",
+    blog: "See the blog",
+    note: "You read the post on the author's own site. Explore only helps you find it.",
+    more: (name: string) => `More from ${name}`,
+    description: (blog: string, excerpt: string | null) => (excerpt ? `${blog}: ${excerpt}` : `A post from ${blog}, listed on Explore.`),
+  },
   submit: {
     title: "Submit a blog",
     intro: "Enter your blog's address and we will check its feed right away. A maintainer reviews blogs that pass, and approved blogs are listed.",
@@ -134,6 +141,7 @@ export const en: Dict = {
     notFound: "Page not found",
     notFoundBody: "The page you are looking for does not exist.",
     blogNotFound: "This blog was not found. It may not be listed yet, or it is unavailable for now.",
+    postNotFound: "This post was not found. Its author may have removed it, or it is unavailable for now.",
     unavailable: "Temporarily unavailable",
     unavailableBody: "The service is unavailable right now. Please try again later.",
     home: "Back to the home page",
