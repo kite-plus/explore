@@ -29,6 +29,7 @@ import (
 	"github.com/kite-plus/explore/internal/feed"
 	"github.com/kite-plus/explore/internal/fetch"
 	"github.com/kite-plus/explore/internal/model"
+	"github.com/kite-plus/explore/internal/policy"
 	"github.com/kite-plus/explore/internal/store"
 	"github.com/kite-plus/explore/internal/store/storetest"
 )
@@ -1166,20 +1167,26 @@ func TestRecommendedEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	quality := map[string]model.Quality{"Post plain": model.QualitySolid, "Post deep": model.QualityStandout, "Post note": model.QualityBrief}
+	score := map[string]int16{"Post plain": 11, "Post deep": 14, "Post note": policy.RecommendedMinScore - 1}
 	for _, j := range jobs {
-		if err := e.s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"life"}, Quality: quality[j.Title]}); err != nil {
+		if err := e.s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"life"}, Score: score[j.Title]}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	page := decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1"))
-	if len(page.Data) != 1 || page.Data[0].Title != "Post deep" || page.NextCursor == nil {
+	// Days come newest first, whatever the score.
+	page := decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1&tz=Asia/Shanghai"))
+	if len(page.Data) != 1 || page.Data[0].Title != "Post plain" || page.NextCursor == nil {
 		t.Fatalf("first page = %+v", page)
 	}
-	page = decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1&cursor="+url.QueryEscape(*page.NextCursor)))
-	if len(page.Data) != 1 || page.Data[0].Title != "Post plain" || page.NextCursor != nil {
+	page = decode[pageOut](t, e.get("/api/v1/entries?order=recommended&limit=1&tz=Asia/Shanghai&cursor="+url.QueryEscape(*page.NextCursor)))
+	if len(page.Data) != 1 || page.Data[0].Title != "Post deep" || page.NextCursor != nil {
 		t.Fatalf("second page = %+v", page)
+	}
+	for _, tz := range []string{"Mars/Olympus_Mons", "Local", "../../etc/passwd"} {
+		if w := e.get("/api/v1/entries?order=recommended&tz=" + url.QueryEscape(tz)); w.Code != http.StatusBadRequest {
+			t.Errorf("tz %q = %d, want 400", tz, w.Code)
+		}
 	}
 	if latest := decode[pageOut](t, e.get("/api/v1/entries?order=latest")); len(latest.Data) != 3 {
 		t.Errorf("latest = %d entries, want all 3", len(latest.Data))

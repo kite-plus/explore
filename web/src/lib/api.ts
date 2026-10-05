@@ -66,9 +66,9 @@ function query(params: Record<string, string | undefined>): string {
 }
 
 export const api = {
-  entries: (caller: Caller, p: { order?: "recommended"; cursor?: string; lang?: string; tag?: string; limit?: number }) =>
+  entries: (caller: Caller, p: { order?: "recommended"; cursor?: string; lang?: string; tag?: string; limit?: number; tz?: string }) =>
     call<Page<Entry>>(
-      `/api/v1/entries${query({ order: p.order, cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString() })}`,
+      `/api/v1/entries${query({ order: p.order, cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString(), tz: p.tz })}`,
       { caller },
     ),
 

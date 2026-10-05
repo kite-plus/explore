@@ -41,6 +41,12 @@ func newAnthropic(o Options) *anthropicAPI {
 	for i, t := range model.Tags {
 		slugs[i] = t.Slug
 	}
+	// Structured outputs take enums but no numeric bounds.
+	var marks []int
+	for m := model.MinMark; m <= model.MaxMark; m++ {
+		marks = append(marks, m)
+	}
+	mark := map[string]any{"type": "integer", "enum": marks}
 	return &anthropicAPI{
 		client: anthropic.NewClient(opts...),
 		model:  o.Model,
@@ -51,10 +57,13 @@ func newAnthropic(o Options) *anthropicAPI {
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"tags":    map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": slugs}},
-				"quality": map[string]any{"type": "string", "enum": qualities},
+				"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": slugs}},
+				"skip":        map[string]any{"type": "boolean"},
+				"depth":       mark,
+				"originality": mark,
+				"value":       mark,
 			},
-			"required":             []string{"tags", "quality"},
+			"required":             []string{"tags", "skip", "depth", "originality", "value"},
 			"additionalProperties": false,
 		},
 	}

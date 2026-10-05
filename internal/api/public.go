@@ -104,12 +104,17 @@ func (s *Server) entries(c *gin.Context) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	stream := s.Store.Stream
+	stream, zone := s.Store.Stream, ""
 	if recommended {
-		stream = s.Store.Recommended
+		stream, zone = s.Store.Recommended, c.Query("tz")
+		// Postgres knows no "Local", which Go would take.
+		if _, err := time.LoadLocation(zone); err != nil || zone == "Local" {
+			s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+			return
+		}
 	}
 	// One extra row says whether there is a next page.
-	rows, err := stream(c.Request.Context(), store.StreamQuery{Lang: language, Tag: tag, Limit: limit + 1, Cursor: cur})
+	rows, err := stream(c.Request.Context(), store.StreamQuery{Lang: language, Tag: tag, Zone: zone, Limit: limit + 1, Cursor: cur})
 	if err != nil {
 		s.storeError(c, err)
 		return

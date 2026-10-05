@@ -196,7 +196,7 @@ func (s *Store) RecordSitemapPage(ctx context.Context, job SitemapPageJob, p Sit
 				    page_excerpt   = excluded.page_excerpt,
 				    tags           = CASE WHEN entries.title = excluded.title THEN entries.tags ELSE '{}' END,
 				    tagged_at      = CASE WHEN entries.title = excluded.title THEN entries.tagged_at END,
-				    quality        = CASE WHEN entries.title = excluded.title THEN entries.quality END,
+				    score          = CASE WHEN entries.title = excluded.title THEN entries.score END,
 				    synced_at      = now()
 				WHERE entries.source = 'sitemap'`, args); err != nil {
 				return err

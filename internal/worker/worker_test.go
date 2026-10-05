@@ -595,7 +595,7 @@ func (f *fakeTagger) Tag(_ context.Context, j store.TagJob) (model.Rating, error
 	if f.err != nil && (f.failOn == nil || slices.Contains(f.failOn, j.EntryID)) {
 		return model.Rating{}, f.err
 	}
-	return model.Rating{Tags: []string{"life"}, Quality: model.QualitySolid}, nil
+	return model.Rating{Tags: []string{"life"}, Score: 12}, nil
 }
 
 func TestTaggingNewEntries(t *testing.T) {

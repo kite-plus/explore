@@ -230,6 +230,11 @@ describe("content", () => {
     assert.doesNotMatch(html, /noindex/);
     assert.match(html, /<title>推荐文章 - Explore<\/title>/);
     assert.match(html, /href="\/recommended\?lang=zh"/, "the language filter stays on the recommended stream");
+    assert.equal(stub.state.entryZones.at(-1), "Asia/Shanghai", "days split where the Chinese page splits them");
+    await page("/en/recommended");
+    assert.equal(stub.state.entryZones.at(-1), "UTC");
+    await page("/");
+    assert.equal(stub.state.entryZones.at(-1), null, "the latest stream sends no time zone");
   });
 
   test("a recommended stream with nothing rated links the latest posts", async () => {

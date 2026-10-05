@@ -12,8 +12,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/kite-plus/explore/internal/model"
 )
 
 // fakeChat answers /v1/chat/completions like an OpenAI-compatible server.
@@ -76,9 +74,9 @@ func (f *fakeChat) tagger(key, effort string) *Tagger {
 
 func TestOpenAISendsAJSONModeRequest(t *testing.T) {
 	f := newFakeChat(t)
-	f.content = `{"tags":["ai","tools"],"quality":"standout"}`
+	f.content = `{"tags":["ai","tools"],"skip":false,"depth":5,"originality":4,"value":4}`
 	rating, err := f.tagger("sk-test", "low").Tag(t.Context(), post)
-	if err != nil || !slices.Equal(rating.Tags, []string{"ai", "tools"}) || rating.Quality != model.QualityStandout {
+	if err != nil || !slices.Equal(rating.Tags, []string{"ai", "tools"}) || rating.Score != 13 {
 		t.Fatalf("rating = %+v, %v", rating, err)
 	}
 	if f.auth != "Bearer sk-test" {
@@ -104,7 +102,7 @@ func TestOpenAISendsAJSONModeRequest(t *testing.T) {
 
 func TestOpenAIWithoutKeyOrEffort(t *testing.T) {
 	f := newFakeChat(t)
-	f.content = `{"tags":[],"quality":"brief"}`
+	f.content = `{"tags":[],"skip":false,"depth":2,"originality":2,"value":2}`
 	if _, err := f.tagger("", "").Tag(t.Context(), post); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +116,7 @@ func TestOpenAIWithoutKeyOrEffort(t *testing.T) {
 
 func TestOpenAIExtraBody(t *testing.T) {
 	f := newFakeChat(t)
-	f.content = `{"tags":[],"quality":"brief"}`
+	f.content = `{"tags":[],"skip":false,"depth":2,"originality":2,"value":2}`
 	tg := New(Options{
 		Provider: OpenAI, BaseURL: f.srv.URL + "/v1", APIKey: "k", Model: "deepseek-flash", Effort: "high",
 		ExtraBody: map[string]any{"thinking": map[string]any{"type": "disabled"}, "reasoning_effort": "low"},
@@ -136,16 +134,16 @@ func TestOpenAIExtraBody(t *testing.T) {
 
 func TestOpenAIAnswers(t *testing.T) {
 	f := newFakeChat(t)
-	f.content = "```json\n{\"tags\":[\"backend\"],\"quality\":\"solid\"}\n```"
-	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || !slices.Equal(rating.Tags, []string{"backend"}) || rating.Quality != model.QualitySolid {
+	f.content = "```json\n{\"tags\":[\"backend\"],\"skip\":false,\"depth\":3,\"originality\":4,\"value\":4}\n```"
+	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || !slices.Equal(rating.Tags, []string{"backend"}) || rating.Score != 11 {
 		t.Errorf("fenced answer: %+v, %v", rating, err)
 	}
 	f.content, f.refusal = "", "I can't help with that."
-	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || len(rating.Tags) != 0 || rating.Quality != model.QualitySkip {
+	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || len(rating.Tags) != 0 || rating.Score != 0 {
 		t.Errorf("refusal: %+v, %v; want no tags, a skip and no error", rating, err)
 	}
 	f.refusal, f.finish = "", "content_filter"
-	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || rating.Quality != model.QualitySkip {
+	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || rating.Score != 0 {
 		t.Errorf("content filter: %+v, %v; want a skip", rating, err)
 	}
 	f.content, f.finish = `{"tags":["ai"`, "length"
@@ -160,9 +158,9 @@ func TestOpenAIAnswers(t *testing.T) {
 
 func TestOpenAIRetries(t *testing.T) {
 	f := newFakeChat(t)
-	f.content = `{"tags":["life"],"quality":"solid"}`
+	f.content = `{"tags":["life"],"skip":false,"depth":3,"originality":3,"value":4}`
 	f.statuses = []int{http.StatusInternalServerError, http.StatusTooManyRequests}
-	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || rating.Quality != model.QualitySolid || f.calls != 3 {
+	if rating, err := f.tagger("k", "").Tag(t.Context(), post); err != nil || rating.Score != 10 || f.calls != 3 {
 		t.Errorf("after a server error and a rate limit: %+v, %v, %d calls", rating, err, f.calls)
 	}
 

@@ -46,7 +46,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | 路由 | 内容 | 数据 | 渲染 | `Cache-Control` | 搜索引擎 |
 |---|---|---|---|---|---|
 | `/` | 首页的最新流，按发布时间倒序翻页、按天分组，含可用的文章缩略图；可按博客语言和文章标签筛选。最新、推荐、订阅三个标签在吸顶工具栏里，宽屏右侧有边栏（§4） | `GET /api/v1/entries`、`GET /api/v1/tags`、`GET /api/v1/blogs?order=newest` | 按需 | `public, max-age=60` | 无筛选时收录 |
-| `/recommended` | 推荐流，按排序时间翻页（[accounts.md §3.1](accounts.md#31-推荐评分)）；可按博客语言和文章标签筛选。还没有评分时说明原因，并链接到最新 | `GET /api/v1/entries?order=recommended`、`GET /api/v1/tags` | 按需 | `public, max-age=60` | 无筛选时收录 |
+| `/recommended` | 推荐流，按天倒序、天内分高的在前（[accounts.md §3.1](accounts.md#31-推荐评分)）；可按博客语言和文章标签筛选。按页面的时区（中文 `Asia/Shanghai`，英文 `UTC`）分日期，请求时传同一个 `tz`。还没有评分时说明原因，并链接到最新 | `GET /api/v1/entries?order=recommended&tz=…`、`GET /api/v1/tags` | 按需 | `public, max-age=60` | 无筛选时收录 |
 | `/blogs` | 博客目录，含 favicon 和简短介绍 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
 | `/blogs/{host}` | 一个博客的介绍、文章（按页往下翻，带游标的页面 `noindex`）、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |

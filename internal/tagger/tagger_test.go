@@ -66,12 +66,12 @@ var post = Post{
 
 func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":["ai","tools"],"quality":"solid"}`
+	f.text = `{"tags":["ai","tools"],"skip":false,"depth":4,"originality":4,"value":3}`
 	rating, err := f.tagger("low").Tag(context.Background(), post)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(rating.Tags, []string{"ai", "tools"}) || rating.Quality != model.QualitySolid {
+	if !slices.Equal(rating.Tags, []string{"ai", "tools"}) || rating.Score != 11 {
 		t.Errorf("rating = %+v", rating)
 	}
 
@@ -98,11 +98,16 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 	if format["type"] != "json_schema" || len(enum) != len(model.Tags) {
 		t.Errorf("format = %v", format)
 	}
-	if got := properties["quality"].(map[string]any)["enum"].([]any); len(got) != 4 || got[0] != "skip" || got[3] != "standout" {
-		t.Errorf("quality enum = %v", got)
+	for _, mark := range []string{"depth", "originality", "value"} {
+		if got := properties[mark].(map[string]any)["enum"].([]any); len(got) != model.MaxMark || got[0] != float64(model.MinMark) {
+			t.Errorf("%s enum = %v", mark, got)
+		}
+		if !strings.Contains(system["text"].(string), "- "+mark+": ") {
+			t.Errorf("system prompt does not explain %s", mark)
+		}
 	}
-	if !strings.Contains(system["text"].(string), "- standout: ") {
-		t.Error("system prompt does not explain the ratings")
+	if required := format["schema"].(map[string]any)["required"].([]any); len(required) != 5 {
+		t.Errorf("required = %v", required)
 	}
 	user := req["messages"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
 	for _, want := range []string{"Title: " + post.Title, "Categories: AI, 博客", "Language: zh-CN", "Blog's usual tags: tools"} {
@@ -114,7 +119,7 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 
 func TestTagExtraBody(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":[],"quality":"brief"}`
+	f.text = `{"tags":[],"skip":false,"depth":2,"originality":2,"value":2}`
 	tg := New(Options{APIKey: "test-key", Model: "test-model", BaseURL: f.srv.URL, ExtraBody: map[string]any{
 		"reasoning": map[string]any{"effort": "none"}, "odd.name": true,
 	}})
@@ -128,7 +133,7 @@ func TestTagExtraBody(t *testing.T) {
 
 func TestTagWithoutEffort(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":[],"quality":"brief"}`
+	f.text = `{"tags":[],"skip":false,"depth":2,"originality":3,"value":2}`
 	if _, err := f.tagger("").Tag(context.Background(), post); err != nil {
 		t.Fatal(err)
 	}
@@ -137,16 +142,27 @@ func TestTagWithoutEffort(t *testing.T) {
 	}
 }
 
-func TestTagKeepsOnlyKnownTagsAndRatings(t *testing.T) {
+func TestTagKeepsOnlyKnownTagsAndSumsTheMarks(t *testing.T) {
 	f := newFakeAPI(t)
-	f.text = `{"tags":["ai","nonsense","ai","backend","ops","data"],"quality":"standout"}`
-	rating, err := f.tagger("").Tag(context.Background(), post)
-	if err != nil || !slices.Equal(rating.Tags, []string{"ai", "backend", "ops"}) || rating.Quality != model.QualityStandout {
+	f.text = `{"tags":["ai","nonsense","ai","backend","ops","data"],"skip":false,"depth":5,"originality":5,"value":4}`
+	rating, err := f.tagger("").Tag(t.Context(), post)
+	if err != nil || !slices.Equal(rating.Tags, []string{"ai", "backend", "ops"}) || rating.Score != 14 {
 		t.Errorf("rating = %+v, %v", rating, err)
 	}
-	f.text = `{"tags":["ai"],"quality":"brilliant"}`
-	if rating, err := f.tagger("").Tag(context.Background(), post); err != nil || rating.Quality != model.QualitySkip {
-		t.Errorf("an unknown rating = %+v, %v; want a skip", rating, err)
+	// An advertisement scores 0, however well it is written.
+	f.text = `{"tags":["ops"],"skip":true,"depth":4,"originality":3,"value":4}`
+	if rating, err := f.tagger("").Tag(t.Context(), post); err != nil || rating.Score != 0 || !slices.Equal(rating.Tags, []string{"ops"}) {
+		t.Errorf("skip = %+v, %v; want the tags and a score of 0", rating, err)
+	}
+	for _, answer := range []string{
+		`{"tags":["ai"],"skip":false,"depth":6,"originality":3,"value":3}`,
+		`{"tags":["ai"],"skip":false,"depth":3,"value":3}`,
+		`{"tags":["ai"],"skip":false,"depth":2.5,"originality":3,"value":3}`,
+	} {
+		f.text = answer
+		if _, err := f.tagger("").Tag(t.Context(), post); !errors.Is(err, ErrMalformed) {
+			t.Errorf("%s: err = %v, want ErrMalformed", answer, err)
+		}
 	}
 }
 
@@ -154,10 +170,10 @@ func TestTagUnusableAnswers(t *testing.T) {
 	f := newFakeAPI(t)
 	f.stopReason, f.text = "refusal", `{"tags":["ai"`
 	rating, err := f.tagger("").Tag(t.Context(), post)
-	if err != nil || len(rating.Tags) != 0 || rating.Quality != model.QualitySkip {
-		t.Errorf("refusal: rating = %+v, %v; want no tags, a skip and no error", rating, err)
+	if err != nil || len(rating.Tags) != 0 || rating.Score != 0 {
+		t.Errorf("refusal: rating = %+v, %v; want no tags, a score of 0 and no error", rating, err)
 	}
-	// A cut-short answer is tried again later rather than taken as a skip.
+	// A cut-short answer is tried again later rather than taken as a 0.
 	f.stopReason = "max_tokens"
 	if _, err := f.tagger("").Tag(t.Context(), post); !errors.Is(err, ErrTruncated) {
 		t.Errorf("max_tokens: err = %v, want ErrTruncated", err)

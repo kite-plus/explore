@@ -4,6 +4,9 @@ package main
 import (
 	"fmt"
 	"os"
+	// The runtime image has no zone database, and readers' time zones
+	// decide the recommended stream's days.
+	_ "time/tzdata"
 
 	"github.com/kite-plus/explore/internal/cli"
 )

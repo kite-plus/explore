@@ -49,10 +49,6 @@ type Options struct {
 // requestTimeout bounds one classification, retries included.
 const requestTimeout = 60 * time.Second
 
-// qualities are the ratings the model chooses from, lowest first, in the
-// order of model.Quality.
-var qualities = []string{"skip", "brief", "solid", "standout"}
-
 var (
 	// ErrMalformed means the model's answer was not the JSON asked for.
 	ErrMalformed = errors.New("malformed answer")
@@ -97,13 +93,13 @@ func systemPrompt() string {
 	for _, t := range model.Tags {
 		fmt.Fprintf(&b, "- %s: %s\n", t.Slug, t.About)
 	}
-	b.WriteString("\nAlso rate the post for a stream of recommended reading, as its title and excerpt show it:\n")
-	b.WriteString("- standout: original, in-depth writing most readers would find worth their time, such as a thorough technical deep dive, original research, a well-argued long essay or a detailed account of hard-won experience.\n")
-	b.WriteString("- solid: a substantial post with a clear subject, such as a how-to, a review, an essay, a project write-up or a well-told personal story.\n")
-	b.WriteString("- brief: short notes, status updates, routine announcements, release notes, or lists of links with little commentary.\n")
-	b.WriteString("- skip: test or placeholder posts, advertising, posts that only point elsewhere, or too little to tell.\n")
-	b.WriteString("Rate the writing, not its topic or language: a solid post on any subject, in any language, is solid. When unsure between two ratings, choose the lower.\n")
-	b.WriteString("\nAnswer with a JSON object only, such as {\"tags\": [\"backend\", \"ops\"], \"quality\": \"solid\"}.\n")
+	fmt.Fprintf(&b, "\nAlso mark the post for a stream of recommended reading, from what its title, excerpt and categories show, on three marks from %d to %d:\n", model.MinMark, model.MaxMark)
+	b.WriteString("- depth: 1 a line or a quick note; 2 a short post, a routine weekly or monthly log, or release notes; 3 a complete post on one subject, such as a how-to, a review or an essay; 4 a detailed, careful treatment; 5 a thorough deep dive, original research or a long, well-argued essay.\n")
+	b.WriteString("- originality: 1 reposts, news, announcements, deals, or lists of links with little comment; 2 a summary or translation of others' work; 3 the author's notes or a how-to on a common topic; 4 first-hand experience, the author's own project or a clear argument; 5 original findings, hard-won lessons or a fresh perspective.\n")
+	b.WriteString("- value: what a reader who opens it gets, whatever the topic: 1 next to nothing, such as site news or a test; 2 mostly of interest to people who know the author; 3 useful or enjoyable for readers into the topic; 4 clearly worth reading, being practical, insightful or moving; 5 something readers would save or pass on.\n")
+	b.WriteString("Most posts deserve 2 or 3 on each mark; give 4 or 5 only when the title or excerpt shows it. Judge the writing, not its topic or language.\n")
+	b.WriteString("Set skip to true for advertising or sponsored posts, test or placeholder posts, and posts that only point elsewhere.\n")
+	b.WriteString("\nAnswer with a JSON object only, such as {\"tags\": [\"backend\", \"ops\"], \"skip\": false, \"depth\": 3, \"originality\": 4, \"value\": 3}.\n")
 	return b.String()
 }
 
@@ -126,8 +122,8 @@ func userText(p Post) string {
 }
 
 // Tag returns the post's tags, best fit first, possibly none, and its
-// quality. A refusal is no tags and a skip, so the post is not asked about
-// again and again. An error means the post should wait for another try:
+// score. A refusal is no tags and a score of 0, so the post is not asked
+// about again and again. An error means the post should wait for another try:
 // the model could not be asked, or its answer was cut short or malformed.
 func (t *Tagger) Tag(ctx context.Context, p Post) (model.Rating, error) {
 	answer, err := t.api.ask(ctx, t.system, userText(p))
@@ -141,7 +137,7 @@ func (t *Tagger) Tag(ctx context.Context, p Post) (model.Rating, error) {
 }
 
 // parse keeps the known tags of an answer, once each, at most three, and
-// its quality; a quality it does not know is a skip.
+// sums its marks into a score; a post marked skip scores 0.
 func parse(answer string) (model.Rating, error) {
 	// Some OpenAI-compatible servers fence the JSON as Markdown.
 	answer = strings.TrimSpace(answer)
@@ -150,13 +146,16 @@ func parse(answer string) (model.Rating, error) {
 		answer, _ = strings.CutSuffix(strings.TrimSpace(s), "```")
 	}
 	var out struct {
-		Tags    []string `json:"tags"`
-		Quality string   `json:"quality"`
+		Tags        []string `json:"tags"`
+		Skip        bool     `json:"skip"`
+		Depth       int      `json:"depth"`
+		Originality int      `json:"originality"`
+		Value       int      `json:"value"`
 	}
 	if err := json.Unmarshal([]byte(answer), &out); err != nil {
 		return model.Rating{}, fmt.Errorf("%w: %w", ErrMalformed, err)
 	}
-	r := model.Rating{Tags: []string{}, Quality: model.QualitySkip}
+	r := model.Rating{Tags: []string{}}
 	for _, slug := range out.Tags {
 		if _, ok := model.TagBySlug(slug); ok && !slices.Contains(r.Tags, slug) {
 			r.Tags = append(r.Tags, slug)
@@ -165,8 +164,14 @@ func parse(answer string) (model.Rating, error) {
 			break
 		}
 	}
-	if i := slices.Index(qualities, out.Quality); i >= 0 {
-		r.Quality = model.Quality(i)
+	if out.Skip {
+		return r, nil
 	}
+	for _, mark := range []int{out.Depth, out.Originality, out.Value} {
+		if mark < model.MinMark || mark > model.MaxMark {
+			return model.Rating{}, fmt.Errorf("%w: marks %d, %d and %d", ErrMalformed, out.Depth, out.Originality, out.Value)
+		}
+	}
+	r.Score = int16(out.Depth + out.Originality + out.Value)
 	return r, nil
 }

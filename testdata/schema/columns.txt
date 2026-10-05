@@ -46,7 +46,7 @@ entries.page_excerpt text
 entries.page_image_url text
 entries.page_next_check_at timestamp with time zone
 entries.published_at timestamp with time zone
-entries.quality smallint
+entries.score smallint
 entries.source text
 entries.synced_at timestamp with time zone
 entries.tagged_at timestamp with time zone

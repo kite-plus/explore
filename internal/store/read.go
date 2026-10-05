@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"time"
@@ -37,6 +38,7 @@ type Cursor struct {
 type StreamQuery struct {
 	Lang   string // a lower-case language prefix such as "zh", or empty
 	Tag    string // a tag slug, or empty
+	Zone   string // the IANA time zone whose days the recommended stream follows; empty is UTC
 	Limit  int
 	Cursor *Cursor
 }
@@ -103,20 +105,22 @@ func (s *Store) Stream(ctx context.Context, q StreamQuery) ([]StreamEntry, error
 	})
 }
 
-// Recommended returns the recommended stream: entries the tagger rated solid
-// or standout, under the latest stream's visibility rules, without a link
-// found unavailable, and at most policy.RecommendedPerBlogPerDay per blog and
-// day, the best first. They are ordered by SortAt: the publish time, plus
-// policy.StandoutBoost for standout entries. SortAt does not move with the
-// clock, so the cursor holds. See docs/design/accounts.md section 3.1.
+// Recommended returns the recommended stream: entries scoring at least
+// policy.RecommendedMinScore, under the latest stream's visibility rules,
+// without a link found unavailable, and at most
+// policy.RecommendedPerBlogPerDay per blog and day, the best first. Days
+// follow q.Zone, the newest first; within a day the higher score comes
+// first, then the newer post. SortAt folds that order into a moment within
+// the post's day, so it does not move with the clock and the cursor holds.
+// See docs/design/data-model.md section 4.3.
 func (s *Store) Recommended(ctx context.Context, q StreamQuery) ([]StreamEntry, error) {
 	args := pgx.NamedArgs{
 		"unhealthy_after":  seconds(policy.UnhealthyAfter),
 		"future_tolerance": seconds(policy.FutureTolerance),
 		"per_day":          policy.RecommendedPerBlogPerDay,
-		"boost":            seconds(policy.StandoutBoost),
-		"solid":            int16(model.QualitySolid),
-		"standout":         int16(model.QualityStandout),
+		"min_score":        policy.RecommendedMinScore,
+		"bands":            model.MaxScore + 1,
+		"tz":               cmp.Or(q.Zone, "UTC"),
 		"lang":             q.Lang,
 		"tag":              q.Tag,
 		"has_cursor":       q.Cursor != nil,
@@ -127,13 +131,16 @@ func (s *Store) Recommended(ctx context.Context, q StreamQuery) ([]StreamEntry, 
 	if q.Cursor != nil {
 		args["cursor_at"], args["cursor_id"] = q.Cursor.At, q.Cursor.ID
 	}
+	// A day splits into one band per score, the higher the later, and a post
+	// sits in its band as far as it sits in the day; bands follow the day's
+	// real length, so a daylight saving day never spills into its neighbor.
 	rows, err := s.pool.Query(ctx, `
 		WITH rated AS (
-			SELECT e.id,
-			       e.published_at + CASE WHEN e.quality = @standout THEN @boost * interval '1 second' ELSE interval '0' END AS rank_at,
+			SELECT e.id, e.published_at, e.score,
+			       date_trunc('day', e.published_at AT TIME ZONE @tz::text) AS day,
 			       row_number() OVER (
-			           PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE 'UTC')
-			           ORDER BY e.quality DESC, e.published_at DESC, e.id DESC
+			           PARTITION BY e.blog_id, date_trunc('day', e.published_at AT TIME ZONE @tz::text)
+			           ORDER BY e.score DESC, e.published_at DESC, e.id DESC
 			       ) AS rank_in_day
 			FROM entries e
 			JOIN blogs b ON b.id = e.blog_id
@@ -141,15 +148,24 @@ func (s *Store) Recommended(ctx context.Context, q StreamQuery) ([]StreamEntry, 
 			  AND `+notSuppressed+`
 			  AND e.date_trusted
 			  AND e.published_at <= now() + (@future_tolerance * interval '1 second')
-			  AND e.quality >= @solid
+			  AND e.score >= @min_score
 			  AND e.link_status <> 'unavailable'
 			  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')
 			  AND (@tag::text = '' OR @tag = ANY (e.tags))
-		), page AS (
-			SELECT id, rank_at
+		), placed AS (
+			SELECT id, published_at, score,
+			       day AT TIME ZONE @tz::text AS day_start,
+			       extract(epoch FROM ((day + interval '1 day') AT TIME ZONE @tz::text) - (day AT TIME ZONE @tz::text)) AS day_seconds
 			FROM rated
 			WHERE rank_in_day <= @per_day
-			  AND (NOT @has_cursor OR (rank_at, id) < (@cursor_at, @cursor_id))
+		), ranked AS (
+			SELECT id, day_start + ((score + extract(epoch FROM published_at - day_start) / day_seconds)
+			                        * day_seconds / @bands::int)::float8 * interval '1 second' AS rank_at
+			FROM placed
+		), page AS (
+			SELECT id, rank_at
+			FROM ranked
+			WHERE NOT @has_cursor OR (rank_at, id) < (@cursor_at, @cursor_id)
 			ORDER BY rank_at DESC, id DESC
 			LIMIT @limit
 		)

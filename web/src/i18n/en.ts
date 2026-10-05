@@ -68,7 +68,7 @@ export const en: Dict = {
   },
   recommended: {
     title: "Recommended posts",
-    intro: "A model rates posts on the writing alone; only solid and standout ones appear here, and standout posts stay at the top two days longer. No one's clicks or reading are used.",
+    intro: "A model scores posts on the writing alone, for depth, originality and value; only high scorers appear here, each day's best first. No one's clicks or reading are used.",
     empty: "No posts have been rated yet. Recommendations wait for a model to rate posts; until then, see the latest posts.",
     latest: "See the latest posts",
   },

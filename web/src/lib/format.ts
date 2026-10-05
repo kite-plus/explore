@@ -4,7 +4,7 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
 
 // Chinese pages show Beijing time and English pages UTC; see
 // docs/design/frontend.md section 3.4.
-const zone = (lang: Lang) => (lang === "zh" ? "Asia/Shanghai" : "UTC");
+export const zone = (lang: Lang) => (lang === "zh" ? "Asia/Shanghai" : "UTC");
 const locale = (lang: Lang) => (lang === "zh" ? "zh-CN" : "en");
 
 /** relativeTime reads "3 hours ago" within a week and a date after that. */

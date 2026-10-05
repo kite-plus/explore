@@ -816,7 +816,7 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 		t.Errorf("job = %+v", jobs[0])
 	}
 	for _, j := range jobs {
-		if err := s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"backend"}, Quality: model.QualitySolid}); err != nil {
+		if err := s.SetRating(ctx, j.EntryID, j.Title, model.Rating{Tags: []string{"backend"}, Score: 11}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1018,45 +1018,45 @@ func TestPingWaitsForAClaimInProgress(t *testing.T) {
 
 func TestRecommendedStream(t *testing.T) {
 	s := newTestStore(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Noon two days ago, so no entry crosses a UTC day by accident.
 	day := time.Now().UTC().Truncate(24 * time.Hour).Add(-36 * time.Hour)
 	a := listBlog(t, s, "a.example.com", "en")
 	b := listBlog(t, s, "b.example.org", "zh-CN")
 	sync(t, s, a.ID,
-		entry("a-solid", at(day.Add(time.Hour)), true),
-		entry("a-standout", at(day), true),
+		entry("a-late", at(day.Add(6*time.Hour)), true),
+		entry("a-good", at(day.Add(time.Hour)), true),
+		entry("a-best", at(day), true),
 		entry("a-yesterday", at(day.Add(-24*time.Hour)), true),
 	)
 	sync(t, s, b.ID,
-		entry("b-solid", at(day.Add(2*time.Hour)), true),
-		entry("b-brief", at(day.Add(-21*time.Hour)), true),
+		entry("b-good", at(day.Add(2*time.Hour)), true),
+		entry("b-low", at(day.Add(-21*time.Hour)), true),
 		entry("b-gone-link", at(day.Add(-48*time.Hour)), true),
 		entry("b-skip", at(day.Add(-30*24*time.Hour)), true),
-		entry("b-standout", at(day.Add(-36*time.Hour)), true),
+		entry("b-best", at(day.Add(-36*time.Hour)), true),
 		entry("b-unrated", at(day.Add(-3*time.Hour)), true),
 	)
-	for id, q := range map[string]model.Quality{
-		"a-solid": model.QualitySolid, "a-standout": model.QualityStandout, "a-yesterday": model.QualitySolid,
-		"b-solid": model.QualitySolid, "b-brief": model.QualityBrief, "b-gone-link": model.QualityStandout,
-		"b-skip": model.QualitySkip, "b-standout": model.QualityStandout,
+	for id, score := range map[string]int16{
+		"a-late": 12, "a-good": 11, "a-best": 13, "a-yesterday": policy.RecommendedMinScore,
+		"b-good": 11, "b-low": policy.RecommendedMinScore - 1, "b-gone-link": 14, "b-skip": 0, "b-best": 14,
 	} {
-		s.exec(t, `UPDATE entries SET quality = $2 WHERE identity = $1`, id, int16(q))
+		s.exec(t, `UPDATE entries SET score = $2 WHERE identity = $1`, id, score)
 	}
 	s.exec(t, `UPDATE entries SET link_status = 'unavailable' WHERE identity = 'b-gone-link'`)
 
-	page := func(q StreamQuery) []string {
+	page := func(q StreamQuery) string {
 		t.Helper()
 		rows, err := s.Recommended(ctx, q)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return identities(rows, func(e StreamEntry) string { return e.Identity })
+		return strings.Join(identities(rows, func(e StreamEntry) string { return e.Identity }), ",")
 	}
-	// A standout post ranks as if published policy.StandoutBoost later, and a
-	// blog keeps its best post of the day.
-	want := "a-standout,b-standout,b-solid,a-yesterday"
-	if got := strings.Join(page(StreamQuery{Limit: 10}), ","); got != want {
+	// Newest day first, and within a day the higher score before the newer
+	// post: b-best, at midnight, outranks a-yesterday's noon. A blog keeps
+	// its best post of the day.
+	if got, want := page(StreamQuery{Limit: 10}), "a-best,b-good,b-best,a-yesterday"; got != want {
 		t.Fatalf("recommended = %s, want %s", got, want)
 	}
 
@@ -1064,15 +1064,20 @@ func TestRecommendedStream(t *testing.T) {
 	if err != nil || len(first) != 2 {
 		t.Fatalf("first page = %v, %v", first, err)
 	}
-	if !first[0].SortAt.Equal(day.Add(policy.StandoutBoost)) {
-		t.Errorf("standout sorts at %v, want %v", first[0].SortAt, day.Add(policy.StandoutBoost))
+	// A score of 13 out of model.MaxScore, half way through its day.
+	if want := day.Truncate(24 * time.Hour).Add(13.5 * 24 * time.Hour / (model.MaxScore + 1)); !first[0].SortAt.Equal(want) {
+		t.Errorf("a-best sorts at %v, want %v", first[0].SortAt, want)
 	}
 	last := first[1]
-	if got := strings.Join(page(StreamQuery{Limit: 10, Cursor: &Cursor{At: last.SortAt, ID: last.ID}}), ","); got != "b-solid,a-yesterday" {
+	if got := page(StreamQuery{Limit: 10, Cursor: &Cursor{At: last.SortAt, ID: last.ID}}); got != "b-best,a-yesterday" {
 		t.Errorf("second page = %s", got)
 	}
 
-	if got := strings.Join(page(StreamQuery{Limit: 10, Lang: "zh"}), ","); got != "b-standout,b-solid" {
+	// In Beijing time a-late, at 02:00 the next morning, has a day of its own.
+	if got, want := page(StreamQuery{Limit: 10, Zone: "Asia/Shanghai"}), "a-late,a-best,b-good,b-best,a-yesterday"; got != want {
+		t.Errorf("recommended in Asia/Shanghai = %s, want %s", got, want)
+	}
+	if got := page(StreamQuery{Limit: 10, Lang: "zh"}); got != "b-good,b-best" {
 		t.Errorf("zh = %s", got)
 	}
 }

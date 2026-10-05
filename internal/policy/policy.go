@@ -43,10 +43,11 @@ const (
 	StreamPerBlogPerDay = 3
 	FutureTolerance     = time.Hour
 
-	// The recommended stream takes at most this many posts per blog and day,
-	// and keeps a standout post this much longer at its top.
+	// The recommended stream takes posts scoring at least this much, out of
+	// model.MaxScore, and at most this many per blog and day. The score is
+	// provisional until the tag window has been rated and its spread seen.
+	RecommendedMinScore      = 10
 	RecommendedPerBlogPerDay = 1
-	StandoutBoost            = 48 * time.Hour
 )
 
 // Inclusion and health rules.

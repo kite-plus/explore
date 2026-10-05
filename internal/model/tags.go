@@ -32,23 +32,20 @@ var Tags = []Tag{
 	{"travel", "旅行与摄影", "Travel & photos", "Travel writing and photography."},
 }
 
-// Quality is how much a post deserves a place in the recommended stream,
-// judged by the tagger from what Explore shows of it. See
-// docs/design/accounts.md section 3.1.
-type Quality int16
-
+// The tagger marks a post for depth, originality and value, each from
+// MinMark to MaxMark; its score for the recommended stream is their sum, or
+// 0 for a post never to recommend. See docs/design/accounts.md section 3.1.
 const (
-	QualitySkip Quality = iota
-	QualityBrief
-	QualitySolid
-	QualityStandout
+	MinMark  = 1
+	MaxMark  = 5
+	MaxScore = 3 * MaxMark
 )
 
 // Rating is the tagger's verdict on one post: its tags, best fit first, and
-// its quality.
+// its score.
 type Rating struct {
-	Tags    []string
-	Quality Quality
+	Tags  []string
+	Score int16
 }
 
 // TagBySlug finds a tag in the list.

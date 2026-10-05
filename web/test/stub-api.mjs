@@ -47,7 +47,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [] };
+  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -139,6 +139,7 @@ export function startStub() {
     }
     if (req.method === "GET" && url.pathname === "/api/v1/entries") {
       state.entryForwards.push(req.headers["x-forwarded-for"]);
+      state.entryZones.push(url.searchParams.get("tz"));
       const cursor = url.searchParams.get("cursor");
       if (cursor === "bad") return error(400, "invalid_cursor");
       if (cursor === "busy") {

@@ -2,6 +2,7 @@ import type { AstroGlobal } from "astro";
 
 import { dict, localePath, type Lang } from "@/i18n";
 import { api, type Caller, type Result } from "@/lib/api";
+import { zone } from "@/lib/format";
 import { forwardedFor } from "@/lib/forwarded";
 import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
@@ -67,7 +68,8 @@ export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | 
   const order = stream === "recommended" ? "recommended" : undefined;
   const from = caller(ctx, lang);
   const [r, tags, blogs] = await Promise.all([
-    api.entries(from, { order, cursor, lang: filter, tag, limit: 30 }),
+    // The recommended stream splits days where the page does.
+    api.entries(from, { order, cursor, lang: filter, tag, limit: 30, tz: order && zone(lang) }),
     tagList(from),
     newBlogs(from, Boolean(cursor)),
   ]);
