@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-05
+
+The recommended stream chooses posts a new way: the model scores each post for depth, originality and value instead of picking one of four levels, the stream keeps the higher scorers, and each day lists its best posts first. Excerpts also lose the markup some feeds left in them. The upgrade runs one migration, after which the newest 10,000 posts are scored again over about eight hours; `docker-compose.yaml` and the `Caddyfile` stay as they are.
+
+### Changed
+
+- Posts are scored instead of rated: the model marks depth, originality and value from 1 to 5 each, and the score is their sum, from 3 to 15; advertising, sponsored and test posts score 0. The recommended stream takes posts scoring at least 10 for now, and the threshold will follow the scores' spread once the newest posts are all scored. The four levels rarely gave their top one and let more than half of all posts in. Posts keep their tags while they are scored again.
+- The recommended stream lists each day's posts best first, instead of keeping standout posts at the top for two days, which put day headings out of order. Days follow the reader's time zone: `GET /api/v1/entries?order=recommended` takes a `tz` parameter, an IANA time zone name, and the web passes Beijing time on Chinese pages and UTC on English ones.
+- With DeepSeek, `EXPLORE_TAGGER_EXTRA_BODY={"thinking":{"type":"disabled"},"temperature":0}` keeps scores steady: at the default temperature, a post scored twice got the same score only 24 times in 40.
+
 ### Fixed
 
 - Excerpts could show markup as text: the insides of inline SVG icons and diagrams, such as `<g fill="none" …>` and `<path d="…">`, the MathML that KaTeX writes, such as `<semantics><mrow>`, and custom elements such as `<mjx-container>`. They are left out now, keeping the text inside custom elements, while a tag-like word in plain text, such as the `<T>` in a title about generics, is still kept. A cached excerpt is rebuilt the next time its blog's feed changes.
