@@ -13,6 +13,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | [frontend.md](frontend.md) | 前端（Astro）：选型、页面与路由、中英双语、组件规则、数据获取、提交流程、SEO、CSP | 前端 |
 | [project-layout.md](project-layout.md) | 工程结构：目录、包的职责与依赖规则、命令、配置、测试、本地开发、部署 | 所有写代码的人 |
 | [accounts.md](accounts.md) | 读者账号、订阅、三条信息流（最新、推荐、订阅）、文章标签，以及它们对核心原则的修订 | 所有贡献者 |
+| [recommendation.md](recommendation.md) | 推荐流的规划：现状、边界、分期（开通与校准、评分输入、排序与版面、原则内的个性化）、费用 | 所有贡献者 |
 | [identity-and-comments.md](identity-and-comments.md) | 跨项目约定：各应用怎么接入 Kite Plus 账号（`id.kite.plus`）、会话与退出、账号删除，以及身份服务、Explore、评论服务的分工和先后；身份服务和评论服务本身的设计分别在 identity、comments 仓库 | 所有贡献者 |
 | [admin.md](admin.md) | 管理后台：产品定位、审核工作台、博客治理、健康监控、鉴权与 UI 架构 | 维护者、前端、后端 |
 | [admin-frontend.md](admin-frontend.md) | 管理后台**前端实现**：目录结构、路由、组件树、鉴权 Hook、数据类型、快捷键、错误处理规范 | 前端 |
@@ -46,6 +47,7 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | frontend.md | E2 的读者页面、标签筛选和推荐流已实现；账号相关页面见 accounts.md | 2026-10-03 |
 | project-layout.md | 已按本文搭建 | 2026-09-23 |
 | accounts.md | 本站账号、订阅流、OPML 导入导出、推荐评分和域名认领已实现；OIDC 待接入 | 2026-10-03 |
+| recommendation.md | 设计中，R0 待实施 | 2026-10-05 |
 | identity-and-comments.md | 架构决定；身份服务先行，实现方式在 identity 的 I0 选型后定案 | 2026-09-26 |
 | admin.md | 初始后台设计；当前实现状态见 admin-operations.md | 2026-09-24 |
 | admin-frontend.md | 初始页面设计；当前页面与接口见 admin-operations.md | 2026-09-24 |
