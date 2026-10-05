@@ -22,38 +22,6 @@ export function relativeTime(iso: string, lang: Lang, now = new Date()): string 
   return rtf.format(-Math.floor(hours / 24), "day");
 }
 
-const dayOf = (date: Date, lang: Lang) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: zone(lang), year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-
-/** dayKey is the calendar day, YYYY-MM-DD, a moment falls on in the page's zone. */
-export function dayKey(iso: string, lang: Lang): string {
-  return dayOf(new Date(iso), lang);
-}
-
-/**
- * dayHeading names a day for a stream's group: "today" or "yesterday" with
- * the date beside it, or the date alone, with the year only when it is not
- * this one.
- */
-export function dayHeading(key: string, lang: Lang, words: { today: string; yesterday: string }, now = new Date()): { name: string; date?: string } {
-  const noon = new Date(`${key}T12:00:00Z`);
-  const date = new Intl.DateTimeFormat(locale(lang), {
-    ...(key.slice(0, 4) === dayOf(now, lang).slice(0, 4) ? {} : { year: "numeric" }),
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-    timeZone: "UTC",
-  }).format(noon);
-  if (key === dayOf(now, lang)) return { name: words.today, date };
-  if (key === dayOf(new Date(now.getTime() - 86_400_000), lang)) return { name: words.yesterday, date };
-  return { name: date };
-}
-
-/** clockTime is the time of day, for a post under a heading that names its day. */
-export function clockTime(iso: string, lang: Lang): string {
-  return new Intl.DateTimeFormat(locale(lang), { hour: "2-digit", minute: "2-digit", timeZone: zone(lang) }).format(new Date(iso));
-}
-
 export function formatDate(iso: string, lang: Lang): string {
   return new Intl.DateTimeFormat(locale(lang), { dateStyle: "medium", timeZone: zone(lang) }).format(new Date(iso));
 }

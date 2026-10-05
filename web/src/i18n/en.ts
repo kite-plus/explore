@@ -34,8 +34,6 @@ export const en: Dict = {
     recommended: "Recommended",
     subscriptions: "Following",
     empty: "No posts yet.",
-    today: "Today",
-    yesterday: "Yesterday",
     followingEmpty: "No posts yet. Follow blogs from the directory.",
     older: "Older posts",
     loading: "Loading…",

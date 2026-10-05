@@ -304,13 +304,15 @@ describe("content", () => {
     }
   });
 
-  test("the streams group posts by day under a toolbar, with no fixed intro", async () => {
+  test("the streams list posts in one run under a toolbar, with no fixed intro", async () => {
     const { html } = await page("/");
     assert.match(html, /<h1 class="sr-only">发现<\/h1>/);
     assert.doesNotMatch(html, /来自已收录博客的公开订阅源/);
-    assert.match(html, /<h2 data-day="\d{4}-\d{2}-\d{2}"/);
+    assert.doesNotMatch(html, /data-day=/, "no day headings");
+    assert.match(html, /<time datetime="[^"]+">1小时前<\/time>/);
+    assert.match(html, /<time datetime="[^"]+">昨天<\/time>/, "each post says when it came out");
     const older = (await page("/?cursor=page-two")).html;
-    assert.match(older, /<time datetime="[^"]+">\d{2}:\d{2}<\/time>/, "a dated group gives the time of day");
+    assert.doesNotMatch(older, /<time datetime="[^"]+">\d{2}:\d{2}<\/time>/, "a date, never a bare time of day");
   });
 
   test("the sidebar speaks to the stream and lists the blogs listed last", async () => {

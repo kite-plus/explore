@@ -32,8 +32,6 @@ export const zh = {
     recommended: "推荐",
     subscriptions: "订阅",
     empty: "暂时还没有文章。",
-    today: "今天",
-    yesterday: "昨天",
     followingEmpty: "订阅流还没有文章。去博客目录订阅几个博客吧。",
     older: "更早的文章",
     loading: "加载中…",

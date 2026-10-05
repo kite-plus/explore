@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The streams no longer split posts under Today, Yesterday and other day headings: posts run in one list, newest first, and each says when it came out, such as "3 hours ago" or a date after a week. The next page simply follows on. Recommended keeps its order, each day's best first, so neighbouring posts can jump in time. The iOS app lists posts the same way.
+
 ## [0.1.13] - 2026-10-06
 
 A small release: a post shared from the iOS app or the site now opens a page of its own on Explore, and feeds that put each post's whole web page in its description get proper excerpts and covers. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
