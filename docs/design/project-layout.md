@@ -104,7 +104,7 @@ explore/
 | `EXPLORE_TAGGER_MODEL` | 空 | 模型名，例如 `claude-haiku-4-5`、`deepseek-chat`；设置了才会打标签 |
 | `EXPLORE_TAGGER_API_KEY` | 空 | 接口密钥。`anthropic` 必填；`openai` 在填了接口地址时可以留空，本机的模型服务通常不要密钥。旧名 `EXPLORE_ANTHROPIC_API_KEY` 仍然有效 |
 | `EXPLORE_TAGGER_EFFORT` | 空 | 可选。`anthropic` 作为 `effort` 发送，取 `low`、`medium`、`high`、`xhigh`、`max`，Claude Haiku 4.5 不支持，留空；`openai` 原样作为 `reasoning_effort` 发送，只给支持它的推理模型填 |
-| `EXPLORE_TAGGER_EXTRA_BODY` | 空 | 可选的 JSON 对象，其中的顶层字段加进每个请求，同名时覆盖 Explore 自己的字段，用于服务商特有的开关。例如 DeepSeek 默认开着思考模式，打标签用不上，填 `{"thinking":{"type":"disabled"}}` 关掉 |
+| `EXPLORE_TAGGER_EXTRA_BODY` | 空 | 可选的 JSON 对象，其中的顶层字段加进每个请求，同名时覆盖 Explore 自己的字段，用于服务商特有的开关。例如 DeepSeek 默认开着思考模式，打标签用不上，而且默认温度下同一篇两次打分常常不同，填 `{"thinking":{"type":"disabled"},"temperature":0}` 关掉思考、让打分稳定 |
 | `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，并放宽提交和读取接口的限流（开发机上所有请求都来自同一个地址），只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 
