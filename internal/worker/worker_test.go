@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -581,16 +582,17 @@ func TestLinkOnceRecordsArticleStatus(t *testing.T) {
 }
 
 type fakeTagger struct {
-	mu    sync.Mutex
-	calls int
-	err   error
+	mu     sync.Mutex
+	calls  int
+	err    error
+	failOn []int64 // when set, err applies to these entries alone
 }
 
 func (f *fakeTagger) Tag(_ context.Context, j store.TagJob) (model.Rating, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
-	if f.err != nil {
+	if f.err != nil && (f.failOn == nil || slices.Contains(f.failOn, j.EntryID)) {
 		return model.Rating{}, f.err
 	}
 	return model.Rating{Tags: []string{"life"}, Quality: model.QualitySolid}, nil
@@ -604,13 +606,13 @@ func TestTaggingNewEntries(t *testing.T) {
 	e.runOnce()
 	ctx := context.Background()
 
-	// A failing model stops the round and backs off.
+	// A round without a success backs off.
 	tagger := &fakeTagger{err: errors.New("401 invalid key")}
 	e.w.Tagger = tagger
-	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 1 {
-		t.Fatalf("tagged %d with %d calls, want 0 after one failed call", n, tagger.calls)
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 2 {
+		t.Fatalf("tagged %d with %d calls, want 0 after both entries failed", n, tagger.calls)
 	}
-	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 1 {
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 2 {
 		t.Fatalf("asked again during the backoff: %d calls", tagger.calls)
 	}
 
@@ -629,7 +631,76 @@ func TestTaggingNewEntries(t *testing.T) {
 	if rec, err := e.s.Recommended(ctx, store.StreamQuery{Limit: 10}); err != nil || len(rec) == 0 {
 		t.Errorf("recommended after rating = %+v, %v", rec, err)
 	}
-	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 3 {
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 4 {
 		t.Errorf("tagged entries asked about again: %d calls", tagger.calls)
+	}
+}
+
+func TestTaggingSkipsAnEntryThatFails(t *testing.T) {
+	e := newEnv(t)
+	s := newSite(t, "127.0.0.1")
+	s.feed("/atom.xml", "hexo/atom.xml", "https://hexo.example.com", "")
+	e.list(s, "/atom.xml")
+	e.runOnce()
+	ctx := t.Context()
+	jobs, err := e.s.Untagged(ctx, 10)
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("untagged = %+v, %v", jobs, err)
+	}
+	clock := time.Now()
+	e.w.Now = func() time.Time { return clock }
+
+	// The newest entry fails while the other is tagged: it alone waits, and
+	// tagging goes on.
+	tagger := &fakeTagger{err: errors.New("400 Content Exists Risk"), failOn: []int64{jobs[0].EntryID}}
+	e.w.Tagger = tagger
+	if n := e.w.TagOnce(ctx); n != 1 || tagger.calls != 2 {
+		t.Fatalf("tagged %d with %d calls, want 1 of 2", n, tagger.calls)
+	}
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != 2 || !e.w.nextTagAt.IsZero() {
+		t.Fatalf("%d calls with the next round at %v; want the failed entry skipped and no pause", tagger.calls, e.w.nextTagAt)
+	}
+
+	clock = clock.Add(policy.TagRetryAfter)
+	tagger.err = nil
+	if n := e.w.TagOnce(ctx); n != 1 || tagger.calls != 3 {
+		t.Errorf("after the wait: tagged %d with %d calls, want the skipped entry", n, tagger.calls)
+	}
+}
+
+func TestTaggingPausesAfterFailuresInARow(t *testing.T) {
+	e := newEnv(t)
+	hexo := newSite(t, "127.0.0.1")
+	hexo.feed("/atom.xml", "hexo/atom.xml", "https://hexo.example.com", "")
+	e.list(hexo, "/atom.xml")
+	hugo := newSite(t, "localhost")
+	hugo.feed("/index.xml", "hugo/index.xml", "https://hugo.example.com", "")
+	e.list(hugo, "/index.xml")
+	e.runOnce()
+	ctx := t.Context()
+	jobs, err := e.s.Untagged(ctx, 10)
+	if err != nil || len(jobs) < policy.TagFailureStreak+2 {
+		t.Fatalf("untagged = %d, %v; the test needs %d", len(jobs), err, policy.TagFailureStreak+2)
+	}
+
+	tagger := &fakeTagger{err: errors.New("503 overloaded")}
+	e.w.Tagger = tagger
+	if n := e.w.TagOnce(ctx); n != 0 || tagger.calls != policy.TagFailureStreak || e.w.nextTagAt.IsZero() {
+		t.Errorf("%d calls with the next round at %v; want a pause after %d failures", tagger.calls, e.w.nextTagAt, policy.TagFailureStreak)
+	}
+
+	// One failure, a success, then failures in a row: the round pauses, and
+	// only the lone failure is held against its entry.
+	ids := make([]int64, len(jobs))
+	for i, j := range jobs {
+		ids[i] = j.EntryID
+	}
+	tagger.calls, tagger.failOn = 0, append([]int64{ids[0]}, ids[2:2+policy.TagFailureStreak]...)
+	e.w.nextTagAt = time.Time{}
+	if n := e.w.TagOnce(ctx); n != 1 || tagger.calls != 2+policy.TagFailureStreak || e.w.nextTagAt.IsZero() {
+		t.Fatalf("tagged %d with %d calls, next round at %v; want 1, then a pause", n, tagger.calls, e.w.nextTagAt)
+	}
+	if _, ok := e.w.tagSkipped[ids[0]]; !ok || len(e.w.tagSkipped) != 1 {
+		t.Errorf("skipped = %v, want only entry %d", e.w.tagSkipped, ids[0])
 	}
 }

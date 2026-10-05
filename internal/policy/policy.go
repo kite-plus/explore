@@ -20,6 +20,12 @@ const (
 	// the model's bill when a cleared cache has to be tagged again.
 	TagsPerMinute = 20
 
+	// An entry the model fails on while others succeed waits this long
+	// before it is asked about again; this many failures in a row pause
+	// tagging altogether. See docs/design/worker.md section 11.
+	TagRetryAfter    = 6 * time.Hour
+	TagFailureStreak = 3
+
 	// More items than this sharing one minute marks their dates untrusted.
 	SameMinuteLimit = 5
 )

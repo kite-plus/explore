@@ -8,6 +8,15 @@
 
 ## [未发布]
 
+### 新增
+
+- 打标签除了 Anthropic 接口，还可以用任何 OpenAI 兼容的 Chat Completions 接口，比如 OpenAI、DeepSeek 或本机的模型服务。`EXPLORE_TAGGER_PROVIDER` 选 `anthropic`（默认）或 `openai`，`EXPLORE_TAGGER_BASE_URL` 填接口地址，`EXPLORE_TAGGER_API_KEY` 填密钥；旧的 `EXPLORE_ANTHROPIC_API_KEY` 仍然有效。不需要密钥的本机服务可以不填。`EXPLORE_TAGGER_EXTRA_BODY` 给每个请求加上服务商需要的字段，比如用 `{"thinking":{"type":"disabled"}}` 关掉 DeepSeek 的思考模式。
+
+### 修复
+
+- 模型的回答被截断时，文章会被当成不推荐，以后也不再评。现在会稍后重试，Claude 模型也有了更多先思考再回答的余地。
+- 模型对某一篇一直出错时，所有文章的打标签都会被卡住。现在只有这一篇等 6 小时再试，其他文章照常进行；连续几篇都失败时才整体暂停。
+
 ## [0.1.9] - 2026-10-05
 
 后台的用户管理从一张简单的列表，变成了真正能照看账号的地方：能筛选、排序和查找，能看清每个账号关联的数据，也能处理读者找上门的事，包括忘记密码（Explore 没有自助找回）。每个账号还有了按注册顺序的数字 ID。升级会执行三个数据库迁移；`.env`、`docker-compose.yaml` 和 `Caddyfile` 都不用改。

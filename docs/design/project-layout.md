@@ -99,9 +99,12 @@ explore/
 | `EXPLORE_PUBLIC_URL` | `https://explore.kite.plus` | 对外地址：User-Agent 里的说明页、`/feed.xml` 里的链接 |
 | `EXPLORE_TRUSTED_PROXIES` | 空 | 反向代理和 `web` 服务的地址，逗号分隔，让限流拿到读者的真实地址。`web` 在服务端代读者调用接口，把读者地址放在 `X-Forwarded-For` 里（[frontend.md §6](frontend.md#6-提交流程)） |
 | `EXPLORE_WORKER_CONCURRENCY` | `16` | 同时抓取的博客数 |
-| `EXPLORE_TAGGER_MODEL` | 空 | 打标签用的模型，例如 `claude-opus-5`；和下一项一起设置才会打标签（[accounts.md §5.3](accounts.md#53-模型与费用-待定)） |
-| `EXPLORE_ANTHROPIC_API_KEY` | 空 | Claude API 的密钥；只能和上一项一起设置 |
-| `EXPLORE_TAGGER_EFFORT` | 空 | 可选的 `effort`：`low`、`medium`、`high`、`xhigh`、`max`。Claude Opus 5 和 Claude Sonnet 5 建议 `low`；Claude Haiku 4.5 不支持，留空 |
+| `EXPLORE_TAGGER_PROVIDER` | `anthropic` | 打标签用的模型接口：`anthropic` 是 Anthropic Messages API，`openai` 是任何 OpenAI 兼容的 Chat Completions 接口，例如 OpenAI、DeepSeek、本机的开源模型服务（[accounts.md §4](accounts.md#4-文章标签)） |
+| `EXPLORE_TAGGER_BASE_URL` | 空，用接口自己的地址 | 接口地址。`anthropic` 默认 `https://api.anthropic.com`，用兼容服务时填它给的地址；`openai` 默认 `https://api.openai.com/v1`，填到 `/chat/completions` 之前为止，例如 `https://api.deepseek.com` |
+| `EXPLORE_TAGGER_MODEL` | 空 | 模型名，例如 `claude-haiku-4-5`、`deepseek-chat`；设置了才会打标签 |
+| `EXPLORE_TAGGER_API_KEY` | 空 | 接口密钥。`anthropic` 必填；`openai` 在填了接口地址时可以留空，本机的模型服务通常不要密钥。旧名 `EXPLORE_ANTHROPIC_API_KEY` 仍然有效 |
+| `EXPLORE_TAGGER_EFFORT` | 空 | 可选。`anthropic` 作为 `effort` 发送，取 `low`、`medium`、`high`、`xhigh`、`max`，Claude Haiku 4.5 不支持，留空；`openai` 原样作为 `reasoning_effort` 发送，只给支持它的推理模型填 |
+| `EXPLORE_TAGGER_EXTRA_BODY` | 空 | 可选的 JSON 对象，其中的顶层字段加进每个请求，同名时覆盖 Explore 自己的字段，用于服务商特有的开关。例如 DeepSeek 默认开着思考模式，打标签用不上，填 `{"thinking":{"type":"disabled"}}` 关掉 |
 | `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，并放宽提交和读取接口的限流（开发机上所有请求都来自同一个地址），只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 

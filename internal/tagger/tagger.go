@@ -1,7 +1,8 @@
-// Package tagger files posts under Explore's tag list with a Claude model,
-// and in the same call rates them for the recommended stream. It is the only
-// package that talks to a model; the worker decides when to call it. See
-// docs/design/accounts.md sections 3.1 and 4.
+// Package tagger files posts under Explore's tag list with a model, and in
+// the same call rates them for the recommended stream. It talks to the
+// Anthropic Messages API or to any OpenAI-compatible chat completions API,
+// and is the only package that talks to a model; the worker decides when to
+// call it. See docs/design/accounts.md sections 3.1 and 4.
 package tagger
 
 import (
@@ -12,9 +13,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 
 	"github.com/kite-plus/explore/internal/model"
 )
@@ -29,58 +27,63 @@ type Post struct {
 	BlogTags   []string // the maintainer's default tags for the blog
 }
 
-// Options configures a Tagger. Model and APIKey come from the deployment;
-// Effort is left empty for models that reject it, such as Claude Haiku 4.5.
+// The APIs a Tagger can talk to.
+const (
+	Anthropic = "anthropic"
+	OpenAI    = "openai" // any OpenAI-compatible chat completions API
+)
+
+// Options configures a Tagger; the values come from the deployment, see
+// docs/design/project-layout.md section 4.
 type Options struct {
-	APIKey  string
-	Model   string
-	Effort  string
-	BaseURL string // tests only
+	Provider string // Anthropic, the default, or OpenAI
+	BaseURL  string // empty uses the provider's own
+	APIKey   string // empty sends none, for a local server that takes none
+	Model    string
+	Effort   string // empty sends none, for models that reject it
+	// ExtraBody holds top-level request fields some APIs need, such as
+	// DeepSeek's switch for thinking; they win over Explore's own.
+	ExtraBody map[string]any
 }
 
-// requestTimeout bounds one classification, retries included by the SDK.
+// requestTimeout bounds one classification, retries included.
 const requestTimeout = 60 * time.Second
 
 // qualities are the ratings the model chooses from, lowest first, in the
 // order of model.Quality.
 var qualities = []string{"skip", "brief", "solid", "standout"}
 
+var (
+	// ErrMalformed means the model's answer was not the JSON asked for.
+	ErrMalformed = errors.New("malformed answer")
+	// ErrTruncated means the answer ran out of output tokens.
+	ErrTruncated = errors.New("truncated answer")
+
+	errRefused = errors.New("refused")
+)
+
+// asker sends one request to a model API and returns the answer's text. It
+// returns errRefused when the model declines and ErrTruncated when the
+// answer was cut short.
+type asker interface {
+	ask(ctx context.Context, system, user string) (string, error)
+}
+
 // Tagger classifies posts. It is safe for concurrent use.
 type Tagger struct {
-	client anthropic.Client
-	model  string
-	effort string
+	api    asker
 	system string
-	schema map[string]any
 }
 
 // New returns a Tagger. It makes no request until Tag is called.
 func New(o Options) *Tagger {
-	opts := []option.RequestOption{option.WithAPIKey(o.APIKey), option.WithRequestTimeout(requestTimeout)}
-	if o.BaseURL != "" {
-		opts = append(opts, option.WithBaseURL(o.BaseURL))
+	t := &Tagger{system: systemPrompt()}
+	if o.Provider == OpenAI {
+		t.api = newOpenAI(o)
+	} else {
+		t.api = newAnthropic(o)
 	}
-	slugs := make([]string, len(model.Tags))
-	for i, t := range model.Tags {
-		slugs[i] = t.Slug
-	}
-	return &Tagger{
-		client: anthropic.NewClient(opts...),
-		model:  o.Model,
-		effort: o.Effort,
-		system: systemPrompt(),
-		// The list is enforced by the schema; the limit of three is not,
-		// since structured outputs take no array bounds, so Tag trims.
-		schema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"tags":    map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": slugs}},
-				"quality": map[string]any{"type": "string", "enum": qualities},
-			},
-			"required":             []string{"tags", "quality"},
-			"additionalProperties": false,
-		},
-	}
+	return t
 }
 
 func systemPrompt() string {
@@ -100,6 +103,7 @@ func systemPrompt() string {
 	b.WriteString("- brief: short notes, status updates, routine announcements, release notes, or lists of links with little commentary.\n")
 	b.WriteString("- skip: test or placeholder posts, advertising, posts that only point elsewhere, or too little to tell.\n")
 	b.WriteString("Rate the writing, not its topic or language: a solid post on any subject, in any language, is solid. When unsure between two ratings, choose the lower.\n")
+	b.WriteString("\nAnswer with a JSON object only, such as {\"tags\": [\"backend\", \"ops\"], \"quality\": \"solid\"}.\n")
 	return b.String()
 }
 
@@ -122,45 +126,29 @@ func userText(p Post) string {
 }
 
 // Tag returns the post's tags, best fit first, possibly none, and its
-// quality. An error means the model could not be asked and the post should
-// wait for another try; an answer that cannot be used, such as a refusal, is
-// no tags and a skip rather than an error, so the post is not asked about
-// again and again.
+// quality. A refusal is no tags and a skip, so the post is not asked about
+// again and again. An error means the post should wait for another try:
+// the model could not be asked, or its answer was cut short or malformed.
 func (t *Tagger) Tag(ctx context.Context, p Post) (model.Rating, error) {
-	params := anthropic.MessageNewParams{
-		Model:     t.model,
-		MaxTokens: 1024,
-		System: []anthropic.TextBlockParam{{
-			Text:         t.system,
-			CacheControl: anthropic.NewCacheControlEphemeralParam(),
-		}},
-		Messages:     []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userText(p)))},
-		OutputConfig: anthropic.OutputConfigParam{Format: anthropic.JSONOutputFormatParam{Schema: t.schema}},
+	answer, err := t.api.ask(ctx, t.system, userText(p))
+	if errors.Is(err, errRefused) {
+		return model.Rating{Tags: []string{}}, nil
 	}
-	if t.effort != "" {
-		params.OutputConfig.Effort = anthropic.OutputConfigEffort(t.effort)
-	}
-	msg, err := t.client.Messages.New(ctx, params)
 	if err != nil {
 		return model.Rating{}, err
 	}
-	if msg.StopReason != anthropic.StopReasonEndTurn {
-		return model.Rating{Tags: []string{}}, nil
-	}
-	for _, block := range msg.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			return parse(text.Text)
-		}
-	}
-	return model.Rating{Tags: []string{}}, nil
+	return parse(answer)
 }
-
-// ErrMalformed means the model's answer was not the JSON the schema asks for.
-var ErrMalformed = errors.New("malformed answer")
 
 // parse keeps the known tags of an answer, once each, at most three, and
 // its quality; a quality it does not know is a skip.
 func parse(answer string) (model.Rating, error) {
+	// Some OpenAI-compatible servers fence the JSON as Markdown.
+	answer = strings.TrimSpace(answer)
+	if s, ok := strings.CutPrefix(answer, "```"); ok {
+		s = strings.TrimPrefix(s, "json")
+		answer, _ = strings.CutSuffix(strings.TrimSpace(s), "```")
+	}
 	var out struct {
 		Tags    []string `json:"tags"`
 		Quality string   `json:"quality"`

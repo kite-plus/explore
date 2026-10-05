@@ -62,15 +62,53 @@ func TestTagger(t *testing.T) {
 		t.Fatalf("tagging must be off by default: %+v, %v", c.Tagger, err)
 	}
 	c, err = Load(env(map[string]string{
-		"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_ANTHROPIC_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "low",
+		"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "low",
 	}))
-	if err != nil || !c.Tagger.Enabled() || c.Tagger.Effort != "low" {
+	if err != nil || !c.Tagger.Enabled() || c.Tagger.Provider != "anthropic" || c.Tagger.APIKey != "sk-secret" || c.Tagger.Effort != "low" {
 		t.Fatalf("tagger = %+v, %v", c.Tagger, err)
 	}
+	c, err = Load(env(map[string]string{"EXPLORE_TAGGER_MODEL": "claude-haiku-4-5", "EXPLORE_ANTHROPIC_API_KEY": "sk-old"}))
+	if err != nil || c.Tagger.APIKey != "sk-old" {
+		t.Errorf("the key's old name: %+v, %v", c.Tagger, err)
+	}
+	c, err = Load(env(map[string]string{
+		"EXPLORE_TAGGER_PROVIDER": "OpenAI", "EXPLORE_TAGGER_BASE_URL": "https://api.deepseek.com/",
+		"EXPLORE_TAGGER_MODEL": "deepseek-chat", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "minimal",
+	}))
+	if err != nil || c.Tagger.Provider != "openai" || c.Tagger.BaseURL != "https://api.deepseek.com" || c.Tagger.Effort != "minimal" {
+		t.Errorf("openai tagger = %+v, %v", c.Tagger, err)
+	}
+	c, err = Load(env(map[string]string{
+		"EXPLORE_TAGGER_PROVIDER": "openai", "EXPLORE_TAGGER_BASE_URL": "http://127.0.0.1:11434/v1", "EXPLORE_TAGGER_MODEL": "qwen3:4b",
+	}))
+	if err != nil || !c.Tagger.Enabled() || c.Tagger.APIKey != "" {
+		t.Errorf("a local server without a key: %+v, %v", c.Tagger, err)
+	}
+	if c, err = Load(env(map[string]string{"EXPLORE_TAGGER_PROVIDER": "anthropic"})); err != nil || c.Tagger.Enabled() {
+		t.Errorf("a provider alone must leave tagging off: %+v, %v", c.Tagger, err)
+	}
+	c, err = Load(env(map[string]string{
+		"EXPLORE_TAGGER_PROVIDER": "openai", "EXPLORE_TAGGER_MODEL": "deepseek-flash", "EXPLORE_TAGGER_API_KEY": "sk-secret",
+		"EXPLORE_TAGGER_EXTRA_BODY": `{"thinking": {"type": "disabled"}}`,
+	}))
+	if err != nil || c.Tagger.ExtraBody["thinking"].(map[string]any)["type"] != "disabled" {
+		t.Errorf("extra body = %+v, %v", c.Tagger.ExtraBody, err)
+	}
 	for _, m := range []map[string]string{
+		{"EXPLORE_TAGGER_API_KEY": "sk-secret"},
 		{"EXPLORE_ANTHROPIC_API_KEY": "sk-secret"},
+		{"EXPLORE_TAGGER_BASE_URL": "https://api.deepseek.com"},
 		{"EXPLORE_TAGGER_MODEL": "claude-opus-5"},
-		{"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_ANTHROPIC_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "turbo"},
+		{"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_TAGGER_BASE_URL": "https://proxy.example.com"},
+		{"EXPLORE_TAGGER_PROVIDER": "openai", "EXPLORE_TAGGER_MODEL": "gpt-test"},
+		{"EXPLORE_TAGGER_PROVIDER": "gemini", "EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret"},
+		{"EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_BASE_URL": "ftp://example.com"},
+		{"EXPLORE_TAGGER_MODEL": "claude-opus-5", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "turbo"},
+		{"EXPLORE_TAGGER_PROVIDER": "openai", "EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EFFORT": "High!"},
+		{"EXPLORE_TAGGER_EXTRA_BODY": `{"thinking": {"type": "disabled"}}`},
+		{"EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EXTRA_BODY": `{"api_key": "sk-secret"`},
+		{"EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EXTRA_BODY": `["sk-secret"]`},
+		{"EXPLORE_TAGGER_MODEL": "m", "EXPLORE_TAGGER_API_KEY": "sk-secret", "EXPLORE_TAGGER_EXTRA_BODY": `null`},
 	} {
 		_, err := Load(env(m))
 		if err == nil {

@@ -76,8 +76,8 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 	}
 
 	req := f.last
-	if req["model"] != "test-model" {
-		t.Errorf("model = %v", req["model"])
+	if req["model"] != "test-model" || req["max_tokens"] != float64(anthropicMaxTokens) {
+		t.Errorf("model = %v, max_tokens = %v", req["model"], req["max_tokens"])
 	}
 	system := req["system"].([]any)[0].(map[string]any)
 	if system["cache_control"].(map[string]any)["type"] != "ephemeral" {
@@ -112,6 +112,20 @@ func TestTagSendsOneCachedPromptAndASchema(t *testing.T) {
 	}
 }
 
+func TestTagExtraBody(t *testing.T) {
+	f := newFakeAPI(t)
+	f.text = `{"tags":[],"quality":"brief"}`
+	tg := New(Options{APIKey: "test-key", Model: "test-model", BaseURL: f.srv.URL, ExtraBody: map[string]any{
+		"reasoning": map[string]any{"effort": "none"}, "odd.name": true,
+	}})
+	if _, err := tg.Tag(t.Context(), post); err != nil {
+		t.Fatal(err)
+	}
+	if reasoning, _ := f.last["reasoning"].(map[string]any); reasoning["effort"] != "none" || f.last["odd.name"] != true {
+		t.Errorf("request = %v", f.last)
+	}
+}
+
 func TestTagWithoutEffort(t *testing.T) {
 	f := newFakeAPI(t)
 	f.text = `{"tags":[],"quality":"brief"}`
@@ -137,17 +151,19 @@ func TestTagKeepsOnlyKnownTagsAndRatings(t *testing.T) {
 }
 
 func TestTagUnusableAnswers(t *testing.T) {
-	for _, reason := range []string{"refusal", "max_tokens"} {
-		f := newFakeAPI(t)
-		f.stopReason, f.text = reason, `{"tags":["ai"`
-		rating, err := f.tagger("").Tag(context.Background(), post)
-		if err != nil || len(rating.Tags) != 0 || rating.Quality != model.QualitySkip {
-			t.Errorf("%s: rating = %+v, %v; want no tags, a skip and no error", reason, rating, err)
-		}
-	}
 	f := newFakeAPI(t)
-	f.text = "not json"
-	if _, err := f.tagger("").Tag(context.Background(), post); !errors.Is(err, ErrMalformed) {
+	f.stopReason, f.text = "refusal", `{"tags":["ai"`
+	rating, err := f.tagger("").Tag(t.Context(), post)
+	if err != nil || len(rating.Tags) != 0 || rating.Quality != model.QualitySkip {
+		t.Errorf("refusal: rating = %+v, %v; want no tags, a skip and no error", rating, err)
+	}
+	// A cut-short answer is tried again later rather than taken as a skip.
+	f.stopReason = "max_tokens"
+	if _, err := f.tagger("").Tag(t.Context(), post); !errors.Is(err, ErrTruncated) {
+		t.Errorf("max_tokens: err = %v, want ErrTruncated", err)
+	}
+	f.stopReason, f.text = "end_turn", "not json"
+	if _, err := f.tagger("").Tag(t.Context(), post); !errors.Is(err, ErrMalformed) {
 		t.Errorf("err = %v, want ErrMalformed", err)
 	}
 }

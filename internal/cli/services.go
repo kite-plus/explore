@@ -127,11 +127,12 @@ func newWorkerCmd() *cobra.Command {
 			w := &worker.Worker{Store: st, Fetch: newFetcher(cfg), Log: log, Concurrency: cfg.WorkerConcurrency}
 			if cfg.Tagger.Enabled() {
 				w.Tagger = entryTagger{tagger.New(tagger.Options{
-					APIKey: cfg.Tagger.APIKey, Model: cfg.Tagger.Model, Effort: cfg.Tagger.Effort,
+					Provider: cfg.Tagger.Provider, BaseURL: cfg.Tagger.BaseURL, APIKey: cfg.Tagger.APIKey,
+					Model: cfg.Tagger.Model, Effort: cfg.Tagger.Effort, ExtraBody: cfg.Tagger.ExtraBody,
 				})}
 			}
-			log.Info("worker started", "concurrency", cfg.WorkerConcurrency, "tagger_model", cfg.Tagger.Model,
-				"version", buildinfo.Version)
+			log.Info("worker started", "concurrency", cfg.WorkerConcurrency, "tagger_provider", cfg.Tagger.Provider,
+				"tagger_model", cfg.Tagger.Model, "version", buildinfo.Version)
 			return w.Run(ctx)
 		},
 	}

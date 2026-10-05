@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -55,6 +57,7 @@ type Worker struct {
 	lastSitemapCheck time.Time
 	tagFailures      int
 	nextTagAt        time.Time
+	tagSkipped       map[int64]time.Time // entry ID to when it may be asked about again
 }
 
 // Run polls until ctx is canceled.
@@ -322,40 +325,72 @@ func (w *Worker) tagLoop(ctx context.Context) {
 }
 
 // TagOnce tags up to policy.TagsPerMinute untagged entries, newest first,
-// and returns how many it tagged. After a failure it stops and waits longer
-// each time, up to an hour: one failure usually means the next would fail
-// too, from a wrong key, an outage or a spent budget.
+// and returns how many it tagged. An entry that fails while others succeed
+// is skipped for policy.TagRetryAfter, so one bad post never blocks the
+// rest. A round without a success, or one ending in policy.TagFailureStreak
+// failures in a row, stops and waits longer each time, up to an hour: that
+// usually means a wrong key, an outage or a spent budget, and the next entry
+// would fail too.
 func (w *Worker) TagOnce(ctx context.Context) int {
 	if w.Tagger == nil || w.now().Before(w.nextTagAt) {
 		return 0
 	}
-	jobs, err := w.Store.Untagged(ctx, policy.TagsPerMinute)
+	now := w.now()
+	maps.DeleteFunc(w.tagSkipped, func(_ int64, until time.Time) bool { return !now.Before(until) })
+	jobs, err := w.Store.Untagged(ctx, policy.TagsPerMinute+len(w.tagSkipped))
 	if err != nil {
 		w.log().Error("listing untagged entries failed", "error", err)
 		return 0
 	}
-	tagged := 0
+	jobs = slices.DeleteFunc(jobs, func(j store.TagJob) bool {
+		_, skipped := w.tagSkipped[j.EntryID]
+		return skipped
+	})
+	jobs = jobs[:min(len(jobs), policy.TagsPerMinute)]
+
+	tagged, streak := 0, 0
+	var failed []int64
+	var lastErr error
 	for _, j := range jobs {
 		rating, err := w.Tagger.Tag(ctx, j)
 		if err != nil {
 			if ctx.Err() != nil {
 				return tagged
 			}
-			w.tagFailures++
-			wait := min(time.Minute<<min(w.tagFailures-1, 6), time.Hour)
-			w.nextTagAt = w.now().Add(wait)
-			w.log().Warn("tagging failed", "entry", j.EntryID, "error", err, "retry_in", wait)
-			return tagged
+			w.log().Warn("tagging failed", "entry", j.EntryID, "error", err)
+			failed, lastErr = append(failed, j.EntryID), err
+			if streak++; streak == policy.TagFailureStreak {
+				break
+			}
+			continue
 		}
 		if err := w.Store.SetRating(ctx, j.EntryID, j.Title, rating); err != nil {
 			w.log().Error("storing tags failed", "entry", j.EntryID, "error", err)
 			return tagged
 		}
-		w.tagFailures = 0
+		streak = 0
 		tagged++
 	}
+
+	if streak == policy.TagFailureStreak || (tagged == 0 && len(failed) > 0) {
+		// The failures in a row at the end point at the API, not at their
+		// entries, which are asked about again after the pause.
+		failed = failed[:len(failed)-streak]
+		w.tagFailures++
+		wait := min(time.Minute<<min(w.tagFailures-1, 6), time.Hour)
+		w.nextTagAt = now.Add(wait)
+		w.log().Warn("tagging paused", "failures", streak, "error", lastErr, "retry_in", wait)
+	} else if tagged > 0 {
+		w.tagFailures = 0
+	}
 	if tagged > 0 {
-		w.log().Info("tagged", "entries", tagged)
+		if len(failed) > 0 && w.tagSkipped == nil {
+			w.tagSkipped = make(map[int64]time.Time)
+		}
+		for _, id := range failed {
+			w.tagSkipped[id] = now.Add(policy.TagRetryAfter)
+		}
+		w.log().Info("tagged", "entries", tagged, "skipped", len(failed))
 	}
 	return tagged
 }

@@ -4,6 +4,8 @@
 package config
 
 import (
+	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,16 +27,50 @@ type Config struct {
 }
 
 // Tagger configures the model that tags entries. Tagging is off until the
-// deployment names both a model and a key; which model is its choice, see
-// docs/design/accounts.md section 5.3.
+// deployment names a model; see docs/design/project-layout.md section 4.
 type Tagger struct {
-	Model  string
-	APIKey string
-	Effort string // empty sends none, for models that reject it
+	Provider  string // "anthropic", or "openai" for any OpenAI-compatible API
+	BaseURL   string // empty uses the provider's own
+	Model     string
+	APIKey    string
+	Effort    string         // empty sends none, for models that reject it
+	ExtraBody map[string]any // top-level fields added to every request
 }
 
 // Enabled reports whether entries get tagged.
-func (t Tagger) Enabled() bool { return t.Model != "" && t.APIKey != "" }
+func (t Tagger) Enabled() bool { return t.Model != "" }
+
+func (t Tagger) validate() error {
+	if t.Provider != "anthropic" && t.Provider != "openai" {
+		return fmt.Errorf("EXPLORE_TAGGER_PROVIDER: %q is not anthropic or openai", t.Provider)
+	}
+	if t.BaseURL != "" {
+		if u, err := url.Parse(t.BaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return errors.New("EXPLORE_TAGGER_BASE_URL is not an http or https URL")
+		}
+	}
+	if t.Model == "" {
+		if t.APIKey != "" || t.BaseURL != "" || t.ExtraBody != nil {
+			return errors.New("EXPLORE_TAGGER_MODEL is not set: name a model to tag entries, or leave the other tagger settings empty")
+		}
+		return nil
+	}
+	// A local OpenAI-compatible server usually takes no key.
+	if t.APIKey == "" && (t.Provider == "anthropic" || t.BaseURL == "") {
+		return errors.New("EXPLORE_TAGGER_API_KEY is not set: only an openai provider with its own base URL may go without one")
+	}
+	if t.Provider == "openai" {
+		if strings.ContainsFunc(t.Effort, func(r rune) bool { return r < 'a' || r > 'z' }) {
+			return fmt.Errorf("EXPLORE_TAGGER_EFFORT: %q is not a reasoning effort such as low or high", t.Effort)
+		}
+		return nil
+	}
+	switch t.Effort {
+	case "", "low", "medium", "high", "xhigh", "max":
+		return nil
+	}
+	return fmt.Errorf("EXPLORE_TAGGER_EFFORT: %q is not low, medium, high, xhigh or max", t.Effort)
+}
 
 // ErrNoDatabase is returned by RequireDatabase.
 var ErrNoDatabase = errors.New("EXPLORE_DATABASE_URL is not set")
@@ -73,17 +109,21 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 	c.Tagger = Tagger{
-		Model:  strings.TrimSpace(getenv("EXPLORE_TAGGER_MODEL")),
-		APIKey: strings.TrimSpace(getenv("EXPLORE_ANTHROPIC_API_KEY")),
+		Provider: strings.ToLower(or(getenv("EXPLORE_TAGGER_PROVIDER"), "anthropic")),
+		BaseURL:  strings.TrimRight(strings.TrimSpace(getenv("EXPLORE_TAGGER_BASE_URL")), "/"),
+		Model:    strings.TrimSpace(getenv("EXPLORE_TAGGER_MODEL")),
+		// EXPLORE_ANTHROPIC_API_KEY is the key's name from before other providers.
+		APIKey: cmp.Or(strings.TrimSpace(getenv("EXPLORE_TAGGER_API_KEY")), strings.TrimSpace(getenv("EXPLORE_ANTHROPIC_API_KEY"))),
 		Effort: strings.TrimSpace(getenv("EXPLORE_TAGGER_EFFORT")),
 	}
-	if (c.Tagger.Model == "") != (c.Tagger.APIKey == "") {
-		return Config{}, errors.New("EXPLORE_TAGGER_MODEL and EXPLORE_ANTHROPIC_API_KEY go together: set both to tag entries, or neither")
+	if v := strings.TrimSpace(getenv("EXPLORE_TAGGER_EXTRA_BODY")); v != "" {
+		// The value is not echoed: it may carry a credential.
+		if err := json.Unmarshal([]byte(v), &c.Tagger.ExtraBody); err != nil || c.Tagger.ExtraBody == nil {
+			return Config{}, errors.New("EXPLORE_TAGGER_EXTRA_BODY is not a JSON object")
+		}
 	}
-	switch c.Tagger.Effort {
-	case "", "low", "medium", "high", "xhigh", "max":
-	default:
-		return Config{}, fmt.Errorf("EXPLORE_TAGGER_EFFORT: %q is not low, medium, high, xhigh or max", c.Tagger.Effort)
+	if err := c.Tagger.validate(); err != nil {
+		return Config{}, err
 	}
 	return c, nil
 }

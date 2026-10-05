@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Tagging can use any OpenAI-compatible chat completions API, such as OpenAI, DeepSeek or a local model server, besides the Anthropic API. `EXPLORE_TAGGER_PROVIDER` picks `anthropic` (the default) or `openai`, `EXPLORE_TAGGER_BASE_URL` points at the service and `EXPLORE_TAGGER_API_KEY` holds its key; the old `EXPLORE_ANTHROPIC_API_KEY` still works. A local server that takes no key may go without one. `EXPLORE_TAGGER_EXTRA_BODY` adds fields a service needs to every request, such as `{"thinking":{"type":"disabled"}}` to turn off DeepSeek's thinking mode.
+
+### Fixed
+
+- A post whose answer was cut short was rated skip and never asked about again. It is now tried again later, and Claude models get more room to think before they answer.
+- A post the model kept failing on held up tagging for every other post. It now waits six hours on its own while the rest go on; tagging pauses only when several posts in a row fail.
+
 ## [0.1.9] - 2026-10-05
 
 User management grows from a bare list into a place to look after accounts: find and sort them, see what hangs off each one, and handle what readers ask for, a forgotten password included, since Explore has no self-service reset. Every account also gets a numeric ID in sign-up order. The upgrade runs three database migrations; `.env`, `docker-compose.yaml` and the `Caddyfile` stay as they are.
