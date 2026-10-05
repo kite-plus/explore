@@ -8,6 +8,10 @@
 
 ## [未发布]
 
+## [0.1.10] - 2026-10-05
+
+打标签，以及依靠它的评分运作的推荐流，现在除了 Anthropic，还能用任何 OpenAI 兼容的模型接口，比如 DeepSeek。打标签遇到出错也不会再整个卡住，并且只给最新的 1 万篇文章打标签和评分。这次升级没有数据库迁移；`.env` 多了几项可选的打标签配置，旧配置照常有效，`docker-compose.yaml` 和 `Caddyfile` 不用改。
+
 ### 新增
 
 - 打标签除了 Anthropic 接口，还可以用任何 OpenAI 兼容的 Chat Completions 接口，比如 OpenAI、DeepSeek 或本机的模型服务。`EXPLORE_TAGGER_PROVIDER` 选 `anthropic`（默认）或 `openai`，`EXPLORE_TAGGER_BASE_URL` 填接口地址，`EXPLORE_TAGGER_API_KEY` 填密钥；旧的 `EXPLORE_ANTHROPIC_API_KEY` 仍然有效。不需要密钥的本机服务可以不填。`EXPLORE_TAGGER_EXTRA_BODY` 给每个请求加上服务商需要的字段，比如用 `{"thinking":{"type":"disabled"}}` 关掉 DeepSeek 的思考模式。

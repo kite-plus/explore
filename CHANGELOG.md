@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-05
+
+Tagging, and the recommended stream that rests on its ratings, can now run on any OpenAI-compatible model API, such as DeepSeek, as well as on Anthropic's. It also copes with failures without stalling, and only the newest 10,000 posts get tags and ratings. The upgrade runs no migration; `.env` gains optional tagger settings while the old ones keep working, and `docker-compose.yaml` and the `Caddyfile` stay as they are.
+
 ### Added
 
 - Tagging can use any OpenAI-compatible chat completions API, such as OpenAI, DeepSeek or a local model server, besides the Anthropic API. `EXPLORE_TAGGER_PROVIDER` picks `anthropic` (the default) or `openai`, `EXPLORE_TAGGER_BASE_URL` points at the service and `EXPLORE_TAGGER_API_KEY` holds its key; the old `EXPLORE_ANTHROPIC_API_KEY` still works. A local server that takes no key may go without one. `EXPLORE_TAGGER_EXTRA_BODY` adds fields a service needs to every request, such as `{"thinking":{"type":"disabled"}}` to turn off DeepSeek's thinking mode.
