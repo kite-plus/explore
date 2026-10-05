@@ -621,7 +621,7 @@ func TestTaggingNewEntries(t *testing.T) {
 	if n := e.w.TagOnce(ctx); n != 2 {
 		t.Fatalf("tagged %d entries, want 2", n)
 	}
-	if jobs, err := e.s.Untagged(ctx, 10); err != nil || len(jobs) != 0 {
+	if jobs, err := e.s.Untagged(ctx, 10, 100); err != nil || len(jobs) != 0 {
 		t.Errorf("still untagged: %+v, %v", jobs, err)
 	}
 	page, err := e.s.Stream(ctx, store.StreamQuery{Tag: "life", Limit: 10})
@@ -643,7 +643,7 @@ func TestTaggingSkipsAnEntryThatFails(t *testing.T) {
 	e.list(s, "/atom.xml")
 	e.runOnce()
 	ctx := t.Context()
-	jobs, err := e.s.Untagged(ctx, 10)
+	jobs, err := e.s.Untagged(ctx, 10, 100)
 	if err != nil || len(jobs) != 2 {
 		t.Fatalf("untagged = %+v, %v", jobs, err)
 	}
@@ -678,7 +678,7 @@ func TestTaggingPausesAfterFailuresInARow(t *testing.T) {
 	e.list(hugo, "/index.xml")
 	e.runOnce()
 	ctx := t.Context()
-	jobs, err := e.s.Untagged(ctx, 10)
+	jobs, err := e.s.Untagged(ctx, 10, 100)
 	if err != nil || len(jobs) < policy.TagFailureStreak+2 {
 		t.Fatalf("untagged = %d, %v; the test needs %d", len(jobs), err, policy.TagFailureStreak+2)
 	}

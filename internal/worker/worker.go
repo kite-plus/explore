@@ -337,7 +337,7 @@ func (w *Worker) TagOnce(ctx context.Context) int {
 	}
 	now := w.now()
 	maps.DeleteFunc(w.tagSkipped, func(_ int64, until time.Time) bool { return !now.Before(until) })
-	jobs, err := w.Store.Untagged(ctx, policy.TagsPerMinute+len(w.tagSkipped))
+	jobs, err := w.Store.Untagged(ctx, policy.TagsPerMinute+len(w.tagSkipped), policy.TagWindow)
 	if err != nil {
 		w.log().Error("listing untagged entries failed", "error", err)
 		return 0

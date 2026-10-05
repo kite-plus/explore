@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Tagging can use any OpenAI-compatible chat completions API, such as OpenAI, DeepSeek or a local model server, besides the Anthropic API. `EXPLORE_TAGGER_PROVIDER` picks `anthropic` (the default) or `openai`, `EXPLORE_TAGGER_BASE_URL` points at the service and `EXPLORE_TAGGER_API_KEY` holds its key; the old `EXPLORE_ANTHROPIC_API_KEY` still works. A local server that takes no key may go without one. `EXPLORE_TAGGER_EXTRA_BODY` adds fields a service needs to every request, such as `{"thinking":{"type":"disabled"}}` to turn off DeepSeek's thinking mode.
 
+### Changed
+
+- Only the newest 10,000 posts by publish date get tags and ratings. Older posts, mostly ones found through sitemaps, are rarely reached in a stream and would have taken days and most of the model's bill; the window moves on as new posts come in, and posts that leave it keep their tags.
+
 ### Fixed
 
 - A post whose answer was cut short was rated skip and never asked about again. It is now tried again later, and Claude models get more room to think before they answer.

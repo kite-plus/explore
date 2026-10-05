@@ -19,15 +19,26 @@ type TagJob struct {
 }
 
 // Untagged returns entries of active blogs that have not been tagged yet,
-// newest first, so a rebuilt cache fills the stream from the top.
-func (s *Store) Untagged(ctx context.Context, limit int) ([]TagJob, error) {
+// newest first, so a rebuilt cache fills the stream from the top. Only the
+// newest window entries of those blogs are considered, tagged or not, so
+// the window moves on as new posts come in.
+func (s *Store) Untagged(ctx context.Context, limit, window int) ([]TagJob, error) {
 	rows, err := s.pool.Query(ctx, `
+		WITH recent AS (
+			SELECT e.id, e.published_at, e.tagged_at
+			FROM entries e
+			JOIN blogs b ON b.id = e.blog_id
+			WHERE b.status = 'active' AND b.gone_since IS NULL
+			ORDER BY e.published_at DESC NULLS LAST, e.id DESC
+			LIMIT $2
+		)
 		SELECT e.id, e.title, coalesce(e.excerpt, e.page_excerpt, ''), e.categories, b.language, b.default_tags
-		FROM entries e
+		FROM recent r
+		JOIN entries e ON e.id = r.id
 		JOIN blogs b ON b.id = e.blog_id
-		WHERE e.tagged_at IS NULL AND b.status = 'active' AND b.gone_since IS NULL
-		ORDER BY e.published_at DESC NULLS LAST, e.id DESC
-		LIMIT $1`, limit)
+		WHERE r.tagged_at IS NULL
+		ORDER BY r.published_at DESC NULLS LAST, r.id DESC
+		LIMIT $1`, limit, window)
 	if err != nil {
 		return nil, err
 	}

@@ -1080,7 +1080,7 @@ func TestTags(t *testing.T) {
 	e := newEnv(t, true)
 	e.seed("tags.example.com", "zh", post("a", 1, ""), post("b", 2, ""))
 	ctx := context.Background()
-	jobs, err := e.s.Untagged(ctx, 10)
+	jobs, err := e.s.Untagged(ctx, 10, 100)
 	if err != nil || len(jobs) != 2 {
 		t.Fatalf("untagged = %+v, %v", jobs, err)
 	}
@@ -1162,7 +1162,7 @@ func TestRecommendedEntries(t *testing.T) {
 	// More than a day apart, so the daily cap of one leaves both.
 	e.seed("rec.example.com", "en", post("plain", 30, ""), post("deep", 60, ""), post("note", 50, ""))
 	ctx := context.Background()
-	jobs, err := e.s.Untagged(ctx, 10)
+	jobs, err := e.s.Untagged(ctx, 10, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

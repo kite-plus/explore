@@ -12,6 +12,10 @@
 
 - 打标签除了 Anthropic 接口，还可以用任何 OpenAI 兼容的 Chat Completions 接口，比如 OpenAI、DeepSeek 或本机的模型服务。`EXPLORE_TAGGER_PROVIDER` 选 `anthropic`（默认）或 `openai`，`EXPLORE_TAGGER_BASE_URL` 填接口地址，`EXPLORE_TAGGER_API_KEY` 填密钥；旧的 `EXPLORE_ANTHROPIC_API_KEY` 仍然有效。不需要密钥的本机服务可以不填。`EXPLORE_TAGGER_EXTRA_BODY` 给每个请求加上服务商需要的字段，比如用 `{"thinking":{"type":"disabled"}}` 关掉 DeepSeek 的思考模式。
 
+### 变更
+
+- 只给按发布时间最新的 1 万篇文章打标签和评分。更早的文章大多是通过站点地图补上的，读者在信息流里很少翻到那么深，全部打完要好几天，还会占掉大部分模型费用；新文章进来后窗口跟着往后移，移出窗口的文章保留已有的标签。
+
 ### 修复
 
 - 模型的回答被截断时，文章会被当成不推荐，以后也不再评。现在会稍后重试，Claude 模型也有了更多先思考再回答的余地。

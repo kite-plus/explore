@@ -805,7 +805,7 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 	second := entry("b", at(now.Add(-2*time.Hour)), true)
 	sync(t, s, b.ID, first, second)
 
-	jobs, err := s.Untagged(ctx, 10)
+	jobs, err := s.Untagged(ctx, 10, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -828,7 +828,7 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 	// The same title keeps its tags through a sync; a new one loses them.
 	second.Title = "a new title"
 	sync(t, s, b.ID, first, second)
-	jobs, err = s.Untagged(ctx, 10)
+	jobs, err = s.Untagged(ctx, 10, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -856,8 +856,48 @@ func TestTagsFollowTheirTitle(t *testing.T) {
 	if strings.Join(got.DefaultTags, ",") != "backend,ops" {
 		t.Errorf("default tags = %v", got.DefaultTags)
 	}
-	if jobs, err := s.Untagged(ctx, 10); err != nil || len(jobs) != 2 || strings.Join(jobs[0].BlogTags, ",") != "backend,ops" {
+	if jobs, err := s.Untagged(ctx, 10, 100); err != nil || len(jobs) != 2 || strings.Join(jobs[0].BlogTags, ",") != "backend,ops" {
 		t.Errorf("untagged after new default tags = %+v, %v", jobs, err)
+	}
+}
+
+func TestUntaggedStaysInTheWindow(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	b := listBlog(t, s, "window.example.com", "en")
+	now := time.Now().UTC()
+	a := entry("a", at(now.Add(-1*time.Hour)), true)
+	bb := entry("b", at(now.Add(-2*time.Hour)), true)
+	c := entry("c", at(now.Add(-3*time.Hour)), true)
+	sync(t, s, b.ID, a, bb, c)
+	titles := func() string {
+		t.Helper()
+		jobs, err := s.Untagged(ctx, 10, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Join(identities(jobs, func(j TagJob) string { return j.Title }), ",")
+	}
+
+	if got := titles(); got != "Title a,Title b" {
+		t.Fatalf("untagged = %s, want the newest two", got)
+	}
+	jobs, err := s.Untagged(ctx, 1, 2)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs = %+v, %v", jobs, err)
+	}
+	if err := s.SetRating(ctx, jobs[0].EntryID, jobs[0].Title, model.Rating{Tags: []string{"life"}}); err != nil {
+		t.Fatal(err)
+	}
+	// A tagged entry still takes its place in the window.
+	if got := titles(); got != "Title b" {
+		t.Errorf("untagged = %s, want b alone", got)
+	}
+	// A newer post pushes the oldest untagged one out.
+	d := entry("d", at(now), true)
+	sync(t, s, b.ID, d, a, bb, c)
+	if got := titles(); got != "Title d" {
+		t.Errorf("untagged = %s, want d alone", got)
 	}
 }
 

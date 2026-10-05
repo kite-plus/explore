@@ -65,7 +65,7 @@ v0.1.6 实现了第一版（[accounts.md §3.1](accounts.md#31-推荐评分)）�
 2. **定模型和入选线。** 选进不进推荐准确率高、两遍一致率高的配置，价格是次要的（§3）。按分布定入选线：如果 `solid` 占一半以上，推荐流每天会有三四十篇，接近最新流的一半，就收紧提示词，或者只收 `standout` 和一部分 `solid` `[待定]`。
 3. **排序改为天内出色在前。** 去掉 `StandoutBoost`：推荐流按天分组，天内先 `standout` 后 `solid`，同档按发布时间倒序。"天"按读者看的时区算：`GET /api/v1/entries` 增加 `tz` 参数（IANA 时区名，缺省 UTC），网页中文页传 `Asia/Shanghai`，英文页传 `UTC`，iOS 传设备时区；每个博客每天的上限也按这个时区计。排序键是（日期，评分，发布时间，id），固定不变，游标照旧不透明。推荐页的说明文字（"出色的在顶部多留两天"）一起改。
 4. **监控。** `GET /api/v1/admin/overview` 和工作台加上待评积压、近 7 天四档分布、近 24 小时推荐篇数。
-5. **上线。** 在选定的模型服务商那里给 Explore 单独建 API key，设用量上限；生产 `.env` 配好接口类型、地址、密钥和模型（[project-layout.md §4](project-layout.md#4-配置)）。积压按每分钟 `policy.TagsPerMinute` 篇从新到旧评，2.2 万篇约 18 小时评完，第一个小时就能评完最近两周多的文章，标签筛选同时恢复。
+5. **上线。** 在选定的模型服务商那里给 Explore 单独建 API key，设用量上限；生产 `.env` 配好接口类型、地址、密钥和模型（[project-layout.md §4](project-layout.md#4-配置)）。只评按发布时间最新的 `policy.TagWindow`（1 万）篇，按每分钟 `policy.TagsPerMinute` 篇从新到旧评，约 8 小时评完，第一个小时就能评完最近两周多的文章，标签筛选同时恢复。
 
 实施时先改 accounts.md §3.1（规则移到本文）、api.md 和 frontend.md，再改代码。
 

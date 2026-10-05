@@ -20,6 +20,10 @@ const (
 	// the model's bill when a cleared cache has to be tagged again.
 	TagsPerMinute = 20
 
+	// Only the newest this many entries get tagged and rated; older posts,
+	// mostly found through sitemaps, are rarely reached in a stream.
+	TagWindow = 10_000
+
 	// An entry the model fails on while others succeed waits this long
 	// before it is asked about again; this many failures in a row pause
 	// tagging altogether. See docs/design/worker.md section 11.
