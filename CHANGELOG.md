@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Excerpts could show markup as text: the insides of inline SVG icons and diagrams, such as `<g fill="none" …>` and `<path d="…">`, the MathML that KaTeX writes, such as `<semantics><mrow>`, and custom elements such as `<mjx-container>`. They are left out now, keeping the text inside custom elements, while a tag-like word in plain text, such as the `<T>` in a title about generics, is still kept. A cached excerpt is rebuilt the next time its blog's feed changes.
+
 ## [0.1.10] - 2026-10-05
 
 Tagging, and the recommended stream that rests on its ratings, can now run on any OpenAI-compatible model API, such as DeepSeek, as well as on Anthropic's. It also copes with failures without stalling, and only the newest 10,000 posts get tags and ratings. The upgrade runs no migration; `.env` gains optional tagger settings while the old ones keep working, and `docker-compose.yaml` and the `Caddyfile` stay as they are.

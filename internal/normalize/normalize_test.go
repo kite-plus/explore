@@ -57,6 +57,7 @@ func TestSnapshotGolden(t *testing.T) {
 		{"json-feed", "edge/feed.json", "https://json.example.com/feed.json", "json.example.com", nil, false},
 		{"tricky", "edge/tricky.xml", "https://blog.tricky.example.com/feed.xml", "blog.tricky.example.com", nil, false},
 		{"tricky-extra-domain", "edge/tricky.xml", "https://blog.tricky.example.com/feed.xml", "blog.tricky.example.com", []string{"spam.example.org"}, false},
+		{"markup", "edge/markup.xml", "https://markup.example.com/feed.xml", "markup.example.com", nil, false},
 		{"wordpress-excerpt-hidden", "wordpress/feed.xml", "https://wp.example.com/feed/", "wp.example.com", nil, true},
 	}
 	for _, c := range cases {
@@ -151,6 +152,13 @@ func TestPlainText(t *testing.T) {
 		"<img src=x.gif>after":                         "after",
 		"<p>第一段。</p><p>第二段。</p>":                       "第一段。 第二段。",
 		"cut in half <a href=\"https://example.com/do": "cut in half",
+		"<p>Icon<svg viewBox=\"0 0 24 24\"><g fill=\"none\"><path d=\"M3 12h1\"/></g></svg> text</p>": "Icon text",
+		"<svg><svg><circle r=\"1\"/></svg><g><text>label</text></g></svg>after":                       "after",
+		"<svg/>after <svg viewBox=\"0 0 1 1\"/>":                                                      "after",
+		"a <math><mrow><mi>x</mi></mrow></math>b":                                                     "a b",
+		"<p>Run <h-c># note</h-c></p>":                                                                "Run # note",
+		"<mjx-container class=\"MathJax\"><svg><path d=\"M0 0\"/></svg></mjx-container>done":          "done",
+		"Make <md-chip> work": "Make <md-chip> work",
 	}
 	for in, want := range cases {
 		if got := PlainText(in); got != want {

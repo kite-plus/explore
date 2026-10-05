@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Markup Blog</title><link>https://markup.example.com/</link><description>Markup that is not text</description>
+<item><title>整页 HTML</title><link>https://markup.example.com/posts/whole-page.html</link><guid>whole-page</guid><pubDate>Mon, 21 Sep 2026 16:00:00 GMT</pubDate><description>&lt;!doctype html&gt;
+&lt;html lang="zh"&gt;
+ &lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;meta name="description" content="整页 HTML - 一个博客"&gt;
+  &lt;title&gt;整页 HTML -一个博客&lt;/title&gt;
+  &lt;style type="text/css"&gt;pre &gt; code { white-space: pre-wrap; }&lt;/style&gt;
+  &lt;script type="application/ld+json"&gt;{"@type": "NewsArticle", "headline": "整页 HTML"}&lt;/script&gt;
+ &lt;/head&gt;
+ &lt;body&gt;
+  &lt;header&gt;
+   &lt;a href="https://markup.example.com"&gt;&lt;img src="/images/logo.png"&gt;&lt;/a&gt;
+   &lt;button type="button"&gt;
+    &lt;svg viewbox="0 0 24 24" class="w-6 h-6" astro-icon="tabler:sun"&gt; &lt;g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"&gt;
+      &lt;circle cx="12" cy="12" r="4"&gt;&lt;/circle&gt;
+      &lt;path d="M3 12h1m8-9v1m8 8h1m-9 8v1"&gt;&lt;/path&gt;
+     &lt;/g&gt;
+    &lt;/svg&gt;
+   &lt;/button&gt;
+   &lt;nav&gt;&lt;ul&gt;&lt;li&gt;&lt;a href="/posts.html"&gt;文章&lt;/a&gt;&lt;/li&gt;&lt;li&gt;&lt;a href="/books.html"&gt;书&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;&lt;/nav&gt;
+  &lt;/header&gt;
+  &lt;main&gt;
+   &lt;h1&gt;整页 HTML&lt;/h1&gt;
+   &lt;p&gt;有的订阅源把整个页面放进 description。&lt;/p&gt;
+  &lt;/main&gt;
+ &lt;/body&gt;
+&lt;/html&gt;</description></item>
+<item><title>Heading anchor</title><link>https://markup.example.com/posts/anchor.html</link><guid>anchor</guid><pubDate>Mon, 21 Sep 2026 15:00:00 GMT</pubDate><description><![CDATA[<h2 id="背景"><a class="anchor" href="#背景"><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0"></path></svg></a>背景</h2><p>标题前的链接图标不是正文。</p>]]></description></item>
+<item><title>Nested svg</title><link>https://markup.example.com/posts/diagram.html</link><guid>diagram</guid><pubDate>Mon, 21 Sep 2026 14:00:00 GMT</pubDate><description><![CDATA[<p>Before the diagram.</p><svg viewBox="0 0 680 380"><rect x="0" y="0" width="680" height="380" fill="#0d1117"/><svg x="10" y="10"><circle cx="5" cy="5" r="5"/></svg><g><text x="20" y="40">API</text><path d="M0,0 L10,10"/></g></svg><p>After the diagram.</p>]]></description></item>
+<item><title>KaTeX with HTML</title><link>https://markup.example.com/posts/katex.html</link><guid>katex</guid><pubDate>Mon, 21 Sep 2026 13:00:00 GMT</pubDate><description><![CDATA[<p>除了第一个操作复杂度为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mclose">)</span></span></span></span>，其他操作都更快。</p>]]></description></item>
+<item><title>MathML only</title><link>https://markup.example.com/posts/mathml.html</link><guid>mathml</guid><pubDate>Mon, 21 Sep 2026 12:00:00 GMT</pubDate><description><![CDATA[<p>设 <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="script">X</mi></mrow><annotation encoding="application/x-tex">\mathcal{X}</annotation></semantics></math></span> 为输入空间。</p>]]></description></item>
+<item><title>Custom elements</title><link>https://markup.example.com/posts/custom.html</link><guid>custom</guid><pubDate>Mon, 21 Sep 2026 11:00:00 GMT</pubDate><description><![CDATA[<p>先看提示：</p><note-box type="tip"><p>提示里的文字是正文。</p></note-box><x-video src="https://video.example.net/v/1" size=""></x-video><pre><h-c># a comment</h-c> run <h-s>"arg"</h-s></pre>]]></description></item>
+<item><title>Cut inside math</title><link>https://markup.example.com/posts/cut.html</link><guid>cut</guid><pubDate>Mon, 21 Sep 2026 10:00:00 GMT</pubDate><description><![CDATA[<h1 id="闲话">闲话</h1> <p>板题，在这种只有 <span class="math inline"><mjx-container class="MathJax" jax="SVG"><svg style="]]></description></item>
+<item><title>Make &lt;md-chip&gt; work without &lt;md-chips&gt;</title><link>https://markup.example.com/posts/plain.html</link><guid>plain</guid><pubDate>Mon, 21 Sep 2026 09:00:00 GMT</pubDate><description>Using &lt;my-element&gt; without a framework, and Vec&lt;T&gt; too.</description></item>
+</channel></rss>
