@@ -8,9 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-06
+
+A small release: a post shared from the iOS app or the site now opens a page of its own on Explore, and feeds that put each post's whole web page in its description get proper excerpts and covers. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
+### Added
+
+- A share page for posts at `/p/{id}` (`/en/p/{id}` in English). Links and QR codes shared from the iOS app used to open the transition page, which asks the reader to confirm an address it did not open itself. The share page names the blog and the post, shows the date, excerpt, cover and tags, and offers Read the post straight away, with a few more posts from the same blog below. It never redirects on its own, shows only what lists already show, and stays out of search engines through `noindex` and `robots.txt`. It reads the post from the new `GET /api/v1/entries/{id}`, which follows the blog page's visibility rules, so a post hidden from lists cannot be reached through it either.
+- Link previews of every page carry an image, the Explore mark; a shared post previews as an article with its cover when it has one.
+
 ### Fixed
 
-- A feed that puts each post's whole web page in its description gave excerpts that began with the page's title and the site's menu, and the site's logo as every post's cover. Such an excerpt now comes from the page's main content, and the cover from the `og:image` the page names.
+- A feed that puts each post's whole web page in its description gave excerpts that began with the page's title and the site's menu, and the site's logo as every post's cover. Such an excerpt now comes from the page's main content, and the cover from the `og:image` the page names. A cached excerpt is rebuilt the next time its blog's feed changes.
 
 ## [0.1.12] - 2026-10-05
 
