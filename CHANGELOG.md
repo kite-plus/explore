@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-05
+
+A small release: the recommended stream now takes posts scoring 11 or more, about ten a day. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
+### Changed
+
+- The recommended stream takes posts scoring at least 11 out of 15, about ten a day, one in six or seven posts. Over 19 days of measured scores, the provisional bar of 10 let in 21 a day, a third of all posts.
+
 ## [0.1.11] - 2026-10-05
 
 The recommended stream chooses posts a new way: the model scores each post for depth, originality and value instead of picking one of four levels, the stream keeps the higher scorers, and each day lists its best posts first. Excerpts also lose the markup some feeds left in them. The upgrade runs one migration, after which the newest 10,000 posts are scored again over about eight hours; `docker-compose.yaml` and the `Caddyfile` stay as they are.
