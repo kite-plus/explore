@@ -44,9 +44,10 @@ const (
 	FutureTolerance     = time.Hour
 
 	// The recommended stream takes posts scoring at least this much, out of
-	// model.MaxScore, and at most this many per blog and day. The score is
-	// provisional until the tag window has been rated and its spread seen.
-	RecommendedMinScore      = 10
+	// model.MaxScore, and at most this many per blog and day. 11 let in
+	// about ten posts a day, one in six or seven, over 19 days of scores;
+	// see docs/design/recommendation.md, R0.
+	RecommendedMinScore      = 11
 	RecommendedPerBlogPerDay = 1
 )
 
