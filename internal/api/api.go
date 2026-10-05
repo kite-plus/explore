@@ -92,6 +92,7 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	v1 := r.Group("/api/v1")
 	v1.GET("/entries", s.limit(s.readLimit), s.entries)
+	v1.GET("/entries/:id", s.limit(s.readLimit), s.entry)
 	v1.GET("/entries/:id/image", s.limit(s.readLimit), s.entryImage)
 	v1.GET("/entries/:id/check", s.limit(s.readLimit), s.entryLinkState)
 	v1.POST("/entries/:id/check", s.limit(s.linkLimit), s.checkEntryLink)

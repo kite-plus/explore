@@ -138,6 +138,23 @@ func (s *Server) entries(c *gin.Context) {
 	cached(c, time.Minute, "application/json; charset=utf-8", encode(out))
 }
 
+// entry returns one entry with its blog, for the website's share page.
+func (s *Server) entry(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		s.fail(c, http.StatusNotFound, codeNotFound)
+		return
+	}
+	r, err := s.Store.VisibleEntry(c.Request.Context(), id)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	out := toEntry(r.Entry)
+	out.Blog = &blogRefJSON{Host: r.Blog.Host, Name: r.Blog.Name, SiteURL: r.Blog.SiteURL, Language: r.Blog.Language}
+	cached(c, time.Minute, "application/json; charset=utf-8", encode(out))
+}
+
 // tags returns the tag list in display order, with names in both languages.
 func (s *Server) tags(c *gin.Context) {
 	out := struct {

@@ -336,6 +336,38 @@ func (s *Store) VisibleBlogPage(ctx context.Context, host string, q BlogPageQuer
 	return blog, entries, err
 }
 
+// VisibleEntry returns one entry with its blog under the blog page's rules:
+// the blog is visible, the entry is not suppressed and not in the future.
+// The website's share page shows it; an entry no list would show is not
+// found.
+func (s *Store) VisibleEntry(ctx context.Context, id int64) (StreamEntry, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.id, e.blog_id, e.identity, e.url, e.title, coalesce(`+shownExcerpt+`, ''), coalesce(`+shownImage+`, ''),
+		       e.published_at, e.date_trusted, e.tags, e.link_status, e.link_checked_at,
+		       b.host, b.name, b.site_url, b.feed_url, b.language
+		FROM entries e
+		JOIN blogs b ON b.id = e.blog_id
+		WHERE e.id = @id AND `+visible+`
+		  AND `+notSuppressed+`
+		  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))`,
+		pgx.NamedArgs{"id": id, "unhealthy_after": seconds(policy.UnhealthyAfter),
+			"future_tolerance": seconds(policy.FutureTolerance)})
+	if err != nil {
+		return StreamEntry{}, err
+	}
+	e, err := pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (StreamEntry, error) {
+		var e StreamEntry
+		err := row.Scan(&e.ID, &e.BlogID, &e.Identity, &e.URL, &e.Title, &e.Excerpt, &e.ImageURL,
+			&e.PublishedAt, &e.DateTrusted, &e.Tags, &e.LinkStatus, &e.LinkCheckedAt,
+			&e.Blog.Host, &e.Blog.Name, &e.Blog.SiteURL, &e.Blog.FeedURL, &e.Blog.Language)
+		return e, err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return StreamEntry{}, ErrNotFound
+	}
+	return e, err
+}
+
 // limitOrAll turns a Limit of 0 into SQL's LIMIT NULL, which takes every row.
 func limitOrAll(limit int) any {
 	if limit <= 0 {

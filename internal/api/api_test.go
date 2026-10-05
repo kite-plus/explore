@@ -198,6 +198,50 @@ type pageOut struct {
 	NextCursor *string    `json:"next_cursor"`
 }
 
+func TestEntry(t *testing.T) {
+	e := newEnv(t, false)
+	e.seed("zh.example.com", "zh-CN", post("shared", 1, "摘要"), post("hidden", 2, ""), post("later", -48, ""))
+	page := decode[pageOut](t, e.get("/api/v1/entries"))
+	if len(page.Data) != 2 {
+		t.Fatalf("stream = %+v", page.Data)
+	}
+	shared, hidden := page.Data[0], page.Data[1]
+
+	w := e.get("/api/v1/entries/" + shared.ID)
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "public, max-age=60" {
+		t.Fatalf("status %d, headers %v", w.Code, w.Header())
+	}
+	got := decode[entryOut](t, w)
+	if got.ID != shared.ID || got.Title != "Post shared" || got.URL != "https://posts.example/shared" || got.Excerpt == nil || *got.Excerpt != "摘要" {
+		t.Errorf("entry = %+v", got)
+	}
+	if got.Blog == nil || got.Blog.Host != "zh.example.com" || got.Blog.Name != "Blog zh.example.com" || got.Blog.Language != "zh-CN" {
+		t.Errorf("blog = %+v", got.Blog)
+	}
+
+	id, err := strconv.ParseInt(hidden.ID, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.SetEntryHidden(context.Background(), id, true, "spam", "maintainer"); err != nil {
+		t.Fatal(err)
+	}
+	// Hidden, in the future, unknown or not a number: what no list shows is
+	// not found here either.
+	for _, path := range []string{"/api/v1/entries/" + hidden.ID, "/api/v1/entries/999999", "/api/v1/entries/abc", "/api/v1/entries/0"} {
+		if w := e.get(path); w.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d", path, w.Code)
+		}
+	}
+	all, _, err := e.s.AdminEntries(context.Background(), "later", 10, 0)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("future entry: %v %+v", err, all)
+	}
+	if w := e.get("/api/v1/entries/" + strconv.FormatInt(all[0].ID, 10)); w.Code != http.StatusNotFound {
+		t.Errorf("future entry: status %d", w.Code)
+	}
+}
+
 func TestEntries(t *testing.T) {
 	e := newEnv(t, false)
 	e.seed("zh.example.com", "zh-CN", post("a", 1, "摘要"), post("b", 3, ""))
