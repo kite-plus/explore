@@ -223,6 +223,29 @@ func TestImageCandidate(t *testing.T) {
 	}
 }
 
+// Some feeds put each post's whole page in its description.
+func TestWholePage(t *testing.T) {
+	page := `<!doctype html><html><head><title>Post - Site</title></head><body><header><img src="/logo.png"><nav><a href="/">Home</a></nav></header><main><h1>Post</h1><p>Text.</p></main><footer>Footer</footer></body></html>`
+	for in, want := range map[string]string{
+		page: "<h1>Post</h1><p>Text.</p>",
+		"<head><title>Post</title></head><body><p>Body only.</p></body>": "<p>Body only.</p>",
+		"<!DOCTYPE html><title>Post</title><p>No body tag.</p>":          "<!DOCTYPE html><title>Post</title><p>No body tag.</p>",
+		"<html><body><p>Wrapped.</p></body></html>":                      "<html><body><p>Wrapped.</p></body></html>",
+		" <p>Fragment.</p>": " <p>Fragment.</p>",
+	} {
+		if got := mainContent(in); got != want {
+			t.Errorf("mainContent(%q) = %q, want %q", in, got, want)
+		}
+	}
+	base, _ := url.Parse("https://blog.example.com/post/")
+	if got := imageURL(feed.Item{Summary: page}, base); got != "" {
+		t.Errorf("image of a whole page = %q, want none", got)
+	}
+	if got := imageURL(feed.Item{Summary: `<html><body><img src="/photo.jpg"></body></html>`}, base); got != "https://blog.example.com/photo.jpg" {
+		t.Errorf("image of a wrapped fragment = %q", got)
+	}
+}
+
 func TestTruncate(t *testing.T) {
 	if got := Truncate("short", 10); got != "short" {
 		t.Errorf("got %q", got)

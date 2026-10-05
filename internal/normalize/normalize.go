@@ -250,9 +250,9 @@ func categories(raw []string) []string {
 }
 
 func excerpt(it feed.Item) string {
-	src := it.Summary
+	src := mainContent(it.Summary)
 	if strings.TrimSpace(PlainText(src)) == "" {
-		src = it.Content
+		src = mainContent(it.Content)
 	}
 	return Truncate(PlainText(src), policy.ExcerptMaxRunes)
 }

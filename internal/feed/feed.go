@@ -45,7 +45,11 @@ type Item struct {
 // Parse reads a feed document. Character sets other than UTF-8 are converted
 // using the document's own declaration.
 func Parse(body []byte) (*Feed, error) {
-	parsed, err := gofeed.NewParser().Parse(bytes.NewReader(body))
+	p := gofeed.NewParser()
+	// An item's image is only one the feed names on its own. normalize picks
+	// images out of the HTML, by rules gofeed's own scan does not know.
+	p.RSSTranslator = &gofeed.DefaultRSSTranslator{DisableContentImageScan: true}
+	parsed, err := p.Parse(bytes.NewReader(body))
 	if errors.Is(err, gofeed.ErrFeedTypeNotDetected) {
 		return nil, ErrNotFeed
 	}

@@ -157,6 +157,7 @@ If-Modified-Since: ...
 - 日期解析要宽松：Halo 的一位数日期（`Thu, 3 Sep 2026 01:02:03 GMT`）能正确解析 `[EV]`。写了日期却解析不了的条目记 `DateUnreadable`，E0 里有这种条目的订阅源只有 5 个。
 - 解析失败只报错，**绝不**当作空订阅源。
 - `Content`（全文）只在内存里停留到规范化结束，用来在没有 `Summary` 时生成摘要，之后立即丢弃。
+- 条目的 `Image` 只取订阅源单独写明的图片：RSS 的 `itunes:image`、`media:content`、图片类型的 `enclosure`，JSON Feed 的 `image`、`banner_image`。gofeed 默认还会在 RSS 的正文和摘要里找第一张 `<img>`，这一步关掉：正文里的图片由规范化按 §5.1 的规则挑，gofeed 的扫描不认极小的统计图，还会把整页 HTML 里的站点 logo 当成封面。
 - 订阅源的 `Description` 可作为博客介绍的后备文本；优先使用首页的 `<meta name="description">`，再尝试 `og:description` 和 `twitter:description`。worker 每 7 天最多读取一次首页，使用同一套 robots、重定向、大小和地址限制，描述清理成纯文本并截到 240 字。首页或订阅源没有可用描述时保留上一次的值；`304` 不影响描述刷新。
 
 ---
@@ -176,7 +177,8 @@ If-Modified-Since: ...
 5. **摘要**：只在 `show_excerpt` 为真时生成。来源是 `Summary`，为空时用 `Content`；先用 `golang.org/x/net/html` 提取纯文本（去掉脚本、样式、SVG 和 MathML 的内容，块级元素之间补一个空格，不是 HTML 元素的标签如 `<T>` 保留原样）、合并空白，**再**截断到 140 字（省略号计入 140）。绝不在去掉标签之前截断，Hexo 插件截断 HTML 的问题就出在这里（[architecture.md §5.1](architecture.md#5-接入的博客系统)）。
    - SVG 和 MathML 要整段去掉：里面的 `<g>`、`<path>`、`<mrow>` 都不是 HTML 元素，只去掉外层标签的话，会被当成作者写的文字留在摘要里。主题放在标题旁的链接图标、整页 HTML 里的按钮图标、KaTeX 输出的公式都出过这个问题。KaTeX 默认在 MathML 旁边另给一份 HTML 文字，公式照样能读到；只输出 MathML 的，摘要里公式的位置是空的。
    - 文本里有 HTML 元素时，名字带连字符的标签是自定义元素（如 `<mjx-container>`、`<note-box>`），去掉标签、保留里面的文字。没有 HTML 元素的纯文本，比如标题 `Make <md-chip> work`，里面的标签原样保留。
-6. **缩略图地址**：只在 `show_excerpt` 为真时提取。优先取正文或摘要 HTML 中第一张未标为极小尺寸的图片，再取订阅源的独立图片字段；只保留合法的 HTTP(S) 地址，图片字节不入库。展示时由本站图片接口校验并转发（[api.md §2.1.2](api.md#212-get-apiv1entriesidimage)）。
+   - 有的订阅源把每篇文章的整个网页放进 `Summary` 或 `Content`，开头是 doctype 或 `<head>`（只用 `<html><body>` 包起来的片段不算）。这时只读 `<main>` 里的内容，没有 `<main>` 就读 `<body>`：页面标题、站点的导航和页脚都不是文章。
+6. **缩略图地址**：只在 `show_excerpt` 为真时提取。优先取正文或摘要 HTML 中第一张未标为极小尺寸的图片，再取订阅源的独立图片字段；只保留合法的 HTTP(S) 地址，图片字节不入库。展示时由本站图片接口校验并转发（[api.md §2.1.2](api.md#212-get-apiv1entriesidimage)）。整页 HTML 里的图片不取，第一张多半是站点 logo；没有别的图时，由读文章页（§12）从 `<head>` 的 `og:image` 补上封面。
 7. **去重**：同一快照里身份键重复的，保留第一次出现的那条。
 
 ### 5.2 整个快照

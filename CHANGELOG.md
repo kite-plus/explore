@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- A feed that puts each post's whole web page in its description gave excerpts that began with the page's title and the site's menu, and the site's logo as every post's cover. Such an excerpt now comes from the page's main content, and the cover from the `og:image` the page names.
+
 ## [0.1.12] - 2026-10-05
 
 A small release: the recommended stream now takes posts scoring 11 or more, about ten a day. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.

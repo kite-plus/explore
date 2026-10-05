@@ -15,6 +15,11 @@ import (
 func imageURL(item feed.Item, article *url.URL) string {
 	skipped := map[string]bool{}
 	for _, fragment := range []string{item.Content, item.Summary} {
+		if wholePage(fragment) {
+			// Its first image is mostly the site's logo; the cover its head
+			// names comes from reading the page.
+			continue
+		}
 		z := html.NewTokenizer(strings.NewReader(fragment))
 		for {
 			token := z.Next()
