@@ -1,73 +1,195 @@
 ---
-import { Pin } from "lucide-react";
+import { ArrowLeft, ArrowRight, Pin, Share2 } from "lucide-react";
+import EntryItem from "@/components/EntryItem.astro";
 import ExternalLink from "@/components/ExternalLink.astro";
+import Logo from "@/components/Logo.astro";
 import Message from "@/components/Message.astro";
 import { buttonVariants } from "@/components/ui/button";
-import { dict, type Lang } from "@/i18n";
+import { dict, localePath, type Lang } from "@/i18n";
 import Base from "@/layouts/Base.astro";
-import { withSource } from "@/lib/config";
+import { avatarColor, initial } from "@/lib/avatar";
+import { publicURL, withSource } from "@/lib/config";
 import { formatDate } from "@/lib/format";
-import type { Loaded } from "@/lib/loaders";
-import type { Notice } from "@/lib/types";
+import { linkify } from "@/lib/linkify";
+import type { Loaded, NoticeView } from "@/lib/loaders";
+import { tagNames } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 
 interface Props {
   lang: Lang;
   id: string;
-  result: Loaded<Notice>;
+  result: Loaded<NoticeView>;
 }
 
-// A notice or ad's own page: its title, who it is from, its mark and its
-// text, which is plain and splits into paragraphs at blank lines
-// (docs/design/notices.md). It stays out of search.
+// A notice or ad's own page, laid out as an article: who it is from, its
+// mark and date, the title and lead, the plain text in paragraphs with its
+// addresses linked, a card on who published it, and the latest posts to go
+// on to (docs/design/notices.md). It stays out of search.
 const { lang, id, result } = Astro.props;
 const t = dict(lang);
-const notice = result.kind === "ok" ? result.data : undefined;
+const data = result.kind === "ok" ? result.data : undefined;
+const notice = data?.notice;
 const ad = notice?.kind === "ad";
 const paragraphs = (notice?.body ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 const link = notice?.url ? (ad ? withSource(notice.url) : notice.url) : "";
+const names = data ? tagNames(data.tags, lang) : {};
+const pageURL = publicURL() + localePath(lang, `/notices/${id}`);
 ---
 
-<Base lang={lang} title={notice ? notice.title : t.errors.notFound} description={notice?.summary || notice?.title || t.errors.notFound} path={`/notices/${id}`} noindex>
+<Base lang={lang} title={notice ? notice.title : t.errors.notFound} description={notice?.summary || notice?.title || t.errors.notFound} path={`/notices/${id}`} noindex article={Boolean(notice)}>
   {
-    notice ? (
-      <article class="mx-auto max-w-xl">
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <span class="font-medium text-foreground/80">{notice.source_name}</span>
-          <span aria-hidden="true">·</span>
-          <span
-            class={cn(
-              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-xs font-medium",
-              ad ? "border border-border text-muted-foreground" : "bg-warning/12 text-warning",
+    notice && data ? (
+      <article class="mx-auto max-w-2xl">
+        <a href={localePath(lang, "/")} class="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          {t.nav.home}
+        </a>
+
+        <header class="mt-6">
+          <div class="flex items-center gap-3">
+            {ad ? (
+              <span aria-hidden="true" class={cn("inline-flex size-10 shrink-0 items-center justify-center rounded-full text-base font-medium text-white", avatarColor(notice.source_name))}>
+                {initial(notice.source_name)}
+              </span>
+            ) : (
+              <span aria-hidden="true" class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border bg-white">
+                <Logo class="h-5 w-auto" />
+              </span>
             )}
-          >
-            {notice.position === 0 && <Pin className="size-3" aria-hidden="true" />}
-            {notice.position === 0 && <span class="sr-only">{t.notices.pinned}</span>}
-            {ad ? t.notices.ad : t.notices.notice}
-          </span>
-          <span aria-hidden="true">·</span>
-          <time datetime={notice.published_at}>{formatDate(notice.published_at, lang)}</time>
-        </div>
-        <h1 class="mt-3 text-2xl leading-snug font-semibold tracking-tight">{notice.title}</h1>
-        {notice.summary && <p class="mt-3 leading-relaxed text-muted-foreground">{notice.summary}</p>}
+            <div class="min-w-0">
+              <div class="truncate font-medium">{notice.source_name}</div>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+                <time datetime={notice.published_at}>{formatDate(notice.published_at, lang)}</time>
+                <span aria-hidden="true">·</span>
+                <span
+                  class={cn(
+                    "inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-xs leading-4 font-medium",
+                    ad ? "border border-border text-muted-foreground" : "bg-warning/12 text-warning",
+                  )}
+                >
+                  {notice.position === 0 && <Pin className="size-3" aria-hidden="true" />}
+                  {notice.position === 0 && <span class="sr-only">{t.notices.pinned}</span>}
+                  {ad ? t.notices.ad : t.notices.notice}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-notice-share={pageURL}
+              data-title={notice.title}
+              data-copied={t.notices.copied}
+              class={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto rounded-full")}
+            >
+              <Share2 className="size-4" aria-hidden="true" />
+              <span data-share-label>{t.notices.share}</span>
+            </button>
+          </div>
+          <h1 class="mt-7 text-[1.75rem] leading-tight font-semibold tracking-tight sm:text-3xl">{notice.title}</h1>
+          {notice.summary && <p class="mt-4 text-lg leading-relaxed text-muted-foreground">{notice.summary}</p>}
+        </header>
+
         {paragraphs.length > 0 && (
-          <div class="mt-6 space-y-4 leading-relaxed">
+          <div class="mt-8 space-y-5 border-t pt-8 text-[1.0625rem] leading-8">
             {paragraphs.map((p) => (
-              <p class="whitespace-pre-line">{p}</p>
+              <p class="whitespace-pre-line">
+                {linkify(p).map((piece) =>
+                  piece.href ? (
+                    <a href={piece.href} target="_blank" rel="noopener" class="text-brand underline decoration-brand/40 underline-offset-4 hover:decoration-brand">{piece.text}</a>
+                  ) : (
+                    piece.text
+                  ),
+                )}
+              </p>
             ))}
           </div>
         )}
-        {link && (
+
+        {link && !ad && (
           <div class="mt-8">
             <ExternalLink lang={lang} href={link} class={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
               {t.notices.open}
             </ExternalLink>
           </div>
         )}
-        {ad && <p class="mt-6 text-xs text-muted-foreground">{t.notices.adNote}</p>}
+
+        <section class="mt-12 rounded-2xl border bg-muted/40 p-5">
+          {ad ? (
+            <>
+              <div class="flex items-center gap-3">
+                <span aria-hidden="true" class={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white", avatarColor(notice.source_name))}>
+                  {initial(notice.source_name)}
+                </span>
+                <div class="min-w-0">
+                  <div class="truncate font-medium">{notice.source_name}</div>
+                  <div class="text-sm text-muted-foreground">{t.notices.adNote}</div>
+                </div>
+              </div>
+              {link && (
+                <ExternalLink lang={lang} href={link} class={cn(buttonVariants(), "mt-4 w-full")}>
+                  {t.notices.open}
+                </ExternalLink>
+              )}
+            </>
+          ) : (
+            <>
+              <div class="flex items-center gap-3">
+                <span aria-hidden="true" class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-white">
+                  <Logo class="h-4.5 w-auto" />
+                </span>
+                <div class="min-w-0">
+                  <div class="font-medium">Kite Plus</div>
+                  <div class="text-sm text-muted-foreground">{t.notices.about}</div>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                <a href={localePath(lang, "/submit")} class={cn(buttonVariants(), "sm:flex-1")}>{t.nav.submit}</a>
+                <a href={localePath(lang, "/about")} class={cn(buttonVariants({ variant: "outline" }), "sm:flex-1")}>{t.about.title}</a>
+              </div>
+            </>
+          )}
+        </section>
+
+        {data.latest.length > 0 && (
+          <section class="mt-12">
+            <h2 class="text-sm font-medium text-muted-foreground">{t.notices.more}</h2>
+            <div class="mt-2 border-t" data-entry-stream>
+              {data.latest.map((entry) => (
+                <EntryItem lang={lang} entry={entry} tagNames={names} />
+              ))}
+            </div>
+            <a href={localePath(lang, "/")} class="mt-4 inline-flex items-center gap-1 text-sm font-medium hover:underline underline-offset-4">
+              {t.notices.all}
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </a>
+          </section>
+        )}
       </article>
     ) : (
       <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
     )
   }
 </Base>
+
+<script>
+  // Shares the notice where the system can, else copies its address.
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-notice-share]")) {
+    button.addEventListener("click", async () => {
+      const url = button.dataset.noticeShare ?? location.href;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: button.dataset.title, url });
+        } catch {
+          // Closing the share sheet is not an error worth showing.
+        }
+        return;
+      }
+      await navigator.clipboard?.writeText(url).catch(() => {});
+      const label = button.querySelector("[data-share-label]");
+      if (label && button.dataset.copied) {
+        const before = label.textContent;
+        label.textContent = button.dataset.copied;
+        setTimeout(() => (label.textContent = before), 2000);
+      }
+    });
+  }
+</script>

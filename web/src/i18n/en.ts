@@ -94,6 +94,11 @@ export const en: Dict = {
     pinned: "Pinned",
     open: "Open the link",
     adNote: "This is an ad, written by the advertiser.",
+    share: "Share",
+    copied: "Link copied",
+    about: "Kite, a blog engine, and Explore, for finding independent blogs, are both part of Kite Plus.",
+    more: "Keep exploring",
+    all: "See all the latest posts",
   },
   post: {
     read: "Read the post",

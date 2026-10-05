@@ -23,7 +23,7 @@ const entries = {
 };
 
 const notices = [
-  { id: "7", kind: "notice", title: "Kite for iOS 上架了", summary: "在 App Store 搜索 Kite Explore。", body: "第一段。\n\n第二段\n同一段。", url: "", source_name: "Kite Plus", position: 0, published_at: iso(5) },
+  { id: "7", kind: "notice", title: "Kite for iOS 上架了", summary: "在 App Store 搜索 Kite Explore。", body: "第一段。\n\n第二段\n同一段。\n\n了解更多：www.kite.plus。", url: "", source_name: "Kite Plus", position: 0, published_at: iso(5) },
   { id: "8", kind: "ad", title: "一元建站", summary: "", body: "", url: "https://ads.example.com/kite", source_name: "某某云", position: 1, published_at: iso(5) },
 ];
 

@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- A notice's page reads like an article: a way back to Discover, who published it with its date and mark, a share button, a larger title and lead, roomier text whose web addresses are links, a card on Kite Plus (or, for an ad, on the advertiser, marked as an ad), and the three latest posts to go on to.
+
 ## [0.1.14] - 2026-10-06
 
 Explore can now publish notices and ads of its own between the posts of the latest stream, and the streams list posts in one run without day headings. The upgrade runs one migration, which adds the `notices` table; `.env`, `docker-compose.yaml` and the `Caddyfile` stay as they are.

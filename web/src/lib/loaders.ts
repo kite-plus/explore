@@ -166,14 +166,21 @@ export async function loadPost(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Pos
   return { kind: "ok", data: { entry: { ...r.data, blog }, more, tags: tags ?? [] } };
 }
 
-/** loadNotice is a notice's own page; only digits name a notice. */
-export async function loadNotice(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Notice>> {
+export type NoticeView = { notice: Notice; latest: Entry[]; tags: Tag[] };
+
+/**
+ * loadNotice is a notice's own page, with a few of the latest posts to go
+ * on to; only digits name a notice.
+ */
+export async function loadNotice(ctx: AstroGlobal, lang: Lang): Promise<Loaded<NoticeView>> {
   const id = ctx.params.id ?? "";
   if (!/^\d+$/.test(id)) return notFound(ctx);
-  const r = await api.notice(caller(ctx, lang), id);
+  const from = caller(ctx, lang);
+  const [r, latest, tags] = await Promise.all([api.notice(from, id), api.entries(from, { limit: 3 }), tagList(from)]);
   if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=60");
-  return { kind: "ok", data: r.data };
+  // The latest posts are only extra: without them the notice still shows.
+  return { kind: "ok", data: { notice: r.data, latest: latest.kind === "ok" ? latest.data.data : [], tags: tags ?? [] } };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {

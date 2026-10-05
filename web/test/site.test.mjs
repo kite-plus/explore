@@ -343,6 +343,11 @@ describe("content", () => {
     assert.match(html, /<p class="whitespace-pre-line">第一段。<\/p>/);
     assert.match(html, /<p class="whitespace-pre-line">第二段\n同一段。<\/p>/);
     assert.match(html, /<meta name="robots" content="noindex, follow">/);
+    assert.match(html, /<a href="https:\/\/www\.kite\.plus" target="_blank" rel="noopener"[^>]*>www\.kite\.plus<\/a>。<\/p>/, "addresses in the text are links");
+    assert.match(html, /data-notice-share="https:\/\/explore\.example\.org\/notices\/7"/);
+    assert.match(html, /<a href="\/submit"[^>]*>提交博客<\/a>/, "the card on Kite Plus");
+    assert.match(html, /<h2[^>]*>继续发现<\/h2>/);
+    assert.match(html, /缓存可以随时删掉/, "the latest posts follow");
     const ad = (await page("/notices/8")).html;
     assert.match(ad, /href="https:\/\/ads\.example\.com\/kite\?utm_source=explore\.example\.org"/);
     assert.match(ad, /这是一条广告/);

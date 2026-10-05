@@ -92,6 +92,11 @@ export const zh = {
     pinned: "置顶",
     open: "打开链接",
     adNote: "这是一条广告，内容由推广方提供。",
+    share: "分享",
+    copied: "链接已复制",
+    about: "博客引擎 Kite 和发现独立博客的 Explore，都是 Kite Plus 的一部分。",
+    more: "继续发现",
+    all: "看全部最新文章",
   },
   post: {
     read: "阅读原文",
