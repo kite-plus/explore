@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Notices and ads that Explore publishes itself. Maintainers write them under 公告与推广 in the admin console: a title, a short summary, a link or a plain-text body, a place in the latest stream (pinned on top, or after the Nth post), who sees it (everyone, or Chinese or English pages) and when. They show on the latest stream's first page without a tag filter, in the same row as a post, with a warm "Notice" capsule or an outlined "Ad" capsule where a post gives its time. One without a link has its own page at `/notices/{id}`. Ads are always marked, and nothing is counted: Explore records no views or clicks, and ad links carry only `utm_source`. The upgrade runs one migration, which adds the `notices` table.
+
 ### Changed
 
 - The streams no longer split posts under Today, Yesterday and other day headings: posts run in one list, newest first, and each says when it came out, such as "3 hours ago" or a date after a week. The next page simply follows on. Recommended keeps its order, each day's best first, so neighbouring posts can jump in time. The iOS app lists posts the same way.

@@ -213,6 +213,10 @@
 
 查询提交进度。返回 `id`、`status`、`host`、`site_url`、`feed_url`、`check_report`、`review_note`、`created_at`、`reviewed_at`。维护者的名字（`reviewed_by`）不对外。
 
+### 2.6 `GET /api/v1/notices` 与 `GET /api/v1/notices/{id}`
+
+Explore 自己发布的公告和广告，正在显示的才返回；字段、`audience` 参数和缓存见 [notices.md §3](notices.md#3-接口)。
+
 ---
 
 ## 3. 订阅与导出
@@ -267,6 +271,10 @@
 | GET | `/api/v1/admin/excluded-hosts` | 排除名单 |
 | DELETE | `/api/v1/admin/excluded-hosts/{host}` | 解除排除，例如作者想重新加入 |
 | POST | `/api/v1/admin/check` | 对任意地址运行检查并返回报告，不写入任何数据 |
+| GET | `/api/v1/admin/notices` | 全部公告与广告，含草稿和过期的 |
+| POST | `/api/v1/admin/notices` | 新建，字段见 [notices.md §1](notices.md#1-条目)，返回新条目 |
+| PATCH | `/api/v1/admin/notices/{id}` | 整条更新，字段同新建 |
+| DELETE | `/api/v1/admin/notices/{id}` | 删除 |
 
 ---
 

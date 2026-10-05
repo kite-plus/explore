@@ -14,6 +14,7 @@
 | `entries` | 缓存：各博客订阅源此刻的样子 | 能，下一轮抓取恢复 | 不备份 |
 | `submissions` | 流程记录：提交与审核 | 能，按保留期清理 | 只备份待审核的 |
 | `excluded_hosts` | 真相源：已退出或被屏蔽的主机名 | 不能 | 要备份 |
+| `notices` | 真相源：Explore 自己发布的公告与推广 | 不能 | 要备份 |
 
 读者账号、会话、订阅、博客归属和未来 OIDC 关联表已实现，结构见 [accounts.md](accounts.md)。账号数据是真相源，不能清空，必须备份；文章标签仍是 `entries` 里的可重建缓存。维护者使用显式授权的本站管理员账号。
 
@@ -197,6 +198,31 @@ CREATE TABLE excluded_hosts (
 ```
 
 作者退出（`opt_out`）或维护者屏蔽（`blocked`）后，主机名记在这里，之后针对它的提交一律拒绝。这是兑现"退出比加入容易"的必要记录：只存一个主机名，要永久保留。作者想重新加入时，由维护者删掉这一行。
+
+### 2.5 `notices`
+
+```sql
+CREATE TABLE notices (
+    id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    kind        text        NOT NULL CHECK (kind IN ('notice', 'ad')),
+    title       text        NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120),
+    summary     text        NOT NULL DEFAULT '' CHECK (char_length(summary) <= 280),
+    body        text        NOT NULL DEFAULT '' CHECK (char_length(body) <= 20000),
+    url         text        NOT NULL DEFAULT '' CHECK (url = '' OR url ~ '^https?://'),
+    source_name text        NOT NULL CHECK (char_length(source_name) BETWEEN 1 AND 60),
+    position    smallint    NOT NULL DEFAULT 0 CHECK (position BETWEEN 0 AND 50),
+    audience    text        NOT NULL DEFAULT '' CHECK (audience IN ('', 'zh', 'en')),
+    starts_at   timestamptz,
+    ends_at     timestamptz CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at),
+    enabled     boolean     NOT NULL DEFAULT false,
+    updated_by  text        NOT NULL DEFAULT '',
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    CHECK (url <> '' OR body <> '')
+);
+```
+
+Explore 自己发布的公告和广告，字段含义和显示规则见 [notices.md](notices.md)。`body` 是 Explore 自己写的正文，不是博客文章，所以不受"永远不出现文章正文"的约束；它只出现在这张表里。`updated_by` 是最后修改它的管理员账号的邮箱。
 
 ---
 

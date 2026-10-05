@@ -66,6 +66,21 @@ fetch_attempts.http_status integer
 fetch_attempts.id bigint
 fetch_attempts.outcome text
 fetch_attempts.started_at timestamp with time zone
+notices.audience text
+notices.body text
+notices.created_at timestamp with time zone
+notices.enabled boolean
+notices.ends_at timestamp with time zone
+notices.id bigint
+notices.kind text
+notices.position smallint
+notices.source_name text
+notices.starts_at timestamp with time zone
+notices.summary text
+notices.title text
+notices.updated_at timestamp with time zone
+notices.updated_by text
+notices.url text
 sessions.created_at timestamp with time zone
 sessions.expires_at timestamp with time zone
 sessions.token_hash bytea

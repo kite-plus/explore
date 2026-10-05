@@ -37,6 +37,7 @@ Explore 是 Kite Plus 负责"发现"的部分，但**它不是 Kite 的附属品
 |---|---|---|---|
 | 博客清单（收录了谁、审核状态） | **保存**，真相源数据 | PostgreSQL `blogs` | 需要备份；同时通过 OPML 公开 |
 | 读者账号（登录身份、昵称、订阅列表、会话） | **保存**；读者随时可以删除，删除立即生效 | PostgreSQL `users`、`subscriptions`、`sessions`（[accounts.md §6](accounts.md#6-数据模型)） | 需要备份 |
+| 公告与推广（Explore 自己发布的内容） | **保存**，真相源数据；广告必须标明，不统计曝光和点击（[notices.md](notices.md)） | PostgreSQL `notices` | 需要备份 |
 | 文章元数据（标题、链接、发布时间、短摘要、缩略图地址） | 只缓存 | PostgreSQL `entries`、`sitemap_urls` | 下一轮抓取、读站点地图和读文章页后完全恢复 |
 | 文章标签（Explore 用模型打的） | 只缓存，跟着文章走 | PostgreSQL `entries` | 下一轮重新打，个别结果可能不同 |
 | 抓取状态（ETag、Last-Modified、失败计数） | 只缓存 | PostgreSQL `blogs` 的抓取字段 | 多一轮完整下载，不影响正确性 |

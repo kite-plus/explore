@@ -13,6 +13,7 @@
 | 下架审批 | 创建内部申请、接收已登录用户举报，审批博客或文章下架 |
 | 用户管理 | 按邮箱、名称、ID（`12` 或 `#12`）或 UUID 检索，按状态和角色筛选，按 ID、注册时间、最近活跃、订阅数或认领数排序；详情抽屉列出会话、订阅、认领、待验证认领和提交的举报；停用（必须填写原因）或恢复、强制下线、编辑资料（名称和邮箱）、重置密码、授予或取消后台权限、解除认领、删除账号；停用、恢复和强制下线可以批量操作 |
 | 抓取任务 | 查看队列状态、进程心跳、错误和抓取尝试，手动排队 |
+| 公告与推广 | 发布、撤下、编辑和删除 Explore 自己的公告与广告，设置位置、受众和起止时间（[notices.md](notices.md)） |
 | 系统设置 | 控制注册、投稿、任务领取，以及站点公告 |
 | 个人资料 | 修改自己的名称和密码；改密码要输入当前密码，完成后其他设备上的登录失效，当前设备保持登录 |
 
@@ -61,6 +62,7 @@ Explore 没有邮件服务，读者忘了密码不能自助找回，只能联系
 | `GET/POST /api/v1/admin/takedowns`、`POST /api/v1/admin/takedowns/:id/review` | 下架申请及审批 |
 | `GET /api/v1/admin/settings`、`PATCH /api/v1/admin/settings/:key` | 持久化站点设置 |
 | `GET /api/v1/site-config` | 公开的站点公告与注册状态 |
+| `GET/POST /api/v1/admin/notices`、`PATCH/DELETE /api/v1/admin/notices/:id` | 公告与广告的增删改 |
 | `GET /api/v1/setup`、`POST /api/v1/setup` | 安装状态、创建第一个管理员 |
 | `PATCH /api/v1/me`、`PUT /api/v1/me/password` | 个人资料页修改名称和密码，与前台共用账号接口；前台账号页也用后者修改密码 |
 
