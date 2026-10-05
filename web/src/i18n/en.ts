@@ -88,6 +88,13 @@ export const en: Dict = {
     description: (name: string, titles: string[]) =>
       titles.length ? `Recent posts on ${name}: ${titles.join(", ")}` : `${name} is listed on Explore.`,
   },
+  notices: {
+    notice: "Notice",
+    ad: "Ad",
+    pinned: "Pinned",
+    open: "Open the link",
+    adNote: "This is an ad, written by the advertiser.",
+  },
   post: {
     read: "Read the post",
     blog: "See the blog",

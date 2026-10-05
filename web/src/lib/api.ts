@@ -1,5 +1,5 @@
 import { apiURL } from "@/lib/config";
-import type { ApiError, Blog, BlogPage, Entry, Page, Submission, Tag } from "@/lib/types";
+import type { ApiError, Blog, BlogPage, Entry, Notice, Page, Submission, Tag } from "@/lib/types";
 import type { Lang } from "@/i18n";
 
 // Page loaders call the API from the server. The on-demand article check is
@@ -84,6 +84,10 @@ export const api = {
   entry: (caller: Caller, id: string) => call<Entry>(`/api/v1/entries/${encodeURIComponent(id)}`, { caller }),
 
   tags: (caller: Caller) => call<{ data: Tag[] }>("/api/v1/tags", { caller }),
+
+  notices: (caller: Caller, audience: "zh" | "en") => call<{ data: Notice[] }>(`/api/v1/notices${query({ audience })}`, { caller }),
+
+  notice: (caller: Caller, id: string) => call<Notice>(`/api/v1/notices/${encodeURIComponent(id)}`, { caller }),
 
   blogs: (caller: Caller, p: { order?: "newest"; cursor?: string; lang?: string; limit?: number }) =>
     call<Page<Blog>>(`/api/v1/blogs${query({ order: p.order, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { caller }),

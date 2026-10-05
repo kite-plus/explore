@@ -1,8 +1,9 @@
 ---
 import EntryItem from "@/components/EntryItem.astro";
 import LoadMore from "@/components/LoadMore.astro";
+import NoticeItem from "@/components/NoticeItem.astro";
 import type { Lang } from "@/i18n";
-import type { Entry } from "@/lib/types";
+import type { Entry, Notice } from "@/lib/types";
 
 interface Props {
   lang: Lang;
@@ -11,14 +12,27 @@ interface Props {
   tagPath: string;
   /** The next page's address, when there is one. */
   older?: string | false | null;
+  /** Notices and ads to place between the posts. */
+  notices?: Notice[];
 }
 
 // Posts in one run, with no day headings; each says when it came out
 // (lib/format.ts). The stream script appends the next page as it comes.
-const { lang, entries, tagNames, tagPath, older } = Astro.props;
+// A notice at position N goes after the Nth post, 0 before the first, and
+// one past the page's end goes last; the API orders those sharing a place.
+const { lang, entries, tagNames, tagPath, older, notices = [] } = Astro.props;
+const at = (index: number) => notices.filter((n) => Math.min(n.position, entries.length) === index);
 ---
 
 <div data-entry-stream data-swap-dim class="pt-1">
-  {entries.map((entry) => <EntryItem lang={lang} entry={entry} tagNames={tagNames} tagPath={tagPath} />)}
+  {
+    entries.map((entry, index) => (
+      <>
+        {at(index).map((notice) => <NoticeItem lang={lang} notice={notice} />)}
+        <EntryItem lang={lang} entry={entry} tagNames={tagNames} tagPath={tagPath} />
+      </>
+    ))
+  }
+  {at(entries.length).map((notice) => <NoticeItem lang={lang} notice={notice} />)}
 </div>
 <LoadMore lang={lang} href={older} />

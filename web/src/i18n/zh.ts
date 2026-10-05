@@ -86,6 +86,13 @@ export const zh = {
     description: (name: string, titles: string[]) =>
       titles.length ? `${name} 最近的文章：${titles.join("、")}` : `${name} 收录在 Explore。`,
   },
+  notices: {
+    notice: "公告",
+    ad: "广告",
+    pinned: "置顶",
+    open: "打开链接",
+    adNote: "这是一条广告，内容由推广方提供。",
+  },
   post: {
     read: "阅读原文",
     blog: "查看这个博客",

@@ -315,6 +315,41 @@ describe("content", () => {
     assert.doesNotMatch(older, /<time datetime="[^"]+">\d{2}:\d{2}<\/time>/, "a date, never a bare time of day");
   });
 
+  test("notices sit between the latest stream's posts, on its first page only", async () => {
+    const { html } = await page("/");
+    const pinned = html.indexOf('data-notice="7"');
+    const first = html.indexOf("缓存可以随时删掉");
+    const ad = html.indexOf('data-notice="8"');
+    const second = html.indexOf("Notes on feeds");
+    assert.ok(pinned > 0 && pinned < first && first < ad && ad < second, "pinned first, the ad after the first post");
+    assert.match(html, /<a href="\/notices\/7" class="hover:underline">Kite for iOS 上架了<\/a>/);
+    assert.match(html, /置顶<\/span>公告<\/span>/);
+    assert.match(html, /href="https:\/\/ads\.example\.com\/kite\?utm_source=explore\.example\.org"/);
+    assert.match(html, />广告<\/span>/);
+    assert.equal(stub.state.noticeAudiences.at(-1), "zh");
+    for (const path of ["/?cursor=page-two", "/?tag=backend", "/recommended"]) {
+      assert.doesNotMatch((await page(path)).html, /data-notice=/, path);
+    }
+    const en = (await page("/en/")).html;
+    assert.equal(stub.state.noticeAudiences.at(-1), "en");
+    assert.match(en, /data-notice="7"/);
+    assert.doesNotMatch(en, /data-notice="8"/, "the ad is for Chinese pages");
+  });
+
+  test("a notice has a page of its own, out of search", async () => {
+    const { res, html } = await page("/notices/7");
+    assert.equal(res.status, 200);
+    assert.match(html, /<h1[^>]*>Kite for iOS 上架了<\/h1>/);
+    assert.match(html, /<p class="whitespace-pre-line">第一段。<\/p>/);
+    assert.match(html, /<p class="whitespace-pre-line">第二段\n同一段。<\/p>/);
+    assert.match(html, /<meta name="robots" content="noindex, follow">/);
+    const ad = (await page("/notices/8")).html;
+    assert.match(ad, /href="https:\/\/ads\.example\.com\/kite\?utm_source=explore\.example\.org"/);
+    assert.match(ad, /这是一条广告/);
+    assert.equal((await page("/notices/99")).res.status, 404);
+    assert.equal((await page("/notices/abc")).res.status, 404);
+  });
+
   test("the sidebar speaks to the stream and lists the blogs listed last", async () => {
     const before = stub.state.blogOrders.length;
     const { html } = await page("/");

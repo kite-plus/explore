@@ -237,3 +237,26 @@ export interface SystemSetting {
   updated_by: string;
   updated_at: string;
 }
+
+/** A notice or ad Explore publishes itself; see docs/design/notices.md. */
+export interface AdminNotice {
+  id: number
+  kind: 'notice' | 'ad'
+  title: string
+  summary: string
+  body: string
+  url: string
+  source_name: string
+  /** 0 before the first post of the latest stream, N after the Nth. */
+  position: number
+  /** Empty for everyone, or one interface language. */
+  audience: '' | 'zh' | 'en'
+  starts_at: string | null
+  ends_at: string | null
+  enabled: boolean
+  updated_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type NoticePayload = Omit<AdminNotice, 'id' | 'updated_by' | 'created_at' | 'updated_at'>

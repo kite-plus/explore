@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Megaphone,
   Palette,
+  Pin,
   Settings,
   SlidersHorizontal,
   Stethoscope,
@@ -35,6 +36,7 @@ export const sidebarData: SidebarData = {
       items: [
         { title: '用户管理', url: '/admin/users', icon: Users },
         { title: '抓取任务', url: '/admin/queue', icon: Activity },
+        { title: '公告与推广', url: '/admin/notices', icon: Pin },
       ],
     },
     {

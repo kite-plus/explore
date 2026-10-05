@@ -1,0 +1,8 @@
+---
+import { loadNotice } from "@/lib/loaders";
+import Notice from "@/views/Notice.astro";
+
+const result = await loadNotice(Astro, "zh");
+---
+
+<Notice lang="zh" id={Astro.params.id ?? ""} result={result} />

@@ -22,6 +22,11 @@ const entries = {
   },
 };
 
+const notices = [
+  { id: "7", kind: "notice", title: "Kite for iOS 上架了", summary: "在 App Store 搜索 Kite Explore。", body: "第一段。\n\n第二段\n同一段。", url: "", source_name: "Kite Plus", position: 0, published_at: iso(5) },
+  { id: "8", kind: "ad", title: "一元建站", summary: "", body: "", url: "https://ads.example.com/kite", source_name: "某某云", position: 1, published_at: iso(5) },
+];
+
 const tags = [
   { slug: "backend", name: { zh: "后端", en: "Backend" } },
   { slug: "ops", name: { zh: "运维与云", en: "Ops & cloud" } },
@@ -47,7 +52,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [] };
+  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [], noticeAudiences: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -160,6 +165,17 @@ export function startStub() {
       if (tag) return send(200, { data: entries.first.data.filter((e) => e.tags.includes(tag)), next_cursor: null });
       if (url.searchParams.get("lang") === "zh") return send(200, { data: [entries.first.data[0]], next_cursor: null });
       return send(200, cursor === "page-two" ? entries.second : entries.first);
+    }
+    if (req.method === "GET" && url.pathname === "/api/v1/notices") {
+      const audience = url.searchParams.get("audience");
+      state.noticeAudiences.push(audience);
+      // The ad is for Chinese pages only.
+      const shown = audience === "zh" ? notices : notices.filter((n) => n.kind === "notice");
+      return send(200, { data: shown.map(({ body, ...rest }) => rest) });
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/api/v1/notices/")) {
+      const n = notices.find((x) => x.id === url.pathname.slice("/api/v1/notices/".length));
+      return n ? send(200, n) : error(404, "not_found");
     }
     if (req.method === "GET" && url.pathname === "/api/v1/blogs") {
       state.blogOrders.push(url.searchParams.get("order"));

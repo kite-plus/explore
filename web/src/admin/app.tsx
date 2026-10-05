@@ -24,6 +24,7 @@ const Entries = lazy(() => import('@/admin/features/entries').then((m) => ({ def
 const Takedowns = lazy(() => import('@/admin/features/takedowns').then((m) => ({ default: m.Takedowns })))
 const Users = lazy(() => import('@/admin/features/users').then((m) => ({ default: m.Users })))
 const Queue = lazy(() => import('@/admin/features/queue').then((m) => ({ default: m.Queue })))
+const Notices = lazy(() => import('@/admin/features/notices').then((m) => ({ default: m.Notices })))
 const ExcludedHosts = lazy(() => import('@/admin/features/excluded-hosts').then((m) => ({ default: m.ExcludedHosts })))
 const Tools = lazy(() => import('@/admin/features/tools').then((m) => ({ default: m.Tools })))
 const Settings = lazy(() => import('@/admin/features/settings').then((m) => ({ default: m.Settings })))
@@ -37,6 +38,7 @@ const PAGES: Record<string, ComponentType> = {
   '/admin/takedowns': Takedowns,
   '/admin/users': Users,
   '/admin/queue': Queue,
+  '/admin/notices': Notices,
   '/admin/excluded-hosts': ExcludedHosts,
   '/admin/tools': Tools,
   '/admin/settings': Settings,

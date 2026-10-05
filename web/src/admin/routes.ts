@@ -8,6 +8,7 @@ export const ADMIN_TITLES: Record<string, string> = {
   '/admin/takedowns': '下架审批',
   '/admin/users': '用户管理',
   '/admin/queue': '抓取任务',
+  '/admin/notices': '公告与推广',
   '/admin/excluded-hosts': '排除名单',
   '/admin/tools': '诊断工具',
   '/admin/settings': '系统设置',

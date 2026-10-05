@@ -6,7 +6,7 @@ import { zone } from "@/lib/format";
 import { forwardedFor } from "@/lib/forwarded";
 import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
-import type { BlogPage, Blog, BlogRef, CheckReport, Entry, Page, Submission, Tag } from "@/lib/types";
+import type { BlogPage, Blog, BlogRef, CheckReport, Entry, Notice, Page, Submission, Tag } from "@/lib/types";
 
 // Loaders run in a page's frontmatter, the only place where the status
 // and headers can still change: Astro streams the body after that.
@@ -50,6 +50,8 @@ export interface StreamPage {
   paged: boolean;
   /** The blogs listed last, for the sidebar; not asked for past page one. */
   newBlogs: Blog[];
+  /** Notices and ads to place between the posts. */
+  notices: Notice[];
 }
 
 // The sidebar's recently listed blogs. A later page only feeds the stream
@@ -60,6 +62,14 @@ async function newBlogs(from: Caller, paged: boolean): Promise<Blog[]> {
   return r.kind === "ok" ? r.data.data : [];
 }
 
+// Notices go only on the latest stream's first page without a tag
+// (docs/design/notices.md section 2). They are extra, so a failure drops them.
+async function streamNotices(from: Caller, lang: Lang, show: boolean): Promise<Notice[]> {
+  if (!show) return [];
+  const r = await api.notices(from, lang);
+  return r.kind === "ok" ? r.data.data : [];
+}
+
 /** loadHome loads a page of the latest stream, or of the recommended one. */
 export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | "recommended" = "latest"): Promise<Loaded<StreamPage>> {
   const cursor = param(ctx, "cursor");
@@ -67,15 +77,16 @@ export async function loadHome(ctx: AstroGlobal, lang: Lang, stream: "latest" | 
   const tag = param(ctx, "tag");
   const order = stream === "recommended" ? "recommended" : undefined;
   const from = caller(ctx, lang);
-  const [r, tags, blogs] = await Promise.all([
+  const [r, tags, blogs, notices] = await Promise.all([
     // The recommended stream splits days where the page does.
     api.entries(from, { order, cursor, lang: filter, tag, limit: 30, tz: order && zone(lang) }),
     tagList(from),
     newBlogs(from, Boolean(cursor)),
+    streamNotices(from, lang, !order && !cursor && !tag),
   ]);
   if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=60");
-  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs, notices } };
 }
 
 export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loaded<StreamPage> | Response> {
@@ -93,7 +104,7 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
     return ctx.redirect(localePath(lang, "/login") + `?next=${encodeURIComponent(localePath(lang, "/following"))}`, 302);
   }
   if (r.kind !== "ok") return failed(ctx, r);
-  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs } };
+  return { kind: "ok", data: { page: r.data, filter, tag, tags: tags ?? [], paged: Boolean(cursor), newBlogs: blogs, notices: [] } };
 }
 
 /**
@@ -153,6 +164,16 @@ export async function loadPost(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Pos
   const more = page.kind === "ok" ? page.data.entries.filter((e) => e.id !== id).slice(0, 3) : [];
   cacheControl(ctx, "public, max-age=300");
   return { kind: "ok", data: { entry: { ...r.data, blog }, more, tags: tags ?? [] } };
+}
+
+/** loadNotice is a notice's own page; only digits name a notice. */
+export async function loadNotice(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Notice>> {
+  const id = ctx.params.id ?? "";
+  if (!/^\d+$/.test(id)) return notFound(ctx);
+  const r = await api.notice(caller(ctx, lang), id);
+  if (r.kind !== "ok") return failed(ctx, r);
+  cacheControl(ctx, "public, max-age=60");
+  return { kind: "ok", data: r.data };
 }
 
 export async function loadSubmission(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Submission>> {

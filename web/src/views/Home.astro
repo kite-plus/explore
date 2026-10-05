@@ -56,7 +56,7 @@ const unrated = recommended && !data?.paged && !data?.filter && !data?.tag;
           ) : data.page.data.length === 0 ? (
             <p class="py-16 text-center text-muted-foreground">{t.home.empty}</p>
           ) : (
-            <EntryStream lang={lang} entries={data.page.data} tagNames={names} tagPath={path} older={older} />
+            <EntryStream lang={lang} entries={data.page.data} tagNames={names} tagPath={path} older={older} notices={data.notices} />
           )}
         </div>
         <StreamSidebar lang={lang} stream={stream} path={path} filter={data.filter} tag={data.tag} tags={data.tags} newBlogs={data.newBlogs} />

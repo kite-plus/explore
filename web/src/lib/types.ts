@@ -22,6 +22,22 @@ export interface Entry {
   blog?: BlogRef;
 }
 
+/** A notice or ad Explore publishes itself; see docs/design/notices.md. */
+export interface Notice {
+  id: string;
+  kind: "notice" | "ad";
+  title: string;
+  summary: string;
+  /** Only on a single notice. */
+  body?: string;
+  /** Where it opens; empty for one that opens its page on Explore. */
+  url: string;
+  source_name: string;
+  /** 0 before the first post, N after the Nth. */
+  position: number;
+  published_at: string;
+}
+
 export interface Tag {
   slug: string;
   name: { zh: string; en: string };
