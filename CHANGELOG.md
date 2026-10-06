@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The site notice under the header stayed light on dark pages, a bright band across the page. On a dark page it is now a faint teal band with light teal text.
+
 ## [0.1.15] - 2026-10-06
 
 A small release: a notice's page reads like an article, and the light and dark switch moved to the header, where readers can find it. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
