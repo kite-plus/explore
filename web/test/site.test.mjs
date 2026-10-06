@@ -649,6 +649,11 @@ describe("submissions", () => {
     assert.equal(res.headers.get("location"), "/submissions/11111111-2222-3333-4444-555555555555");
   });
 
+  test("a post from the public address passes, as it arrives behind the proxy", async () => {
+    const res = await submit("/submit", "https://ok.example.com/", { Origin: PUBLIC });
+    assert.equal(res.status, 303);
+  });
+
   test("a post from another site is refused", async () => {
     const res = await submit("/submit", "https://ok.example.com/", { Origin: "https://evil.example" });
     assert.equal(res.status, 403);

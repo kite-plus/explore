@@ -72,7 +72,8 @@ export default defineConfig({
     inlineStylesheets: "never",
   },
   security: {
-    checkOrigin: true,
+    // src/middleware.ts checks Origin against EXPLORE_PUBLIC_URL instead.
+    checkOrigin: false,
     csp: {
       scriptDirective: { hashes: [themeHash, entryCheckHash, entryStreamHash, submitProbeHash] },
       directives: [

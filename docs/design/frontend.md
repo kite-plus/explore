@@ -227,7 +227,7 @@ import SubmitForm from "@/components/submit-form";
 | `409 already_listed` | 提示已收录，链接到 `/blogs/{host}` |
 | `403 excluded` | 说明该博客已退出或被屏蔽，以及如何联系维护者 |
 
-4. **防跨站提交**：Astro 的 `security.checkOrigin` 默认开启，会检查按需渲染页面收到的表单 `POST` 的 `Origin` 头。
+4. **防跨站提交**：按需渲染页面收到的表单 `POST`，`Origin` 头必须是 `EXPLORE_PUBLIC_URL` 的来源，或前端服务自己看到的地址（本地开发和测试），否则返回 `403`（`src/middleware.ts`）。不用 Astro 的 `security.checkOrigin`：它只拿后者比较，而反向代理用 HTTP 连前端，它看到的是 `http://`，浏览器提交的每个表单都会被拒。
 5. **限流**：前端服务在服务端代读者调用的每个接口（页面数据、登录状态、提交，以及本地开发时转发的接口）都带上 `X-Forwarded-For`：先是反向代理传来的值，最后加上连到前端的地址（`src/lib/forwarded.ts`）。Astro 只在配置了 `security.allowedDomains` 时才读 `X-Forwarded-For`，Explore 不配置它，所以 `clientAddress` 就是这条连接的地址。API 从右往左跳过 `EXPLORE_TRUSTED_PROXIES` 里的地址，第一个不受信任的就是读者，所以反向代理和 `web` 服务都要列在里面；读者自己伪造的值只会排在前面，不起作用。这样每个读者有自己的限流额度，而不是所有读者共用前端服务器一个地址的额度（地址仍然只在内存里用，[api.md §1](api.md#1-约定)）。前面还有 CDN 时，由 Caddy 按 `EXPLORE_CDN_RANGES` 认出读者，传给前端的就是读者的地址（[project-layout.md §10](project-layout.md#10-部署)）。
 
 ---
