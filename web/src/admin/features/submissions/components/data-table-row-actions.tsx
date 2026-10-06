@@ -47,7 +47,7 @@ export function DataTableRowActions({ row }: { row: Row<AdminSubmission> }) {
         {pending && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={open('approve')}>
+            <DropdownMenuItem variant='success' onClick={open('approve')}>
               通过
               <DropdownMenuShortcut>
                 <Check size={16} />
