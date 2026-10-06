@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-10-06
+
+A small release for maintainers: the admin console marks what waits for review more clearly. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
+### Changed
+
+- In the admin console, the sidebar counts of submissions and takedowns waiting for review are red instead of black, and Approve in a submission's menu is green, as Reject beside it is red.
+
 ## [0.1.16] - 2026-10-06
 
 A small release: submitting a blog on the site works again, and the header's theme switch now covers following the system. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
