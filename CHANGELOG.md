@@ -8,12 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-10-06
+
+A small release: submitting a blog on the site works again, and the header's theme switch now covers following the system. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
 ### Changed
 
 - The theme switch in the header now also covers following the system: each click goes from following the system to dark, to light and back, and the icon shows which one is on (a monitor, a moon or a sun). The footer's "Follow the system" button is gone.
 
 ### Fixed
 
+- Submitting a blog on the site failed at the last step with "Cross-site POST form submissions are forbidden", for every reader since 0.1.0: behind the reverse proxy, the site took the browser's own address for another site's. Forms are now checked against `EXPLORE_PUBLIC_URL`, so it must name the address readers use. Fetching the blog's information first was not affected.
 - The site notice under the header stayed light on dark pages, a bright band across the page. On a dark page it is now a faint teal band with light teal text.
 
 ## [0.1.15] - 2026-10-06
