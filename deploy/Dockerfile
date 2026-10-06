@@ -6,6 +6,10 @@
 # Must match the toolchain directive in go.mod.
 ARG GO_VERSION=1.26.8
 ARG ALPINE_VERSION=3.22
+# Where the program comes from: "build" compiles it below, while "prebuilt"
+# takes prebuilt/explore-linux-<arch> from the context, as the release
+# workflow does with the binaries its native jobs built.
+ARG BINARY=build
 
 # The compiler runs on the build machine's own platform and cross-compiles
 # for the target, so an arm64 image builds without emulating arm64.
@@ -30,13 +34,19 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs
       -X github.com/kite-plus/explore/internal/buildinfo.Date=${DATE}" \
     -o /out/explore ./cmd/explore
 
+FROM scratch AS prebuilt
+ARG TARGETARCH
+COPY prebuilt/explore-linux-${TARGETARCH} /out/explore
+
+FROM ${BINARY} AS binary
+
 FROM alpine:${ALPINE_VERSION}
 
 # ca-certificates for fetching feeds over https.
 RUN apk add --no-cache ca-certificates && \
     adduser -D -H -u 1718 explore
 
-COPY --from=build /out/explore /usr/local/bin/explore
+COPY --from=binary /out/explore /usr/local/bin/explore
 
 USER explore
 ENV EXPLORE_HTTP_ADDR=0.0.0.0:8080
