@@ -11,8 +11,10 @@ on:
 permissions:
   contents: read
 
+# Called from release.yml, github.workflow names the caller, so a manual
+# release on main neither cancels nor waits for main's own CI.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
