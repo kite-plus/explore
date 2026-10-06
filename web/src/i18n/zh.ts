@@ -8,7 +8,14 @@ export const zh = {
     description: "汇集独立博客公开的订阅源，按时间展示最新文章。点进去，读的永远是作者自己的网站。",
   },
   nav: { home: "发现", blogs: "博客", submit: "提交博客", about: "关于", label: "网站导航", menu: "菜单" },
-  theme: { toDark: "切换到深色模式", toLight: "切换到浅色模式", followSystem: "跟随系统" },
+  theme: {
+    auto: "跟随系统",
+    dark: "深色模式",
+    light: "浅色模式",
+    toAuto: "点击切换至跟随系统",
+    toDark: "点击切换至深色模式",
+    toLight: "点击切换至浅色模式",
+  },
   newTab: "（在新标签页打开）",
   entryStatus: {
     available: "最近检测正常",

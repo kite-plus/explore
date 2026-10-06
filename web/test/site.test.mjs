@@ -488,16 +488,20 @@ describe("content", () => {
     assert.equal(stub.state.tagLists, before);
   });
 
-  test("the theme buttons speak the page's language", async () => {
+  test("the theme toggle speaks the page's language", async () => {
     const zh = (await page("/")).html;
     const en = (await page("/en/")).html;
-    assert.match(zh, /<button type="button" data-theme-toggle data-to-dark="切换到深色模式" data-to-light="切换到浅色模式" aria-label="切换到深色模式"/);
-    assert.match(en, /<button type="button" data-theme-toggle data-to-dark="Switch to dark mode" data-to-light="Switch to light mode" aria-label="Switch to dark mode"/);
-    for (const icon of ["dark", "light"]) {
+    assert.match(
+      zh,
+      /<button type="button" data-theme-toggle data-auto="跟随系统" data-dark="深色模式" data-light="浅色模式" data-to-auto="点击切换至跟随系统" data-to-dark="点击切换至深色模式" data-to-light="点击切换至浅色模式" aria-label="跟随系统 · 点击切换至深色模式"/,
+    );
+    assert.match(
+      en,
+      /<button type="button" data-theme-toggle data-auto="Following the system" data-dark="Dark mode" data-light="Light mode" data-to-auto="Follow the system" data-to-dark="Switch to dark mode" data-to-light="Switch to light mode" aria-label="Following the system · Switch to dark mode"/,
+    );
+    for (const icon of ["auto", "dark", "light"]) {
       assert.match(zh, new RegExp(`data-theme-icon="${icon}"`));
     }
-    assert.match(zh, /data-theme-auto[^>]*>[\s\S]*?跟随系统\s*<\/button>/);
-    assert.match(en, /data-theme-auto[^>]*>[\s\S]*?Follow the system\s*<\/button>/);
   });
 
   test("article links show their checked status in both languages", async () => {
@@ -813,9 +817,8 @@ describe("reader accounts", () => {
       const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
       const footer = html.slice(html.indexOf("<footer"), html.indexOf("</footer>"));
       assert.match(header, /data-theme-toggle/, path);
-      assert.doesNotMatch(header, /hreflang=|data-theme-auto/, path);
-      assert.doesNotMatch(footer, /data-theme-toggle/, path);
-      assert.match(footer, /data-theme-auto/, path);
+      assert.doesNotMatch(header, /hreflang=/, path);
+      assert.doesNotMatch(footer, /data-theme/, `${path}: the footer has no theme button`);
       assert.match(footer, new RegExp(`<a href="${switchTo}" hreflang="(zh|en)"`), path);
     }
   });

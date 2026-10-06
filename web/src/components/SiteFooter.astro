@@ -1,6 +1,5 @@
 ---
 import ExternalLink from "@/components/ExternalLink.astro";
-import { Monitor } from "lucide-react";
 
 import { dict, localePath, other, type Lang } from "@/i18n";
 
@@ -12,8 +11,7 @@ interface Props {
 }
 
 // The language switch sits here rather than in the header: every page has
-// it, few readers need it. So does the way back to the system's theme, which
-// shows only after the reader picked one in the header.
+// it, few readers need it.
 const { lang, path, bilingual, wide = false } = Astro.props;
 const all = dict(lang);
 const t = all.footer;
@@ -34,25 +32,15 @@ const switchTo = other(lang);
           GitHub
         </ExternalLink>
       </nav>
-      <div class="flex items-center gap-3">
-        <a
-          href={localePath(switchTo, bilingual ? path : "/")}
-          hreflang={switchTo}
-          lang={switchTo === "zh" ? "zh-CN" : "en"}
-          data-swap-mirror="lang"
-          class="hover:text-foreground"
-        >
-          {all.otherLangName}
-        </a>
-        <button
-          type="button"
-          data-theme-auto
-          class="theme-auto items-center gap-1 rounded-md px-1.5 py-1 transition hover:bg-accent hover:text-foreground"
-        >
-          <Monitor className="size-4" aria-hidden="true" />
-          {all.theme.followSystem}
-        </button>
-      </div>
+      <a
+        href={localePath(switchTo, bilingual ? path : "/")}
+        hreflang={switchTo}
+        lang={switchTo === "zh" ? "zh-CN" : "en"}
+        data-swap-mirror="lang"
+        class="hover:text-foreground"
+      >
+        {all.otherLangName}
+      </a>
     </div>
   </div>
 </footer>

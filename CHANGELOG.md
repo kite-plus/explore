@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The theme switch in the header now also covers following the system: each click goes from following the system to dark, to light and back, and the icon shows which one is on (a monitor, a moon or a sun). The footer's "Follow the system" button is gone.
+
 ### Fixed
 
 - The site notice under the header stayed light on dark pages, a bright band across the page. On a dark page it is now a faint teal band with light teal text.

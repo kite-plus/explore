@@ -7,7 +7,7 @@ const source = readFileSync(new URL("../src/scripts/theme.js", import.meta.url),
 
 function load({ saved, storage = true, systemDark = false, reducedMotion = false, transitions = false, covers = [] } = {}) {
   const store = new Map(saved ? [["theme", saved]] : []);
-  const listeners = { document: {}, window: {}, media: [] };
+  const listeners = { document: {}, window: {} };
   const on = (bucket) => (type, fn) => {
     (bucket[type] ??= []).push(fn);
   };
@@ -17,16 +17,22 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
   const blocked = () => {
     if (!storage) throw new Error("storage is blocked");
   };
-  let dark = systemDark;
 
   class Element {
-    constructor(kind = null) {
-      this.kind = kind;
+    constructor(toggle = false) {
+      this.toggle = toggle;
       this.attrs = {};
-      this.dataset = { toDark: "Switch to dark mode", toLight: "Switch to light mode" };
+      this.dataset = {
+        auto: "Following the system",
+        dark: "Dark mode",
+        light: "Light mode",
+        toAuto: "Follow the system",
+        toDark: "Switch to dark mode",
+        toLight: "Switch to light mode",
+      };
     }
     closest(selector) {
-      return selector === `[data-theme-${this.kind}]` ? this : null;
+      return selector === "[data-theme-toggle]" && this.toggle ? this : null;
     }
     setAttribute(name, value) {
       this.attrs[name] = value;
@@ -35,8 +41,7 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
       return { left: 100, top: 10, width: 32, height: 32 };
     }
   }
-  const toggle = new Element("toggle");
-  const auto = new Element("auto");
+  const button = new Element(true);
   const animations = [];
   const root = { dataset: {}, animate: (keyframes, options) => animations.push({ keyframes, options }) };
   let started = 0;
@@ -56,13 +61,12 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
     },
     document: {
       documentElement: root,
-      querySelectorAll: (selector) => (selector === "[data-entry-cover]" ? covers : selector === "[data-theme-toggle]" ? [toggle] : []),
+      querySelectorAll: (selector) => (selector === "[data-entry-cover]" ? covers : selector === "[data-theme-toggle]" ? [button] : []),
       addEventListener: on(listeners.document),
       ...(transitions ? { startViewTransition } : {}),
     },
     matchMedia: (query) => ({
-      matches: (query.includes("color-scheme: dark") && dark) || (query.includes("reduced-motion") && reducedMotion),
-      addEventListener: (type, fn) => type === "change" && listeners.media.push(fn),
+      matches: (query.includes("color-scheme: dark") && systemDark) || (query.includes("reduced-motion") && reducedMotion),
     }),
     innerWidth: 1200,
     innerHeight: 800,
@@ -73,17 +77,12 @@ function load({ saved, storage = true, systemDark = false, reducedMotion = false
     store,
     animations,
     transitions: () => started,
-    label: () => toggle.attrs["aria-label"],
-    title: () => toggle.attrs.title,
+    label: () => button.attrs["aria-label"],
+    title: () => button.attrs.title,
     ready: () => fire(listeners.document, "DOMContentLoaded"),
     failed: (target) => fire(listeners.document, "error", { target }),
-    click: () => fire(listeners.document, "click", { target: toggle }),
-    followSystem: () => fire(listeners.document, "click", { target: auto }),
+    click: () => fire(listeners.document, "click", { target: button }),
     clickElsewhere: () => fire(listeners.document, "click", { target: new Element() }),
-    systemTurns: (isDark) => {
-      dark = isDark;
-      for (const fn of listeners.media) fn({ matches: isDark });
-    },
     otherTab: (theme) => {
       if (theme) store.set("theme", theme);
       else store.delete("theme");
@@ -114,28 +113,23 @@ describe("theme script", () => {
   });
 
   test("follows the system until the reader picks a theme", () => {
-    const page = load();
-    page.ready();
-    assert.equal(page.root.dataset.theme, undefined);
-    assert.equal(page.root.dataset.themeMode, "auto");
-    assert.equal(page.root.dataset.themeShown, "light");
-    assert.equal(page.root.dataset.js, "", "marks the page as scripted so the buttons show");
-    assert.equal(page.label(), "Switch to dark mode", "the button names where a click goes");
-    assert.equal(page.title(), page.label());
-
-    const night = load({ systemDark: true });
-    night.ready();
-    assert.equal(night.root.dataset.themeShown, "dark");
-    assert.equal(night.label(), "Switch to light mode");
+    for (const systemDark of [false, true]) {
+      const page = load({ systemDark });
+      page.ready();
+      assert.equal(page.root.dataset.theme, undefined);
+      assert.equal(page.root.dataset.themeMode, "auto");
+      assert.equal(page.root.dataset.js, "", "marks the page as scripted so the toggle shows");
+      assert.equal(page.label(), "Following the system · Switch to dark mode");
+      assert.equal(page.title(), page.label());
+    }
   });
 
   test("applies a stored choice before the page renders", () => {
     const page = load({ saved: "dark" });
     assert.equal(page.root.dataset.theme, "dark");
     assert.equal(page.root.dataset.themeMode, "dark");
-    assert.equal(page.root.dataset.themeShown, "dark");
     page.ready();
-    assert.equal(page.label(), "Switch to light mode");
+    assert.equal(page.label(), "Dark mode · Switch to light mode");
   });
 
   test("ignores a stored value it does not know", () => {
@@ -144,54 +138,31 @@ describe("theme script", () => {
     assert.equal(page.root.dataset.themeMode, "auto");
   });
 
-  test("the header button flips between light and dark and remembers it", () => {
+  test("cycles through following the system, dark and light", () => {
     const page = load();
     page.ready();
     page.click();
     assert.equal(page.root.dataset.theme, "dark");
     assert.equal(page.root.dataset.themeMode, "dark");
     assert.equal(page.store.get("theme"), "dark");
-    assert.equal(page.label(), "Switch to light mode");
+    assert.equal(page.label(), "Dark mode · Switch to light mode");
     page.click();
     assert.equal(page.root.dataset.theme, "light");
+    assert.equal(page.root.dataset.themeMode, "light");
     assert.equal(page.store.get("theme"), "light");
-    assert.equal(page.label(), "Switch to dark mode");
+    assert.equal(page.label(), "Light mode · Follow the system");
     page.click();
-    assert.equal(page.root.dataset.theme, "dark", "never back to automatic on its own");
-  });
-
-  test("from a dark system, the first click goes light", () => {
-    const page = load({ systemDark: true });
-    page.click();
-    assert.equal(page.root.dataset.theme, "light");
-  });
-
-  test("the footer button forgets the choice and follows the system again", () => {
-    const page = load({ saved: "dark" });
-    page.ready();
-    page.followSystem();
     assert.equal(page.root.dataset.theme, undefined);
     assert.equal(page.root.dataset.themeMode, "auto");
-    assert.equal(page.store.has("theme"), false);
-    assert.equal(page.label(), "Switch to dark mode");
-  });
-
-  test("following the system, the page changes when the system does", () => {
-    const page = load();
-    page.ready();
-    page.systemTurns(true);
-    assert.equal(page.root.dataset.themeShown, "dark");
-    assert.equal(page.label(), "Switch to light mode");
-
-    const chosen = load({ saved: "light" });
-    chosen.systemTurns(true);
-    assert.equal(chosen.root.dataset.themeShown, "light", "a choice holds");
+    assert.equal(page.store.has("theme"), false, "following the system forgets the choice");
+    assert.equal(page.label(), "Following the system · Switch to dark mode");
   });
 
   test("clicks elsewhere change nothing", () => {
     const page = load();
     page.clickElsewhere();
     assert.equal(page.root.dataset.theme, undefined);
+    assert.equal(page.root.dataset.themeSwitched, undefined);
     assert.equal(page.store.size, 0);
   });
 
@@ -201,11 +172,11 @@ describe("theme script", () => {
     assert.equal(page.root.dataset.theme, "dark");
     page.click();
     assert.equal(page.root.dataset.theme, "light");
-    page.followSystem();
+    page.click();
     assert.equal(page.root.dataset.theme, undefined);
   });
 
-  test("reveals the new theme from the button when the page changes color", async () => {
+  test("reveals the new theme from the toggle when the page changes color", async () => {
     const page = load({ transitions: true });
     page.ready();
     page.click();
@@ -220,10 +191,17 @@ describe("theme script", () => {
   });
 
   test("switches at once when the page keeps its colors or motion is reduced", () => {
-    const page = load({ transitions: true, saved: "light" });
-    page.followSystem();
-    assert.equal(page.root.dataset.theme, undefined);
-    assert.equal(page.transitions(), 0, "the system already shows light");
+    const dark = load({ transitions: true, systemDark: true });
+    dark.click();
+    assert.equal(dark.root.dataset.theme, "dark");
+    assert.equal(dark.transitions(), 0, "following the system already showed dark");
+    dark.click();
+    assert.equal(dark.transitions(), 1, "dark to light changes the page");
+
+    const light = load({ transitions: true, saved: "light" });
+    light.click();
+    assert.equal(light.root.dataset.theme, undefined);
+    assert.equal(light.transitions(), 0, "the system already shows light");
 
     const still = load({ transitions: true, reducedMotion: true });
     still.click();
@@ -235,8 +213,9 @@ describe("theme script", () => {
     const page = load();
     page.otherTab("dark");
     assert.equal(page.root.dataset.theme, "dark");
-    assert.equal(page.label(), "Switch to light mode");
+    assert.equal(page.label(), "Dark mode · Switch to light mode");
     page.otherTab(null);
     assert.equal(page.root.dataset.themeMode, "auto");
+    assert.equal(page.label(), "Following the system · Switch to dark mode");
   });
 });

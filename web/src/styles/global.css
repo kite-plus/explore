@@ -17,10 +17,9 @@
   }
 }
 
-/* Without light-dark() the pages stay light, so the buttons have nothing to do. */
+/* Without light-dark() the pages stay light, so the toggle has nothing to do. */
 @supports not (color: light-dark(white, black)) {
-  .theme-toggle,
-  .theme-auto {
+  .theme-toggle {
     display: none !important;
   }
 }
@@ -48,16 +47,12 @@
 }
 
 @layer components {
-  /* The buttons need the theme script; without it the page just follows
-     the system setting. The footer's "follow the system" shows only while
-     the reader has a choice to forget. */
-  .theme-toggle,
-  .theme-auto {
+  /* The toggle needs the theme script; without it the page just follows
+     the system setting. */
+  .theme-toggle {
     display: none;
   }
-  [data-js] .theme-toggle,
-  :root[data-js][data-theme-mode="light"] .theme-auto,
-  :root[data-js][data-theme-mode="dark"] .theme-auto {
+  [data-js] .theme-toggle {
     display: inline-flex;
   }
   .entry-status-available {
@@ -92,13 +87,14 @@
     cursor: wait;
     text-decoration: none;
   }
-  /* The icon is the theme a click goes to: a moon on a light page, a sun
-     on a dark one. */
+  /* The icon is the mode in use: a monitor while following the system, a
+     moon for dark, a sun for light. */
   .theme-toggle [data-theme-icon] {
     display: none;
   }
-  :root:not([data-theme-shown="dark"]) .theme-toggle [data-theme-icon="dark"],
-  :root[data-theme-shown="dark"] .theme-toggle [data-theme-icon="light"] {
+  :root[data-theme-mode="auto"] .theme-toggle [data-theme-icon="auto"],
+  :root[data-theme-mode="dark"] .theme-toggle [data-theme-icon="dark"],
+  :root[data-theme-mode="light"] .theme-toggle [data-theme-icon="light"] {
     display: block;
   }
   /* The new icon turns in after a click, not on first paint. */

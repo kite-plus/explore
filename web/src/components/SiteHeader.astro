@@ -1,5 +1,5 @@
 ---
-import { CirclePlus, Compass, Info, Library, Menu, Moon, Sun, X } from "lucide-react";
+import { CirclePlus, Compass, Info, Library, Menu, Monitor, Moon, Sun, X } from "lucide-react";
 
 import Logo from "@/components/Logo.astro";
 import { AccountMenu } from "@/components/reader/AccountMenu";
@@ -47,16 +47,22 @@ const links = [
       }
     </nav>
     <div class="ml-auto flex items-center gap-1.5 sm:ml-0">
-      {/* Flips between light and dark; the theme script sets its label. */}
+      {/* Goes from following the system to dark, to light and back; the
+          theme script sets its label. */}
       <button
         type="button"
         data-theme-toggle
+        data-auto={t.theme.auto}
+        data-dark={t.theme.dark}
+        data-light={t.theme.light}
+        data-to-auto={t.theme.toAuto}
         data-to-dark={t.theme.toDark}
         data-to-light={t.theme.toLight}
-        aria-label={t.theme.toDark}
-        title={t.theme.toDark}
+        aria-label={`${t.theme.auto} · ${t.theme.toDark}`}
+        title={`${t.theme.auto} · ${t.theme.toDark}`}
         class="theme-toggle size-9 items-center justify-center rounded-lg text-muted-foreground outline-offset-2 transition hover:bg-accent hover:text-foreground active:scale-90"
       >
+        <Monitor data-theme-icon="auto" className="size-[1.125rem]" aria-hidden="true" />
         <Moon data-theme-icon="dark" className="size-[1.125rem]" aria-hidden="true" />
         <Sun data-theme-icon="light" className="size-[1.125rem]" aria-hidden="true" />
       </button>

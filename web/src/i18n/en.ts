@@ -10,7 +10,14 @@ export const en: Dict = {
     description: "New posts from the public feeds of independent blogs. Every link takes you to the author's own site.",
   },
   nav: { home: "Discover", blogs: "Blogs", submit: "Submit a blog", about: "About", label: "Site", menu: "Menu" },
-  theme: { toDark: "Switch to dark mode", toLight: "Switch to light mode", followSystem: "Follow the system" },
+  theme: {
+    auto: "Following the system",
+    dark: "Dark mode",
+    light: "Light mode",
+    toAuto: "Follow the system",
+    toDark: "Switch to dark mode",
+    toLight: "Switch to light mode",
+  },
   newTab: " (opens in a new tab)",
   entryStatus: {
     available: "Last check succeeded",

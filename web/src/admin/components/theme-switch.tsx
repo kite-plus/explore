@@ -4,7 +4,7 @@ import { Button } from '@/admin/components/ui/button'
 
 // The reader site's toggle: the same order, icons and wording.
 const MODES = {
-  system: { icon: Monitor, label: '自动模式', next: 'dark' },
+  system: { icon: Monitor, label: '跟随系统', next: 'dark' },
   dark: { icon: Moon, label: '深色模式', next: 'light' },
   light: { icon: Sun, label: '浅色模式', next: 'system' },
 } as const
