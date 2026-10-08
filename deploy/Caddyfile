@@ -15,7 +15,7 @@
 	encode zstd gzip
 
 	# serve and web get the reader's address alone, as found above.
-	@api path /api/* /feed.xml /blogs.opml /healthz /readyz
+	@api path /api/* /feed.xml /blogs.opml /f/* /healthz /readyz
 	handle @api {
 		reverse_proxy serve:8080 {
 			header_up X-Forwarded-For {client_ip}

@@ -65,7 +65,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面 | 按需，`public, max-age=86400`；写成接口而不是静态文件，sitemap 地址才能跟着 `EXPLORE_PUBLIC_URL` |
 
 - **带筛选或翻页的列表页**（`?lang=`、`?tag=`、`?cursor=`，可以组合）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
-- `/feed.xml`、`/blogs.opml`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
+- `/feed.xml`、`/blogs.opml`、`/f/`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。
 - **没有可被收录的文章页**。文章只以指向原文的链接出现（[architecture.md §8](architecture.md#8-前端与-seo)）；分享页 `/p/{id}` 是唯一的例外，它不收录，也只有列表里已有的内容。
 - 匿名读者没有 Cookie，公开页面对所有人相同；两种语言又是不同的地址，所以公开页面都可以被反向代理和 CDN 直接缓存。登录后的请求带会话 Cookie，返回个人化的页面，不缓存（[accounts.md §8](accounts.md#8-前端)）。
 
@@ -306,7 +306,7 @@ web/
 - 有图文章输出本站缩略图地址，不让浏览器直接请求源站图片；无图文章仍是纯文字条目；
 - 提交流程的各种结果，以及跨站提交被拒绝。
 
-**部署**：`web` 服务和 `serve`、`worker`、`postgres` 在同一个 Compose 里（[project-layout.md §10](project-layout.md#10-部署)）。反向代理把 `/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。
+**部署**：`web` 服务和 `serve`、`worker`、`postgres` 在同一个 Compose 里（[project-layout.md §10](project-layout.md#10-部署)）。反向代理把 `/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`，并按页面的 `Cache-Control` 缓存。
 
 ---
 

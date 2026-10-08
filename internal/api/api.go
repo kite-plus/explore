@@ -44,6 +44,7 @@ type Server struct {
 	loginLimit    *limiter
 	pingLimit     *limiter
 	importLimit   *limiter
+	feedLimit     *limiter
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage
@@ -73,6 +74,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	s.loginLimit = newLimiter(10, time.Minute, s.Now)
 	s.pingLimit = newLimiter(60, time.Hour, s.Now)
 	s.importLimit = newLimiter(10, time.Hour, s.Now)
+	// Per token: a blogroll reads its feed from a server or at build time, not
+	// from every visitor's browser.
+	s.feedLimit = newLimiter(600, time.Hour, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -89,6 +93,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	r.GET("/readyz", s.ready)
 	r.GET("/feed.xml", s.limit(s.readLimit), s.feedXML)
 	r.GET("/blogs.opml", s.limit(s.readLimit), s.blogsOPML)
+	r.GET("/f/:file", s.limit(s.readLimit), s.followingFeed)
 
 	v1 := r.Group("/api/v1")
 	v1.GET("/entries", s.limit(s.readLimit), s.entries)
@@ -123,6 +128,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	account.PUT("/me/subscriptions/:host", s.addSubscription)
 	account.DELETE("/me/subscriptions/:host", s.removeSubscription)
 	account.GET("/me/entries", s.following)
+	account.GET("/me/following-feed", s.followingFeedSettings)
+	account.POST("/me/following-feed", s.publishFollowingFeed)
+	account.DELETE("/me/following-feed", s.unpublishFollowingFeed)
 	account.GET("/me/blogs", s.ownedBlogs)
 	account.POST("/me/blog-claims/:host", s.startBlogClaim)
 	account.POST("/me/blog-claims/:host/verify", s.verifyBlogClaim)

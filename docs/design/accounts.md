@@ -1,6 +1,6 @@
 # 统一身份、订阅与标签
 
-> 状态：本站账号、订阅流、OPML 导入导出、推荐评分和域名认领已实现；OIDC 待接入 · 最近更新：2026-10-03
+> 状态：本站账号、订阅流及其公开地址、OPML 导入导出、推荐评分和域名认领已实现；OIDC 待接入 · 最近更新：2026-10-08
 > 跨站身份和评论的架构见 [identity-and-comments.md](identity-and-comments.md)。
 
 ## 0. 边界
@@ -24,6 +24,7 @@
 - 订阅对象是博客，不是单篇文章或标签。博客页和目录页提供订阅入口。
 - 订阅列表可以逐个取消，也可以导出为 OPML，带去任何 RSS 阅读器。
 - 可以导入其他阅读器导出的 OPML。按每个订阅的订阅地址和站点地址找正在展示的已收录博客：主机名相同、只差 `www.`、是博客的额外域名，或订阅地址完全相同；找到的直接订阅，没找到的列出来，读者可以去提交。导入不新增博客，也不访问文件里的任何地址。
+- 订阅流可以发布到一个私密地址，给自己博客上的博友圈页面读取：`/f/{token}.json`（JSON Feed 1.1）和 `/f/{token}.xml`（RSS 2.0）是订阅流最新的 50 篇，`/f/{token}.opml` 是订阅的博客（[api.md §3](api.md#3-订阅与导出)）。账号页默认不发布；发布后显示三个地址，可以复制，也可以换新地址（原来的立即失效）或停止发布。账号页写明：知道地址的人都能看到你订阅了哪些博客。账号被停用时地址不再返回内容，删除账号时地址一起删除。地址是随机值，不含读者的任何信息，日志里也不出现。
 - 博客退出时删除其订阅。
 - 每人最多 1,000 个订阅 `[待定]`。订阅人数是否公开展示 `[待定]`。
 
@@ -83,7 +84,8 @@ Worker 独立循环分类，不阻塞抓取，只给按发布时间最新的 1 �
 
 ```sql
 users (id, number unique, email, password_hash, display_name, is_admin,
-       created_at, disabled_at, disabled_reason, disabled_by, last_seen_at)
+       created_at, disabled_at, disabled_reason, disabled_by, last_seen_at,
+       feed_token unique)
 user_identities (issuer, subject, user_id, linked_at,
                  primary key (issuer, subject))
 sessions (token_hash primary key, user_id -> users on delete cascade,
@@ -97,6 +99,8 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 
 用户看到的 ID 是 `number`：按注册顺序递增的数字，账号页显示为「ID 12 · 2026年9月5日加入」，后台列表和详情也叫 ID，`/api/v1/me` 返回 `number` 和 `created_at`。`id` 列是 UUID，只在内部使用：其他表和统一身份服务都按它关联账号，接口路径里的账号也用它，后台详情里标为 UUID。`number` 由数据库序列生成（`GENERATED ALWAYS AS IDENTITY`），不能修改，可用于以后按注册先后安排的活动。注册时先确认邮箱没被占用再插入，重复注册不会消耗 ID；空号只来自删除的账号，以及两个人同时用同一邮箱注册这种极少见的情况。迁移 `00018_user_number.sql` 按注册时间给已有账号回填 1、2、3…，新账号从最大值之后继续。
 
+`feed_token` 是订阅流公开地址里的随机值（32 字节，base64url），没有发布时为空，由迁移 `00022_feed_token.sql` 加入。它按原样保存而不是只存哈希：读者要在账号页再次看到地址，而它能透露的订阅本来就存在同一个库里。
+
 不建 `login_codes` 或 GitHub 凭据表。清空 `entries` 不丢订阅；订阅流用 `subscriptions` 过滤文章并复用游标分页。博客认领要求用户在 `_explore-claim.<host>` 发布随机值对应的 DNS TXT 记录，验证值有效期 30 分钟；一个博客只能有一个已验证归属。
 
 ## 6. 接口与前端
@@ -109,6 +113,8 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除账号（唯一可用的管理员除外） |
 | PUT | `/api/v1/me/password` | 验证当前密码后修改密码，撤销其他会话，清除管理员重置留下的临时标记；账号页「修改密码」使用 |
 | GET | `/api/v1/me/entries` | 订阅流 |
+| GET、POST、DELETE | `/api/v1/me/following-feed` | 订阅流的公开地址：查看、换新地址（没有发布时就是开始发布）、停止发布 |
+| GET | `/f/{token}.json`、`.xml`、`.opml` | 发布出去的订阅流和订阅清单，不需要登录 |
 | GET | `/api/v1/me/subscriptions` | 订阅列表 |
 | GET | `/api/v1/me/subscriptions.opml` | 导出订阅的 OPML |
 | POST | `/api/v1/me/subscriptions/import` | 导入 OPML，订阅其中已收录的博客 |

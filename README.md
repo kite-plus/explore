@@ -15,7 +15,7 @@ Explore is the discovery side of [Kite Plus](https://github.com/kite-plus).
 ## Features
 
 - **Reading**: the latest posts from every listed blog in one stream, filtered by language or topic; a directory with a page for each blog; the stream as RSS at `/feed.xml` and the whole blog list as OPML at `/blogs.opml`. The interface is in Chinese and English.
-- **Accounts, optional**: follow blogs for a stream of your own, claim your blog, report a problem. Reading needs no account.
+- **Accounts, optional**: follow blogs for a stream of your own, and publish it at a private address for your blog's blogroll; claim your blog, report a problem. Reading needs no account.
 - **Joining**: authors submit a blog and its feed is checked on the spot, with what to fix if it fails. `explore check <url>` runs the same check from a terminal.
 - **Crawling**: reads each blog's feed, and its sitemap for older posts, taking only the metadata in a post page's `<head>`; follows robots.txt and robots meta tags, makes conditional requests and respects Retry-After; posts that link outside the blog's own site are dropped.
 - **Admin console**: review submissions, manage blogs and posts, handle takedowns and users, watch the crawl queue, and switch registration, submissions and crawling on or off.
@@ -65,7 +65,7 @@ Every [release](https://github.com/kite-plus/explore/releases) also carries nati
 1. Set `EXPLORE_DATABASE_URL` and `EXPLORE_PUBLIC_URL`, then run `explore migrate up`. Run it again after every upgrade.
 2. Keep `explore serve` (on `127.0.0.1:8080` by default) and `explore worker` running. Set `EXPLORE_TRUSTED_PROXIES=127.0.0.1` so rate limits still see readers' addresses behind the proxy and the site.
 3. In the unpacked `explore-web-<version>` directory, run `node dist/server/entry.mjs` with `EXPLORE_API_URL=http://127.0.0.1:8080`, `EXPLORE_PUBLIC_URL`, `HOST=127.0.0.1` and `PORT=4321`.
-4. Have the proxy send `/api/*`, `/feed.xml`, `/blogs.opml`, `/healthz` and `/readyz` to serve and everything else to the site, as `deploy/Caddyfile` does.
+4. Have the proxy send `/api/*`, `/feed.xml`, `/blogs.opml`, `/f/*`, `/healthz` and `/readyz` to serve and everything else to the site, as `deploy/Caddyfile` does.
 
 `deploy/.env.example` explains the other settings.
 

@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A reader can publish their following stream at a private address for a blogroll on their own blog. Under Following on the account page, Publish gives `/f/{token}.json` (JSON Feed 1.1) and `/f/{token}.xml` (RSS 2.0), the newest 50 posts with their original links and blog names, the favicon too in JSON Feed, and `/f/{token}.opml`, the blogs followed. The page says that anyone with the address can see which blogs the reader follows; a new address stops the old one at once, and so does stopping. The feeds are cached for five minutes, kept out of search engines and answer 600 requests an hour each. The upgrade runs one migration, which adds `users.feed_token`, and needs this version's `Caddyfile`, which sends `/f/` to serve: fetch it again as in the README's first step.
+
 ## [0.1.17] - 2026-10-06
 
 A small release for maintainers: the admin console marks what waits for review more clearly. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.

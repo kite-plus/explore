@@ -136,6 +136,7 @@ users.disabled_by text
 users.disabled_reason text
 users.display_name text
 users.email text
+users.feed_token text
 users.id uuid
 users.is_admin boolean
 users.last_seen_at timestamp with time zone

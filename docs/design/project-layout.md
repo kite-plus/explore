@@ -22,7 +22,7 @@ explore/
 │   ├── store/          PostgreSQL queries and transactions (pgx)
 │   ├── worker/         scheduling, snapshot sync, tagging, daily maintenance
 │   ├── tagger/         file posts under the tag list with a Claude model
-│   ├── publicfeed/     /feed.xml and /blogs.opml
+│   ├── publicfeed/     /feed.xml, /blogs.opml and readers' /f/ feeds
 │   └── api/            Gin router, handlers, middleware
 ├── migrations/         goose SQL migrations, embedded into the binary
 ├── testdata/
@@ -204,7 +204,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 | 服务 | 镜像与命令 | 说明 |
 |---|---|---|
-| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
+| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
 | `postgres` | `postgres:16-alpine` | 数据卷持久化；备份时排除 `entries` 的数据（[data-model.md §5](data-model.md#5-数据保留)） |
 | `migrate` | `ghcr.io/kite-plus/explore`，`explore migrate up` | 每次 `up` 先跑一次，跑完退出 |
 | `serve` | 同一镜像，`explore serve` | API；可以多实例 |

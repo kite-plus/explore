@@ -1,6 +1,6 @@
 # API 设计
 
-> 状态：公开 API、本站账号与订阅接口已实现 · 最近更新：2026-09-24
+> 状态：公开 API、本站账号与订阅接口已实现 · 最近更新：2026-10-08
 > 服务：`explore serve`（Gin）。读者看到的页面由独立的前端在服务端渲染（[architecture.md §8](architecture.md#8-前端与-seo)），前端只调用本文的公开接口。
 > 登录、会话、订阅和博客认领接口见下文及 [accounts.md](accounts.md)。标签已经实现（§2.1、§2.1.1）。
 
@@ -25,7 +25,7 @@
 
 `POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；`POST /api/v1/auth/login` 接收邮箱和密码。成功后都设置本站会话 Cookie 并返回用户资料与 `csrf_token`。`POST /api/v1/auth/logout` 撤销当前会话。
 
-`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、密码是否为管理员重置的临时密码 `temporary_password`、`email`、`display_name`、`is_admin`、`csrf_token`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。所有个人响应为 `private, no-store`。
+`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、密码是否为管理员重置的临时密码 `temporary_password`、`email`、`display_name`、`is_admin`、`csrf_token`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。`GET /api/v1/me/following-feed` 返回订阅流公开发布的地址 `{"json_url": "...", "rss_url": "...", "opml_url": "..."}`（§3），没有发布时三项都是 `null`；`POST` 换一个新地址并返回它，原来的地址立即失效，没有发布时就是开始发布；`DELETE` 停止发布，返回 `204`。所有个人响应为 `private, no-store`。
 
 `GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`。
 
@@ -225,6 +225,8 @@ Explore 自己发布的公告和广告，正在显示的才返回；字段、`au
 |---|---|
 | `GET /feed.xml` | 首页时间流的 RSS 2.0，最新 50 篇，规则与 §2.1 相同（不按语言筛选），`Cache-Control: public, max-age=300` |
 | `GET /blogs.opml` | 全部可见博客的 OPML 2.0，导入阅读器即可带走整份清单 |
+| `GET /f/{token}.json`、`GET /f/{token}.xml` | 一位读者自己发布的订阅流，JSON Feed 1.1 或 RSS 2.0，给他博客上的博友圈页面读取：最新 50 篇，规则与 `/api/v1/me/entries` 相同（不按语言和标签筛选），`Cache-Control: public, max-age=300` |
+| `GET /f/{token}.opml` | 同一位读者订阅的博客，OPML 2.0，格式同 `/blogs.opml` |
 | `GET /healthz` | 进程存活即返回 `200` |
 | `GET /readyz` | 能连上数据库才返回 `200` |
 
@@ -242,6 +244,25 @@ Explore 自己发布的公告和广告，正在显示的才返回；字段、`au
 ```
 
 `<source>` 是 RSS 2.0 专门用来标明"这一项来自哪个订阅源"的元素。作者关闭摘要时省略 `<description>`。
+
+`/f/{token}` 的地址由读者在账号页发布（§2，[accounts.md §2](accounts.md#2-订阅)），`token` 是 32 字节的随机值，地址本身就是凭证：换了新地址、停止发布、账号被停用或删除后，原来的地址返回 `404`。响应带 `X-Robots-Tag: noindex`，日志只记路由模板，不记地址。每个地址每小时最多 600 次，按客户端地址的读取限流照常适用：博友圈应当在服务器上或构建时读取，而不是在每位访客的浏览器里。链接都是原文地址，不加 `utm_source`，因为访客是从博主的页面过去的，不是从 Explore。
+
+`/f/{token}.xml` 的每一项与 `/feed.xml` 相同，发布时间不可信的文章没有 `<pubDate>`。`/f/{token}.json` 的每一项：
+
+```json
+{
+  "id": "https://blog.example.com/posts/hello/",
+  "url": "https://blog.example.com/posts/hello/",
+  "title": "Hello, world",
+  "content_text": "First paragraph of the post, cut to 140 characters…",
+  "summary": "First paragraph of the post, cut to 140 characters…",
+  "date_published": "2026-09-20T02:00:00Z",
+  "authors": [{"name": "Example Blog", "url": "https://blog.example.com/",
+               "avatar": "https://explore.kite.plus/api/v1/blogs/blog.example.com/favicon"}]
+}
+```
+
+作者就是文章所在的博客，`avatar` 是 Explore 缓存的博客图标。JSON Feed 要求每一项都有内容，Explore 只保存摘要，所以 `content_text` 和 `summary` 都是摘要；作者关闭摘要时 `content_text` 是空字符串，没有 `summary`；发布时间不可信的文章没有 `date_published`。
 
 `/blogs.opml` 的每个博客一行：
 

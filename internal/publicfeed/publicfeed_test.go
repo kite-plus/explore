@@ -1,6 +1,8 @@
 package publicfeed
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -61,6 +63,81 @@ func TestEmptyRSS(t *testing.T) {
 	if _, err := feed.Parse(out); err != nil {
 		t.Errorf("empty feed does not parse: %v", err)
 	}
+}
+
+// A post whose feed gave no date to trust is listed without one.
+func TestRSSLeavesOutAnUntrustedDate(t *testing.T) {
+	out, err := RSS(Channel{Title: "Explore", Link: "https://explore.kite.plus/", Self: "https://explore.kite.plus/f/t.xml"}, []Item{
+		{Title: "Undated", Link: "https://other.example.org/p/2", BlogName: "Other", BlogFeed: "https://other.example.org/feed/"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := string(out); strings.Contains(s, "pubDate") || strings.Contains(s, "lastBuildDate") {
+		t.Errorf("an undated item has a date:\n%s", s)
+	}
+	if f, err := feed.Parse(out); err != nil || len(f.Items) != 1 || f.Items[0].Published != nil {
+		t.Errorf("round trip = %+v, %v", f, err)
+	}
+}
+
+func TestJSONFeed(t *testing.T) {
+	published := time.Date(2026, 9, 20, 2, 0, 0, 0, time.UTC)
+	out, err := JSON(Channel{
+		Title: "Explore · Following", Link: "https://explore.kite.plus/", Self: "https://explore.kite.plus/f/t.json",
+	}, []Item{
+		{
+			Title: "Tom & Jerry <3", Link: "https://blog.example.com/p/1", Excerpt: "Short.", PublishedAt: published,
+			BlogName: "Example", BlogFeed: "https://blog.example.com/atom.xml", BlogSite: "https://blog.example.com/",
+			BlogIcon: "https://explore.kite.plus/api/v1/blogs/blog.example.com/favicon",
+		},
+		{Title: "Undated, no excerpt", Link: "https://other.example.org/p/2", BlogName: "Other"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Version     string                       `json:"version"`
+		Title       string                       `json:"title"`
+		HomePageURL string                       `json:"home_page_url"`
+		FeedURL     string                       `json:"feed_url"`
+		Items       []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	if got.Version != "https://jsonfeed.org/version/1.1" || got.HomePageURL != "https://explore.kite.plus/" ||
+		got.FeedURL != "https://explore.kite.plus/f/t.json" || len(got.Items) != 2 {
+		t.Fatalf("feed = %s", out)
+	}
+	first := got.Items[0]
+	for key, want := range map[string]string{
+		"id": `"https://blog.example.com/p/1"`, "url": `"https://blog.example.com/p/1"`, "title": `"Tom & Jerry <3"`,
+		"content_text": `"Short."`, "summary": `"Short."`, "date_published": `"2026-09-20T02:00:00Z"`,
+		"authors": `[{"name":"Example","url":"https://blog.example.com/","avatar":"https://explore.kite.plus/api/v1/blogs/blog.example.com/favicon"}]`,
+	} {
+		if compact(first[key]) != want {
+			t.Errorf("first item's %s = %s, want %s", key, first[key], want)
+		}
+	}
+	// JSON Feed requires content on every item, even an empty one.
+	second := got.Items[1]
+	if string(second["content_text"]) != `""` {
+		t.Errorf("an item without an excerpt has content_text %s", second["content_text"])
+	}
+	for _, key := range []string{"summary", "date_published"} {
+		if _, ok := second[key]; ok {
+			t.Errorf("an undated item without an excerpt has %s", key)
+		}
+	}
+}
+
+func compact(raw json.RawMessage) string {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return string(raw)
+	}
+	return buf.String()
 }
 
 func TestOPML(t *testing.T) {

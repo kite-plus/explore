@@ -332,7 +332,7 @@ Typecho、Jekyll、Ghost 同样开箱输出标准订阅源。E0 顺带实测，�
 | 组成 | 职责 |
 |---|---|
 | worker | 调度抓取；条件请求、限速、退避；解析并规范化；把每个博客的最新快照同步进 `entries`；给新文章打标签（Anthropic 或 OpenAI 兼容的模型接口，[accounts.md §4](accounts.md#4-文章标签)） |
-| api | Gin，提供 `/api/v1`，以及 `/feed.xml`、`/blogs.opml`；读者的登录、会话和订阅 |
+| api | Gin，提供 `/api/v1`，以及 `/feed.xml`、`/blogs.opml` 和读者发布的订阅流 `/f/`；读者的登录、会话和订阅 |
 | web | 前端，Astro 服务端渲染，只在服务端调用公开 API（§8） |
 | PostgreSQL | 博客清单、文章缓存、提交记录、读者账号与订阅 |
 

@@ -219,6 +219,40 @@ func (s *Store) FollowingStream(ctx context.Context, userID string, q StreamQuer
 	})
 }
 
+// FeedToken is the token of the address that publishes the user's following
+// stream, or "" while they keep it off.
+func (s *Store) FeedToken(ctx context.Context, userID string) (string, error) {
+	var token *string
+	err := s.pool.QueryRow(ctx, `SELECT feed_token FROM users WHERE id = $1`, userID).Scan(&token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil || token == nil {
+		return "", err
+	}
+	return *token, nil
+}
+
+// SetFeedToken publishes the user's following stream under token, in place of
+// the token before, or stops publishing it when token is "". The token is
+// kept as it is rather than hashed: its owner reads the address back, and
+// it reveals no more than the follows stored beside it.
+func (s *Store) SetFeedToken(ctx context.Context, userID, token string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET feed_token = nullif($2, '') WHERE id = $1`, userID, token)
+	return err
+}
+
+// FeedOwner is the account whose following stream is published under token.
+// A token no one uses, and one of a disabled account, are ErrNotFound.
+func (s *Store) FeedOwner(ctx context.Context, token string) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `SELECT id::text FROM users WHERE feed_token = $1 AND disabled_at IS NULL`, token).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return id, err
+}
+
 func (s *Store) CreateBlogClaim(ctx context.Context, userID, host string, tokenHash [sha256.Size]byte, expires time.Time) error {
 	var ownerID string
 	err := s.pool.QueryRow(ctx, `SELECT coalesce(o.user_id::text, '') FROM blogs b LEFT JOIN blog_owners o ON o.blog_id = b.id WHERE b.host = $1`, host).Scan(&ownerID)
