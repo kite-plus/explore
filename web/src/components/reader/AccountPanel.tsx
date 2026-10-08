@@ -134,6 +134,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         </>}
       </div>}
       {subscriptions.length ? <ul className="mt-4 divide-y rounded-lg border">{subscriptions.map(blog => <li className="flex items-center justify-between gap-3 px-4 py-3" key={blog.host}><a className="min-w-0 truncate text-sm font-medium hover:underline" href={`${prefix}/blogs/${blog.host}`}>{blog.name} <span className="font-normal text-muted-foreground">· {blog.host}</span></a><button className="shrink-0 text-sm text-muted-foreground hover:text-foreground" onClick={() => remove(blog.host)}>{zh ? "取消订阅" : "Unfollow"}</button></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{zh ? "还没有订阅博客。可从博客详情页订阅。" : "No blogs followed yet. Open a blog to follow it."}</p>}
+      {user && <FollowingFeed user={user} zh={zh} />}
     </section>
     <section><h2 className="text-lg font-semibold">{zh ? "我认领的博客" : "My blogs"}</h2>
       {owned.length ? <ul className="mt-3 space-y-2">{owned.map(blog => <li key={blog.host}><a className="text-sm underline" href={`${prefix}/blogs/${blog.host}`}>{blog.name} · {blog.host}</a></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{zh ? "尚未认领博客。" : "No claimed blogs yet."}</p>}
@@ -154,6 +155,64 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         </div>
       </div> : <button type="button" className="mt-4 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" disabled={!user} onClick={() => setConfirming(true)}>{zh ? "删除账号" : "Delete account"}</button>}
     </section>
+  </div>;
+}
+
+interface FeedAddresses { json_url: string | null; rss_url: string | null; opml_url: string | null }
+
+/** The following stream published at a private address, for a blogroll on the reader's own blog. */
+function FollowingFeed({ user, zh }: { user: ReaderUser; zh: boolean }) {
+  const [feed, setFeed] = useState<FeedAddresses | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  useEffect(() => {
+    readerRequest<FeedAddresses>("me/following-feed").then(setFeed).catch(reason => setError(String(reason)));
+  }, []);
+
+  async function change(method: "POST" | "DELETE") {
+    setError(""); setCopied(""); setBusy(true);
+    try {
+      const next = await readerRequest<FeedAddresses | undefined>("me/following-feed", { method }, user.csrf_token);
+      setFeed(next ?? { json_url: null, rss_url: null, opml_url: null });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function copy(address: string) {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(address);
+    } catch {
+      // A browser may refuse the clipboard; the address is on screen to copy by hand.
+    }
+  }
+
+  const addresses = feed?.json_url && feed.rss_url && feed.opml_url
+    ? [["JSON Feed", feed.json_url], ["RSS", feed.rss_url], [zh ? "订阅的博客 OPML" : "Blogs, OPML", feed.opml_url]]
+    : null;
+  return <div className="mt-5 rounded-lg border p-4">
+    <h3 className="font-medium">{zh ? "公开订阅流" : "Publish your stream"}</h3>
+    <p className="mt-1 text-sm text-muted-foreground">{zh
+      ? "把订阅流发布到一个私密地址，给自己博客上的博友圈页面读取，最好在服务器上或构建时读取。知道地址的人都能看到你订阅了哪些博客。"
+      : "Publish your following stream at a private address for a blogroll on your own blog, best read from a server or at build time. Anyone with the address can see which blogs you follow."}</p>
+    {addresses ? <>
+      <ul className="mt-3 space-y-3 sm:space-y-2">{addresses.map(([label, address]) => <li key={label} className="text-sm sm:flex sm:items-center sm:gap-2">
+        <span className="block text-muted-foreground sm:w-32 sm:shrink-0">{label}</span>
+        <div className="mt-1 flex min-w-0 flex-1 items-center gap-2 sm:mt-0">
+          <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1" title={address}>{address}</code>
+          <button type="button" className="shrink-0 rounded-md border px-2.5 py-1 hover:bg-accent" onClick={() => copy(address)}>{copied === address ? (zh ? "已复制" : "Copied") : (zh ? "复制" : "Copy")}</button>
+        </div>
+      </li>)}</ul>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" className="rounded-md border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50" disabled={busy} onClick={() => change("POST")}>{zh ? "换新地址" : "New address"}</button>
+        <button type="button" className="rounded-md border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50" disabled={busy} onClick={() => change("DELETE")}>{zh ? "停止发布" : "Stop publishing"}</button>
+        <span className="text-sm text-muted-foreground">{zh ? "换新地址或停止发布后，原来的地址立即失效。" : "The address stops working at once when you change it or stop publishing."}</span>
+      </div>
+    </> : <button type="button" className="mt-4 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={busy || !feed} onClick={() => change("POST")}>{zh ? "发布订阅流" : "Publish"}</button>}
+    {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
   </div>;
 }
 
