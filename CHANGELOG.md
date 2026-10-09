@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-10-10
+
+A fix release: most of the newest posts no longer show "Awaiting check". The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
 ### Fixed
 
 - New posts no longer wait behind rechecks of older ones for their link check. Rechecks kept the per-minute budget full, so most of the newest posts showed "Awaiting check"; posts never checked now go first.
