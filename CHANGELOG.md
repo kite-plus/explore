@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- New posts no longer wait behind rechecks of older ones for their link check. Rechecks kept the per-minute budget full, so most of the newest posts showed "Awaiting check"; posts never checked now go first.
+
 ## [0.1.18] - 2026-10-08
 
 A release for bloggers: a reader can publish what they follow at a private address, for the blogroll on their own blog. The upgrade runs one migration, which adds `users.feed_token`, and needs this version's `Caddyfile`, which sends `/f/` to serve: fetch it again as in the README's first step. `.env` and `docker-compose.yaml` stay as they are.

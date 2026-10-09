@@ -137,7 +137,7 @@ CREATE INDEX entries_url_key  ON entries (blog_id, url_key);
 - `suppressed_entries` 同时记下被隐藏文章的 `url_key`，文章从订阅源挪到站点地图、换了 `identity` 之后仍然隐藏。
 - `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
 - `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。`score` 是同一次模型调用给出的推荐分数（[accounts.md §3.1](accounts.md#31-推荐评分)）：深度、原创、价值三项各 1 到 5 分之和，广告、测试等为 0，为空表示还没评。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
-- `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
+- `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点；从没检查过的文章排在到期复查之前，免得新文章一直等在复查后面。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
 - `page_image_url`、`page_excerpt` 是订阅源缺图或摘要被截断时，从文章页 `<head>` 读到的封面地址和描述（[worker.md §12](worker.md#12-读文章页)）；`page_next_check_at` 是下次该读的时间，读过后为空。它们也是缓存：同步时链接不变就保留，链接变了就清空重读。展示时订阅源自己的图片和完整摘要优先。
 
 ### 2.2.1 `sitemap_urls`

@@ -166,6 +166,34 @@ func TestLinkCheckState(t *testing.T) {
 	}
 }
 
+func TestLinkChecksPreferUncheckedEntries(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	old := listBlog(t, s, "rechecks.example.com", "en")
+	checked := entry("checked", at(time.Now().Add(-48*time.Hour)), true)
+	sync(t, s, old.ID, checked)
+	jobs, err := s.ClaimLinks(ctx, 8)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("first claim = %+v, %v", jobs, err)
+	}
+	if err := s.RecordLinkStatus(ctx, jobs[0], model.LinkAvailable, -time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := listBlog(t, s, "new-posts.example.com", "en")
+	sync(t, s, fresh.ID, entry("elsewhere", at(time.Now().Add(-time.Hour)), true))
+	sync(t, s, old.ID, checked, entry("newer", at(time.Now().Add(-time.Hour)), true))
+
+	first, err := s.ClaimLinks(ctx, 1)
+	if err != nil || len(first) != 1 || first[0].URL != "https://x/elsewhere" {
+		t.Fatalf("an overdue recheck went before an unchecked entry: %+v, %v", first, err)
+	}
+	rest, err := s.ClaimLinks(ctx, 8)
+	if err != nil || len(rest) != 1 || rest[0].URL != "https://x/newer" {
+		t.Fatalf("a blog's overdue recheck went before its unchecked entry: %+v, %v", rest, err)
+	}
+}
+
 func TestReaderClaimSharesLinkLeaseWithWorker(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

@@ -64,15 +64,17 @@ func (s *Store) VisibleLinkState(ctx context.Context, entryID int64) (LinkState,
 }
 
 func (s *Store) ClaimLinks(ctx context.Context, limit int) ([]LinkJob, error) {
+	// Unchecked entries go first: rechecks alone can fill the budget, and new
+	// posts would wait behind them.
 	rows, err := s.pool.Query(ctx, `
 		WITH per_blog AS (
-			SELECT DISTINCT ON (e.blog_id) e.id, e.blog_id, e.link_next_check_at
+			SELECT DISTINCT ON (e.blog_id) e.id, e.blog_id, e.link_checked_at IS NULL AS unchecked, e.link_next_check_at
 			FROM entries e JOIN blogs b ON b.id = e.blog_id
 			WHERE e.link_next_check_at <= now() AND `+visible+`
-			ORDER BY e.blog_id, e.link_next_check_at, e.id
+			ORDER BY e.blog_id, e.link_checked_at IS NULL DESC, e.link_next_check_at, e.id
 		), claimed AS (
 			SELECT e.id FROM entries e JOIN per_blog p ON p.id = e.id
-			ORDER BY p.link_next_check_at, p.id
+			ORDER BY p.unchecked DESC, p.link_next_check_at, p.id
 			LIMIT @limit FOR UPDATE OF e SKIP LOCKED
 		)
 		UPDATE entries e
