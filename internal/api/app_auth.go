@@ -50,7 +50,7 @@ func pkceChallenge(v string) bool { return len(v) == 43 && only(v, "-_") }
 func pkceVerifier(v string) bool { return len(v) >= 43 && len(v) <= 128 && only(v, "-._~") }
 
 // appStart begins an app's sign-in in the system browser:
-// GET /auth/app/start?challenge=…&client=ios|android, with switch=1 to pick
+// GET /auth/app/start?challenge=...&client=ios|android, with switch=1 to pick
 // another account and callback=scheme for the custom-scheme callback.
 func (s *Server) appStart(c *gin.Context) {
 	challenge, client := c.Query("challenge"), c.Query("client")

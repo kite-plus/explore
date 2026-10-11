@@ -71,7 +71,7 @@ function BlogRow({ blog, since, action }: { blog: AdminUserBlog; since: string; 
 
 const clientNames = { web: '网页', ios: 'iOS', android: 'Android' } as const
 
-// "（网页 2、iOS 1）" when an app holds any of the sessions.
+// Counts the sessions by client when an app holds any of them.
 function sessionClients(sessions: AdminUserDetail['sessions']) {
   const counts = new Map<string, number>()
   for (const s of sessions) counts.set(s.client, (counts.get(s.client) ?? 0) + 1)
