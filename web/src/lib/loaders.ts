@@ -111,11 +111,21 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
  * loadLogin sends a reader who is signed in already, as src/middleware.ts
  * found, on to where they were going.
  */
-export function loadLogin(ctx: AstroGlobal, lang: Lang): { next: string } | Response {
+export async function loadLogin(ctx: AstroGlobal, lang: Lang): Promise<LoginPage | Response> {
   cacheControl(ctx, "private, no-store");
   const next = safeNext(param(ctx, "next"), localePath(lang, "/following"));
   if (ctx.locals.reader) return ctx.redirect(next, 302);
-  return { next };
+  // Without the options the page still offers the password form.
+  const options = await api.authOptions(caller(ctx, lang));
+  return { next, kitePlus: options.kind === "ok" ? options.data.oidc?.name ?? null : null, error: param(ctx, "error") ?? null };
+}
+
+export interface LoginPage {
+  next: string;
+  /** The name of the Kite Plus sign-in, or null when the server has none. */
+  kitePlus: string | null;
+  /** Why a sign-in with Kite Plus came back without signing in. */
+  error: string | null;
 }
 
 export interface DirectoryPage {

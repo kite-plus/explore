@@ -8,6 +8,11 @@ import type { Lang } from "@/i18n";
 const TIMEOUT_MS = 3000;
 const SUBMIT_TIMEOUT_MS = 35_000;
 
+export interface AuthOptions {
+  password: boolean;
+  oidc: { name: string; account_url: string } | null;
+}
+
 export type Result<T> =
   | { kind: "ok"; data: T }
   | { kind: "notFound" }
@@ -71,6 +76,10 @@ export const api = {
       `/api/v1/entries${query({ order: p.order, cursor: p.cursor, lang: p.lang, tag: p.tag, limit: p.limit?.toString(), tz: p.tz })}`,
       { caller },
     ),
+
+  /** How this server signs readers in; oidc is null without Kite Plus. */
+  authOptions: (caller: Caller) =>
+    call<AuthOptions>("/api/v1/auth/options", { caller }),
 
   me: (caller: Caller, cookie: string) =>
     call<{ id: string; number: number; created_at: string; temporary_password: boolean; email: string; display_name: string; is_admin: boolean }>("/api/v1/me", { caller, headers: { Cookie: cookie } }),

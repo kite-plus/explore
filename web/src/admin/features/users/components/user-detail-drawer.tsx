@@ -23,7 +23,7 @@ import { UserAvatar } from '@/admin/components/user-avatar'
 import { Link } from '@/admin/router'
 import type { AdminUserBlog, AdminUserDetail } from '@/lib/admin-types'
 import { useUserDetail } from '../api'
-import { reportStatuses, userRole, userStatus } from '../data/data'
+import { disabledBy, disabledReason, reportStatuses, userRole, userStatus } from '../data/data'
 import { UserActionsMenu } from './data-table-row-actions'
 import { useIsSelf, useUsers } from './users-provider'
 
@@ -67,6 +67,16 @@ function BlogRow({ blog, since, action }: { blog: AdminUserBlog; since: string; 
       {action}
     </li>
   )
+}
+
+const clientNames = { web: '网页', ios: 'iOS', android: 'Android' } as const
+
+// "（网页 2、iOS 1）" when an app holds any of the sessions.
+function sessionClients(sessions: AdminUserDetail['sessions']) {
+  const counts = new Map<string, number>()
+  for (const s of sessions) counts.set(s.client, (counts.get(s.client) ?? 0) + 1)
+  if (counts.size === 1 && counts.has('web')) return ''
+  return `（${[...counts].map(([client, n]) => `${clientNames[client as keyof typeof clientNames] ?? client} ${n}`).join('、')}）`
 }
 
 function Overview({ user }: { user: AdminUserDetail }) {
@@ -122,11 +132,27 @@ function Overview({ user }: { user: AdminUserDetail }) {
           </dd>
         </>
       )}
+      <dt className='text-muted-foreground'>登录方式</dt>
+      <dd>
+        {user.identities.length ? (
+          user.identities.map((identity) => (
+            <span key={identity.issuer + identity.subject} className='block'>
+              Kite Plus 账号
+              <span className='block text-xs text-muted-foreground'>
+                {formatDateTime(identity.linked_at)} 关联 ·{' '}
+                <span className='font-mono'>{identity.subject}</span>
+              </span>
+            </span>
+          ))
+        ) : (
+          '本站密码'
+        )}
+      </dd>
       <dt className='text-muted-foreground'>登录会话</dt>
       <dd>
         {user.sessions.length ? (
           <>
-            {user.sessions.length} 个有效
+            {user.sessions.length} 个有效{sessionClients(user.sessions)}
             <span className='text-muted-foreground'>
               ，最近一次登录 <TimeAgo iso={lastSignIn} />
             </span>
@@ -150,10 +176,10 @@ function Details({ user }: { user: AdminUserDetail }) {
           <TriangleAlert />
           <AlertTitle>账号已停用</AlertTitle>
           <AlertDescription>
-            <p>{user.disabled_reason || '没有记录原因。'}</p>
+            <p>{disabledReason(user)}</p>
             <p className='text-xs opacity-80'>
               {formatDateTime(user.disabled_at)}
-              {user.disabled_by && ` · ${user.disabled_by}`}
+              {user.disabled_by && ` · ${disabledBy(user)}`}
             </p>
           </AlertDescription>
         </Alert>

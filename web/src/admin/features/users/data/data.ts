@@ -19,6 +19,23 @@ export function userRole(user: AdminUserRow) {
   return roles[user.is_admin ? 0 : 1]
 }
 
+// Why the identity provider disabled an account; the API keeps its reasons
+// in disabled_reason (internal/store/identity.go).
+const identityReasons: Record<string, string> = {
+  removed: 'Kite Plus 账号已删除；本站账号是唯一可用的管理员，另一位管理员可用后自动删除',
+  deactivated: 'Kite Plus 账号已停用',
+  locked: 'Kite Plus 账号已锁定',
+}
+
+export function disabledReason(user: AdminUserRow) {
+  if (user.disabled_by !== 'idp') return user.disabled_reason || '没有记录原因。'
+  return user.disabled_reason.split(',').map((r) => identityReasons[r] ?? r).join('；') + '。'
+}
+
+export function disabledBy(user: AdminUserRow) {
+  return user.disabled_by === 'idp' ? 'Kite Plus 账号' : user.disabled_by
+}
+
 /** Columns the API can order by, keyed by column id. */
 export const sortKeys: Record<string, string> = {
   number: 'number',

@@ -3,9 +3,9 @@ import { AuthForm } from "@/components/reader/AuthForm";
 import Base from "@/layouts/Base.astro";
 import { loadLogin } from "@/lib/loaders";
 
-const state = loadLogin(Astro, "en");
+const state = await loadLogin(Astro, "en");
 if (state instanceof Response) return state;
 ---
 <Base lang="en" title="Sign in" description="Sign in to Explore" path="/login" noindex center>
-  <AuthForm client:load lang="en" next={state.next} />
+  <AuthForm client:load lang="en" next={state.next} kitePlus={state.kitePlus} error={state.error} />
 </Base>

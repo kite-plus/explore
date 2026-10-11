@@ -1,8 +1,8 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { CircleAlert, Eye, EyeOff, LogIn, UserPlus } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, KeyRound, LogIn, UserPlus } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -14,11 +14,31 @@ const MIN_PASSWORD = 12;
 
 type Errors = Partial<Record<"name" | "email" | "password" | "confirm", string>>;
 
+// Why a sign-in with Kite Plus came back without signing in; the API names
+// them in ?error= (internal/api/oidc.go).
+const kitePlusErrors: Record<string, [string, string]> = {
+  login_expired: ["登录已过期，请重试。", "The sign-in expired. Please try again."],
+  login_failed: ["没能用 Kite Plus 账号登录，请重试。", "Signing in with Kite Plus did not work. Please try again."],
+  access_denied: ["Kite Plus 账号登录已取消。", "Signing in with Kite Plus was cancelled."],
+  unavailable: ["Kite Plus 账号暂时无法访问，请稍后再试。", "Kite Plus accounts are unavailable right now. Please try again later."],
+  account_disabled: ["这个账号已停用。", "This account is disabled."],
+  email_in_use: ["这个邮箱已经有本站账号。请先用密码登录，再到「我的账号」关联 Kite Plus 账号。", "This email already has an account here. Sign in with its password, then link Kite Plus from My account."],
+  email_unverified: ["请先在 Kite Plus 账号里验证邮箱。", "Verify your email in your Kite Plus account first."],
+  registration_closed: ["目前暂未开放注册。", "Registration is currently closed."],
+};
+
 // Laid out like the admin sign-in (src/admin/features/auth/sign-in.tsx), so
-// both read as one site.
-export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
+// both read as one site. With Kite Plus on the server, its button comes
+// first and new accounts come from it; the password form stays for
+// accounts made here before (docs/design/accounts.md section 1).
+export function AuthForm({ lang, next, kitePlus = null, error: returned = null }: {
+  lang: "zh" | "en";
+  next: string;
+  kitePlus?: string | null;
+  error?: string | null;
+}) {
   const [register, setRegister] = useState(false);
-  const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [registrationEnabled, setRegistrationEnabled] = useState(kitePlus === null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +52,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
   const errors = submitted ? validate() : {};
 
   useEffect(() => {
+    if (kitePlus !== null) return;
     const controller = new AbortController();
 
     void fetch("/api/v1/site-config", { signal: controller.signal })
@@ -45,7 +66,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
       .catch(() => {});
 
     return () => controller.abort();
-  }, []);
+  }, [kitePlus]);
 
   function validate(): Errors {
     const found: Errors = {};
@@ -92,6 +113,8 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
     setError("");
   }
 
+  const kitePlusError = returned ? kitePlusErrors[returned] ?? kitePlusErrors.login_failed : null;
+
   return (
     <section aria-labelledby="auth-title" className="mx-auto flex w-full max-w-sm flex-col gap-6 sm:pb-16">
       <div className="flex flex-col gap-2">
@@ -101,9 +124,29 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
         <p className="text-sm leading-relaxed text-muted-foreground">
           {register
             ? zh ? "订阅喜欢的博客，拥有自己的阅读流。" : "Follow your favorite blogs in your own reading feed."
-            : zh ? "输入你的邮箱和密码。" : "Enter your email and password."}
+            : kitePlus !== null
+              ? zh ? "用 Kite Plus 账号登录或注册，订阅喜欢的博客。" : "Sign in or sign up with a Kite Plus account to follow your favorite blogs."
+              : zh ? "输入你的邮箱和密码。" : "Enter your email and password."}
         </p>
       </div>
+
+      {kitePlus !== null && (
+        <div className="flex flex-col gap-3">
+          {kitePlusError && (
+            <Alert variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{zh ? kitePlusError[0] : kitePlusError[1]}</AlertDescription>
+            </Alert>
+          )}
+          <ButtonLink href={`/auth/login?return=${encodeURIComponent(safeNext(next, zh ? "/following" : "/en/following"))}`} data-kite-plus>
+            <KeyRound aria-hidden="true" />
+            {zh ? "使用 Kite Plus 账号登录" : "Sign in with a Kite Plus account"}
+          </ButtonLink>
+          <p className="pt-3 text-sm leading-relaxed text-muted-foreground">
+            {zh ? "以前在本站注册的账号，可以继续用邮箱和密码登录，登录后在「我的账号」里关联 Kite Plus 账号。" : "An account made here before still signs in with its email and password; link it to Kite Plus from My account afterwards."}
+          </p>
+        </div>
+      )}
 
       <form onSubmit={submit} noValidate aria-labelledby="auth-title" aria-busy={busy}>
         <FieldGroup className="gap-3">
@@ -194,7 +237,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
       </form>
 
       <div className="flex flex-col gap-3 px-8 text-center text-sm leading-relaxed text-muted-foreground">
-        <p>
+        {kitePlus === null && <p>
           {registrationEnabled ? (
             <>
               {register ? zh ? "已有账号？" : "Already have an account?" : zh ? "还没有账号？" : "New to Explore?"}{" "}
@@ -208,7 +251,7 @@ export function AuthForm({ lang, next }: { lang: "zh" | "en"; next: string }) {
               </button>
             </>
           ) : zh ? "目前暂未开放注册。" : "Registration is currently closed."}
-        </p>
+        </p>}
         <p>
           {zh ? "不登录也能阅读，" : "Reading needs no account. "}
           <a href={home} className="text-nowrap underline underline-offset-4 hover:text-primary">

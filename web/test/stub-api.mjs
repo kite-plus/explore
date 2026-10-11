@@ -52,7 +52,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [], noticeAudiences: [] };
+  const state = { down: false, unrated: false, kitePlus: false, serverRequests: [], blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [], noticeAudiences: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -63,6 +63,32 @@ export function startStub() {
     const error = (status, code, extra = {}) => send(status, { error: { code, message: code }, ...extra });
 
     if (state.down) return error(500, "internal");
+
+    if (url.pathname === "/api/v1/auth/options" && req.method === "GET") {
+      return send(200, { password: true, oidc: state.kitePlus ? { name: lang === "zh" ? "Kite Plus 账号" : "Kite Plus account", account_url: "https://id.example.org/ui/console/users/me" } : null });
+    }
+    // The paths the API serves outside /api, which the site hands on as they are.
+    if (/^\/(auth|hooks)\/|^\/app\/auth\/done$|^\/\.well-known\//.test(url.pathname)) {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      state.serverRequests.push({ method: req.method, path: url.pathname, query: url.search, body: Buffer.concat(chunks).toString(), headers: req.headers });
+      if (url.pathname === "/auth/login") {
+        res.writeHead(302, { Location: "https://id.example.org/authorize?state=s", "Set-Cookie": "explore_login=binding; Path=/; Max-Age=1800; HttpOnly; SameSite=Lax", "Cache-Control": "no-store" });
+        return res.end();
+      }
+      if (url.pathname === "/auth/link") {
+        res.writeHead(302, { Location: "https://id.example.org/authorize?state=l", "Cache-Control": "no-store" });
+        return res.end();
+      }
+      if (url.pathname === "/app/auth/done") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" });
+        return res.end("<!doctype html><title>Finish signing in in the Kite app</title>");
+      }
+      if (url.pathname === "/.well-known/apple-app-site-association") return send(200, { applinks: { details: [] } });
+      if (url.pathname === "/.well-known/assetlinks.json") return send(200, []);
+      res.writeHead(200);
+      return res.end();
+    }
 
     if (url.pathname === "/api/v1/auth/login" && req.method === "POST") {
       res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "explore_session=test-session; Path=/; HttpOnly; SameSite=Lax" });

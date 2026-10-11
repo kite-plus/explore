@@ -6,12 +6,20 @@ import { forwardedFor } from "@/lib/forwarded";
 
 const formTypes = ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"];
 
+// The identity provider calls these from its own server, with no Origin,
+// and the API checks its signature or logout token instead.
+const serverToServer = /^\/(?:auth\/backchannel-logout|hooks\/)/;
+
+// Paths the API serves outside /api (src/lib/server-proxy.ts), which draw
+// no header and so need no session lookup.
+const apiPaths = /^\/(?:api\/|auth\/|hooks\/|app\/auth\/|\.well-known\/)/;
+
 // Astro's own checkOrigin compares Origin with the URL this server sees,
 // which behind the proxy is http://, so it refused every form a browser
 // posted. This is the same check against EXPLORE_PUBLIC_URL, still taking
 // the server's own address for astro dev and the tests.
 function crossSite(request: Request, url: URL): boolean {
-  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return false;
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method) || serverToServer.test(url.pathname)) return false;
   const origin = request.headers.get("origin");
   if (origin === new URL(publicURL()).origin || origin === url.origin) return false;
   const type = request.headers.get("content-type")?.toLowerCase();
@@ -29,7 +37,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   ctx.locals.reader = null;
   ctx.locals.readerChecked = false;
   const path = ctx.url.pathname;
-  if (path.startsWith("/api/") || path.startsWith("/admin") || /^(\/en)?\/go$/.test(path) || /\.[a-z0-9]+$/i.test(path)) return next();
+  if (apiPaths.test(path) || path.startsWith("/admin") || /^(\/en)?\/go$/.test(path) || /\.[a-z0-9]+$/i.test(path)) return next();
 
   const cookie = ctx.request.headers.get("cookie");
   if (cookie) {

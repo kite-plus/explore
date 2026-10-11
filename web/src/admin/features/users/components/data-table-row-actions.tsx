@@ -37,7 +37,7 @@ export function UserActionsMenu({ user, children }: { user: AdminUserRow; childr
         </DropdownMenuItem>
         {!self && (
           <>
-            <DropdownMenuItem onClick={() => act('reset-password', [user])}>
+            <DropdownMenuItem disabled={!user.password_login} onClick={() => act('reset-password', [user])}>
               重置密码
               <DropdownMenuShortcut>
                 <KeyRound size={16} />

@@ -160,6 +160,8 @@ export interface AdminUserRow {
   password_reset_by: string;
   subscription_count: number;
   owned_blog_count: number;
+  /** False for an account that signs in with Kite Plus and has no password. */
+  password_login: boolean;
 }
 
 /** Matches store.AdminUserCounts: each filter's counts skip that filter. */
@@ -184,7 +186,9 @@ export interface AdminUserBlog {
 
 /** Matches store.AdminUserDetail; the lists hold at most 200 items. */
 export interface AdminUserDetail extends AdminUserRow {
-  sessions: { created_at: string; expires_at: string }[];
+  /** Kite Plus accounts linked to this one. */
+  identities: { issuer: string; subject: string; linked_at: string }[];
+  sessions: { created_at: string; expires_at: string; client: "web" | "ios" | "android" }[];
   subscriptions: AdminUserBlog[];
   owned_blogs: AdminUserBlog[];
   pending_claims: { host: string; expires_at: string }[];

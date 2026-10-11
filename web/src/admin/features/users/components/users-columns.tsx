@@ -8,7 +8,7 @@ import { DataTableColumnHeader } from '@/admin/components/data-table'
 import { TimeAgo } from '@/admin/components/time-ago'
 import { UserAvatar } from '@/admin/components/user-avatar'
 import type { AdminUserRow } from '@/lib/admin-types'
-import { userRole, userStatus } from '../data/data'
+import { disabledBy, disabledReason, userRole, userStatus } from '../data/data'
 import { DataTableRowActions } from './data-table-row-actions'
 import { useIsSelf, useUsers } from './users-provider'
 
@@ -46,10 +46,10 @@ function StatusCell({ user }: { user: AdminUserRow }) {
     <Tooltip>
       <TooltipTrigger asChild>{label}</TooltipTrigger>
       <TooltipContent className='max-w-xs'>
-        <p>{user.disabled_reason || '没有记录原因'}</p>
+        <p>{disabledReason(user)}</p>
         <p className='opacity-70'>
           {formatDateTime(user.disabled_at)}
-          {user.disabled_by && ` · ${user.disabled_by}`}
+          {user.disabled_by && ` · ${disabledBy(user)}`}
         </p>
       </TooltipContent>
     </Tooltip>

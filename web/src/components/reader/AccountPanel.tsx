@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentProps } from "react";
 
-import { currentReader, readerRequest, type ImportResult, type ReaderBlog, type ReaderUser } from "@/lib/reader-api";
+import { currentReader, readerRequest, type AuthOptions, type ImportResult, type ReaderBlog, type ReaderUser } from "@/lib/reader-api";
 
 interface Challenge { record: string; value: string; expires_in_seconds: number }
 
@@ -17,6 +17,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<ImportResult | null>(null);
+  const [options, setOptions] = useState<AuthOptions | null>(null);
   const zh = lang === "zh";
   const prefix = lang === "en" ? "/en" : "";
 
@@ -24,12 +25,14 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
     const person = await currentReader();
     if (!person) { window.location.assign(`${prefix}/login?next=${encodeURIComponent(`${prefix}/account`)}`); return; }
     setUser(person);
-    const [followed, blogs] = await Promise.all([
+    const [followed, blogs, offered] = await Promise.all([
       readerRequest<{ data: ReaderBlog[] }>("me/subscriptions"),
       readerRequest<{ data: ReaderBlog[] }>("me/blogs"),
+      readerRequest<AuthOptions>("auth/options").catch(() => null),
     ]);
     setSubscriptions(followed.data);
     setOwned(blogs.data);
+    setOptions(offered);
   }
   useEffect(() => { void load().catch(reason => setError(String(reason))); }, []);
   // The section draws only once the account loads, too late for the browser to follow #password.
@@ -143,7 +146,8 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         {challenge && <div className="mt-4 space-y-2 rounded-md bg-muted p-3 text-sm"><p>{zh ? "TXT 主机名" : "TXT name"}: <code className="break-all">{challenge.record}</code></p><p>{zh ? "TXT 内容" : "TXT value"}: <code className="break-all">{challenge.value}</code></p><button className="mt-2 rounded-md border bg-background px-3 py-2 text-sm" onClick={verifyClaim}>{zh ? "验证并认领" : "Verify and claim"}</button></div>}
       </div>
     </section>
-    {user && <ChangePassword user={user} zh={zh} onChanged={async () => setUser(await currentReader())} />}
+    {user && options?.oidc && <KitePlus user={user} zh={zh} prefix={prefix} accountURL={options.oidc.account_url} />}
+    {user?.password_login && <ChangePassword user={user} zh={zh} onChanged={async () => setUser(await currentReader())} />}
     <section className="rounded-lg border border-destructive/30 p-4"><h2 className="text-lg font-semibold">{zh ? "删除账号" : "Delete account"}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{zh ? "账号、登录状态、订阅和认领的博客会被永久删除，无法恢复。你提交过的举报会保留，但不再关联到你的账号。" : "Your account, its sign-ins, follows and claimed blogs are deleted for good. Reports you filed stay, no longer linked to you."}</p>
       {confirming && user ? <div className="mt-4 space-y-3">
@@ -154,6 +158,13 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
           <button type="button" className="rounded-md bg-destructive px-3 py-2 text-sm text-white disabled:opacity-50" disabled={deleting || confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()} onClick={deleteAccount}>{deleting ? (zh ? "正在删除…" : "Deleting…") : (zh ? "永久删除账号" : "Delete my account")}</button>
         </div>
       </div> : <button type="button" className="mt-4 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" disabled={!user} onClick={() => setConfirming(true)}>{zh ? "删除账号" : "Delete account"}</button>}
+      {user?.identity_linked_at && options?.oidc && <div className="mt-6 border-t border-destructive/20 pt-4">
+        <h3 className="font-medium">{zh ? "删除 Kite Plus 账号" : "Delete your Kite Plus account"}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{zh
+          ? "Kite Plus 账号在 Kite Plus 的各个服务通用。到 Kite Plus 账号页面删除它，Explore 的账号也会随之删除。"
+          : "Your Kite Plus account works across Kite Plus services. Delete it on its account page and your Explore account is deleted with it."}</p>
+        <a className="mt-3 inline-block rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5" href={options.oidc.account_url} target="_blank" rel="noopener" data-delete-kite-plus>{zh ? "删除 Kite Plus 账号" : "Delete Kite Plus account"}</a>
+      </div>}
     </section>
   </div>;
 }
@@ -214,6 +225,46 @@ function FollowingFeed({ user, zh }: { user: ReaderUser; zh: boolean }) {
     </> : <button type="button" className="mt-4 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={busy || !feed} onClick={() => change("POST")}>{zh ? "发布订阅流" : "Publish"}</button>}
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
   </div>;
+}
+
+// Why linking came back without linking; the API names them in ?error=
+// (internal/api/oidc.go).
+const linkErrors: Record<string, [string, string]> = {
+  identity_taken: ["这个 Kite Plus 账号已经关联了本站的另一个账号。", "This Kite Plus account is already linked to another account here."],
+  already_linked: ["这个账号已经关联了 Kite Plus 账号。", "This account is already linked to a Kite Plus account."],
+  login_expired: ["关联已过期，请重试。", "Linking expired. Please try again."],
+  access_denied: ["关联已取消。", "Linking was cancelled."],
+  unavailable: ["Kite Plus 账号暂时无法访问，请稍后再试。", "Kite Plus accounts are unavailable right now. Please try again later."],
+};
+
+/** The Kite Plus account linked to this one, or the way to link one. */
+function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: boolean; prefix: string; accountURL: string }) {
+  const [returned, setReturned] = useState<{ linked: boolean; error: string | null }>({ linked: false, error: null });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setReturned({ linked: params.get("linked") === "1", error: params.get("error") });
+  }, []);
+  const error = returned.error ? linkErrors[returned.error] ?? ["没能关联 Kite Plus 账号，请重试。", "Linking the Kite Plus account did not work. Please try again."] : null;
+  const linked = user.identity_linked_at
+    ? new Date(user.identity_linked_at).toLocaleDateString(zh ? "zh-CN" : "en", { dateStyle: zh ? "long" : "medium" })
+    : null;
+  return <section id="kite-plus" className="scroll-mt-24"><h2 className="text-lg font-semibold">{zh ? "Kite Plus 账号" : "Kite Plus account"}</h2>
+    {returned.linked && linked && <p role="status" className="mt-2 text-sm text-success">{zh ? "已关联 Kite Plus 账号，以后用它登录。" : "Kite Plus account linked; sign in with it from now on."}</p>}
+    {error && <p role="alert" className="mt-2 text-sm text-destructive">{zh ? error[0] : error[1]}</p>}
+    {linked ? <>
+      <p className="mt-1 text-sm text-muted-foreground" data-kite-plus-linked>{zh ? `已关联 Kite Plus 账号，用它登录。${linked}关联。` : `Linked to a Kite Plus account, which you sign in with. Linked ${linked}.`}</p>
+      <a className="mt-3 inline-block rounded-md border px-3 py-2 text-sm hover:bg-accent" href={accountURL} target="_blank" rel="noopener">{zh ? "管理 Kite Plus 账号" : "Manage Kite Plus account"}</a>
+    </> : <>
+      <p className="mt-1 text-sm text-muted-foreground">{zh
+        ? "关联后用 Kite Plus 账号登录，本站密码随即停用；订阅和认领的博客都会保留。一个 Kite Plus 账号只能关联本站的一个账号。"
+        : "Once linked, you sign in with your Kite Plus account and your password here stops working; your follows and blogs stay. A Kite Plus account links to one account here."}</p>
+      <form method="post" action="/auth/link" className="mt-3" data-kite-plus-link>
+        <input type="hidden" name="csrf_token" value={user.csrf_token} />
+        <input type="hidden" name="return" value={`${prefix}/account`} />
+        <button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">{zh ? "关联 Kite Plus 账号" : "Link a Kite Plus account"}</button>
+      </form>
+    </>}
+  </section>;
 }
 
 const MIN_PASSWORD = 12;

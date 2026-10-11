@@ -13,6 +13,16 @@ export interface Reader {
 
 export interface ReaderUser extends Reader {
   csrf_token: string;
+  /** False once the account signs in with Kite Plus instead. */
+  password_login: boolean;
+  /** When a Kite Plus account was linked, or null. */
+  identity_linked_at: string | null;
+}
+
+/** How this server signs readers in (GET /api/v1/auth/options). */
+export interface AuthOptions {
+  password: boolean;
+  oidc: { name: string; account_url: string } | null;
 }
 
 export interface ReaderBlog {

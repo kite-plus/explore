@@ -876,3 +876,71 @@ describe("reader accounts", () => {
     assert.equal(stub.state.reports.at(-1).blog_host, "zh.example.com");
   });
 });
+
+describe("sign-in with a Kite Plus account", () => {
+  test("the sign-in page offers only the password form without it", async () => {
+    stub.state.kitePlus = false;
+    const { res, html } = await page("/login");
+    assert.equal(res.status, 200);
+    assert.doesNotMatch(html, /data-kite-plus/);
+    assert.doesNotMatch(html, /使用 Kite Plus 账号登录/);
+  });
+
+  test("the sign-in page leads with it and keeps the password form", async () => {
+    stub.state.kitePlus = true;
+    try {
+      const { res, html } = await page("/login?next=%2Fblogs");
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get("cache-control"), "private, no-store");
+      assert.match(html, /<a[^>]*href="\/auth\/login\?return=%2Fblogs"[^>]*data-kite-plus/);
+      assert.match(html, /使用 Kite Plus 账号登录/);
+      assert.match(html, /name="password"/, "accounts made here before still sign in with a password");
+      assert.doesNotMatch(html, /创建账号/, "new accounts come from Kite Plus");
+      const en = await page("/en/login?error=email_in_use");
+      assert.match(en.html, /Sign in with a Kite Plus account/);
+      assert.match(en.html, /This email already has an account here/);
+      assert.match(en.html, /href="\/auth\/login\?return=%2Fen%2Ffollowing"/);
+    } finally {
+      stub.state.kitePlus = false;
+    }
+  });
+
+  test("sign-in paths reach the API as they are", async () => {
+    const start = await get("/auth/login?return=%2Ffollowing", { headers: { "X-Forwarded-For": "203.0.113.9" } });
+    assert.equal(start.status, 302);
+    assert.equal(start.headers.get("location"), "https://id.example.org/authorize?state=s");
+    assert.match(start.headers.get("set-cookie"), /^explore_login=binding;/);
+    assert.equal(start.headers.get("cache-control"), "no-store");
+    const forwarded = stub.state.serverRequests.at(-1);
+    assert.equal(forwarded.query, "?return=%2Ffollowing");
+    assert.match(forwarded.headers["x-forwarded-for"], /^203\.0\.113\.9, /);
+
+    const body = '{"event_type":"user.locked","sequence":7}';
+    const hook = await get("/hooks/idp", { method: "POST", headers: { "Content-Type": "application/json", "ZITADEL-Signature": "t=1,v1=ab" }, body });
+    assert.equal(hook.status, 200, "the provider's server sends no Origin");
+    assert.equal(stub.state.serverRequests.at(-1).body, body, "the signed body arrives byte for byte");
+    assert.equal(stub.state.serverRequests.at(-1).headers["zitadel-signature"], "t=1,v1=ab");
+
+    const logout = await get("/auth/backchannel-logout", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "logout_token=x.y.z" });
+    assert.equal(logout.status, 200);
+    assert.equal(stub.state.serverRequests.at(-1).body, "logout_token=x.y.z");
+
+    const link = await get("/auth/link", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: base, Cookie: "explore_session=test-session" }, body: "csrf_token=test-csrf&return=%2Faccount" });
+    assert.equal(link.status, 302);
+    assert.equal(stub.state.serverRequests.at(-1).headers.cookie, "explore_session=test-session");
+    const forged = await get("/auth/link", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://evil.example" }, body: "csrf_token=x" });
+    assert.equal(forged.status, 403);
+
+    const done = await get("/app/auth/done?code=abc");
+    assert.equal(done.status, 200);
+    assert.equal(done.headers.get("content-security-policy"), "default-src 'none'");
+    assert.equal(done.headers.get("referrer-policy"), "no-referrer");
+    assert.match(await done.text(), /Kite app/);
+
+    const aasa = await get("/.well-known/apple-app-site-association");
+    assert.equal(aasa.status, 200);
+    assert.deepEqual(await aasa.json(), { applinks: { details: [] } });
+    const links = await get("/.well-known/assetlinks.json");
+    assert.equal(links.status, 200);
+  });
+});
