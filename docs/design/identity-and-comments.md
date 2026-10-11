@@ -1,6 +1,6 @@
 # Kite Plus 统一身份与跨博客评论
 
-> 状态：架构决定；域名和部署地已定。身份服务本身的规划在 [identity 仓库](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md)，评论服务的详细设计在 [comments 仓库](https://github.com/kite-plus/comments/blob/main/docs/design/README.md) · 最近更新：2026-09-26
+> 状态：架构决定；域名和部署地已定。身份服务本身的规划在 [identity 仓库](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md)，评论服务的详细设计在 [comments 仓库](https://github.com/kite-plus/comments/blob/main/docs/design/README.md) · 最近更新：2026-10-10
 
 本文只记跨项目的约定：各应用怎么接入身份服务（§3），以及三个项目的分工和先后。身份服务本身（选型、登录方式、部署、运维）在 identity 仓库，评论服务自己的设计在 comments 仓库，这里都不重复。
 
@@ -46,12 +46,13 @@
 3. 每个应用建立自己的本地会话，Cookie 只发给自己的域名，名称用 `__Host-` 前缀：`comments.kite.plus` 承载用户生成的内容，前缀能防止兄弟子域覆盖别的应用的 Cookie。应用退出只结束本地会话。读者在身份服务退出时，身份服务用 back-channel logout 通知各应用，各应用按 `sid` 删除这次身份服务会话期间签发的本地会话，所以本地会话要记下签发时 ID Token 里的 `sid`。更早的身份服务会话期间签发、仍然有效的本地会话不受影响，各应用自己提供「退出所有设备」一类的入口。
 4. Explore 只持有身份键和订阅；评论服务持有身份键、公开昵称、评论、站点归属与审核信息。隐私导出、删除和身份服务停用事件需跨服务协调：身份服务推送用户删除和停用事件，各应用删除或暂停本地数据；推送可能丢失，各应用另外定时对账（[comments login.md §7](https://github.com/kite-plus/comments/blob/main/docs/design/login.md#7-账号删除与停用)）。
 5. 面向跨域博客的评论登录用弹窗进入身份服务，再返回评论服务；弹窗不可用时整页跳转。组件运行在评论服务自己的 iframe 里，宿主页拿不到任何凭据；不依赖第三方 Cookie。协议和威胁分析见 [comments login.md §4](https://github.com/kite-plus/comments/blob/main/docs/design/login.md#4-组件登录协议)。
+6. 原生应用（比如 Kite 应用）不在身份服务里登记客户端，由它所属服务的服务端代办登录：服务端是身份服务唯一的机密客户端，登录完成后把自己的会话交给应用，应用不持有身份服务的任何令牌。这样退出和删号事件只在服务端处理，身份服务里也不用管理公开客户端和刷新令牌。Explore 的做法见 [accounts.md §1.1](accounts.md#11-应用登录-设计中)。
 
 ## 4. 通用评论接入
 
 博主注册站点，逐个验证 origin 的控制权（DNS TXT、HTML meta 或文件），然后嵌入 `<kite-comments>` 组件。组件只能出现在已验证的 origin 上，由浏览器按 `frame-ancestors` 保证。讨论页优先用页面的稳定 ID 标识，没有时用规范化后的路径；评论服务不抓取或存储文章正文。细节见 comments 仓库的 [widget.md](https://github.com/kite-plus/comments/blob/main/docs/design/widget.md) 和 [sites.md](https://github.com/kite-plus/comments/blob/main/docs/design/sites.md)。
 
-纯静态博客只需嵌入代码；Kite 默认主题内置；WordPress、Halo、Typecho 先用主题模板或代码注入，C4 提供插件。站点若继续使用 Giscus、Waline 等原有评论后端，登录状态不会自动互通；可以把旧评论导入评论服务，读者再认领自己的旧评论。评论接入与否不影响 Explore 收录。
+纯静态博客只需嵌入代码；Kite 在官方评论插件里选「Kite Plus 评论」；WordPress、Halo、Typecho 先用主题模板或代码注入，C4 提供插件。站点若继续使用 Giscus、Waline 等原有评论后端，登录状态不会自动互通；可以把旧评论导入评论服务，读者再认领自己的旧评论。评论接入与否不影响 Explore 收录。
 
 ## 5. 交付顺序与验收
 
