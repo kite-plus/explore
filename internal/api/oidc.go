@@ -52,7 +52,7 @@ const (
 func (s *Server) authOptions(c *gin.Context) {
 	var oidc gin.H
 	if s.OIDC != nil {
-		name := "Kite Plus account"
+		name := "Kite Plus"
 		if lang(c) == i18n.Chinese {
 			name = "Kite Plus 账号"
 		}

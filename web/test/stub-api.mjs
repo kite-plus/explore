@@ -65,7 +65,7 @@ export function startStub() {
     if (state.down) return error(500, "internal");
 
     if (url.pathname === "/api/v1/auth/options" && req.method === "GET") {
-      return send(200, { password: true, oidc: state.kitePlus ? { name: lang === "zh" ? "Kite Plus 账号" : "Kite Plus account", account_url: "https://id.example.org/ui/console/users/me" } : null });
+      return send(200, { password: true, oidc: state.kitePlus ? { name: lang === "zh" ? "Kite Plus 账号" : "Kite Plus", account_url: "https://id.example.org/ui/console/users/me" } : null });
     }
     // The paths the API serves outside /api, which the site hands on as they are.
     if (/^\/(auth|hooks)\/|^\/app\/auth\/done$|^\/\.well-known\//.test(url.pathname)) {
