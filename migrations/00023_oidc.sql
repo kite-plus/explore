@@ -9,10 +9,6 @@ ALTER TABLE sessions
     ADD COLUMN client text NOT NULL DEFAULT 'web' CHECK (client IN ('web', 'ios', 'android'));
 CREATE INDEX sessions_sid ON sessions (sid) WHERE sid IS NOT NULL;
 
--- When the newest provider event applied to the account happened, so an
--- older one delivered late does not undo it.
-ALTER TABLE user_identities ADD COLUMN event_at timestamptz;
-
 -- A sign-in waiting for the provider to send the reader back. The state and
 -- the cookie that binds it to the starting browser are kept as hashes.
 CREATE TABLE login_flows (

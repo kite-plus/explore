@@ -149,6 +149,7 @@ func TestOIDC(t *testing.T) {
 		{"EXPLORE_IDP_WEBHOOK_SECRET": "hook"},
 		{"EXPLORE_OIDC_ISSUER": "localhost:8090", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s"},
 		{"EXPLORE_OIDC_ISSUER": "https://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c"},
+		{"EXPLORE_OIDC_ISSUER": "https://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s", "EXPLORE_IDP_WEBHOOK_SECRET": "hook"},
 		{"EXPLORE_OIDC_ISSUER": "https://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s", "EXPLORE_OIDC_ACCOUNT_URL": "account"},
 		{"EXPLORE_APPLE_APP_IDS": "plus.kite.explore"},
 		{"EXPLORE_ANDROID_CERT_SHA256": "AB:CD"},

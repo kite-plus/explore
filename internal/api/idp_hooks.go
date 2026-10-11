@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kite-plus/explore/internal/idp"
+	"github.com/kite-plus/explore/internal/model"
 	"github.com/kite-plus/explore/internal/store"
 )
 
@@ -73,9 +75,15 @@ func (s *Server) backchannelLogout(c *gin.Context) {
 // maxEventBody bounds a pushed event.
 const maxEventBody = 64 << 10
 
+// identityLookupTimeout keeps the answer to a push within the 10 seconds
+// the provider waits for it.
+const identityLookupTimeout = 5 * time.Second
+
 // identityHook receives a user event the provider pushes, signed with the
-// shared secret: removing, deactivating, locking and restoring accounts.
-// A delivery seen before is acknowledged and not applied again.
+// shared secret. The event only names the account: other services' tokens
+// can read the signing key, so the account's state is read back from the
+// provider and that is what gets applied. A delivery seen before is
+// acknowledged and not applied again.
 func (s *Server) identityHook(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxEventBody+1))
@@ -108,8 +116,27 @@ func (s *Server) identityHook(c *gin.Context) {
 		c.Status(http.StatusOK)
 		return
 	}
-	outcome, err := s.Store.ApplyIdentityEvent(ctx, s.OIDC.Issuer(), e)
-	if err != nil {
+	outcome := store.IdentityIgnored
+	if _, err := s.Store.UserByIdentity(ctx, s.OIDC.Issuer(), e.Subject); err == nil {
+		lookup, cancel := context.WithTimeout(ctx, identityLookupTimeout)
+		state, err := s.IdentityDirectory.State(lookup, e.Subject)
+		cancel()
+		if err != nil {
+			// The hourly reconciliation reads it again.
+			s.Log.Warn("reading an account from the identity provider failed", "error", err)
+			s.fail(c, http.StatusServiceUnavailable, codeInternal)
+			return
+		}
+		if state == model.IdentityRemoved && e.Type != model.RemovalEvent {
+			s.Log.Warn("identity provider has no such account, but the event is not a removal", "type", e.Type)
+			c.Status(http.StatusOK)
+			return
+		}
+		if outcome, err = s.Store.ApplyIdentityState(ctx, s.OIDC.Issuer(), e.Subject, state); err != nil {
+			s.storeError(c, err)
+			return
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
 		s.storeError(c, err)
 		return
 	}
@@ -117,7 +144,7 @@ func (s *Server) identityHook(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	s.Log.Info("identity event", "change", e.Change, "outcome", outcome)
+	s.Log.Info("identity event", "type", e.Type, "outcome", outcome)
 	c.Status(http.StatusOK)
 }
 

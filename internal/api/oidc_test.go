@@ -38,6 +38,7 @@ func newOIDCEnv(t *testing.T, publicURL string, configure func(*api.Server)) (*e
 			RedirectURL: publicURL + "/auth/callback"}),
 		IdentityAccountURL:    p.URL + "/ui/console/users/me",
 		IdentityWebhookSecret: webhookSecret,
+		IdentityDirectory:     &idp.Directory{Issuer: p.URL, Token: idptest.DirectoryToken},
 		AllowPrivate:          true,
 	}
 	if configure != nil {
@@ -166,7 +167,7 @@ func TestSignInIsOffWithoutOIDC(t *testing.T) {
 func TestWebSignIn(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
 	verified := true
-	p.Next = idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "Reader@Example.org", Name: "Reader", EmailVerified: &verified}
+	p.SetUser(idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "Reader@Example.org", Name: "Reader", EmailVerified: &verified})
 
 	options := e.do(req{method: http.MethodGet, path: "/api/v1/auth/options", header: map[string]string{"Accept-Language": "zh-CN"}})
 	if !strings.Contains(options.Body.String(), `"name":"Kite Plus 账号"`) || !strings.Contains(options.Body.String(), `"account_url":"`+p.URL+`/ui/console/users/me"`) {
@@ -279,13 +280,13 @@ func TestCallbackRefusals(t *testing.T) {
 	wantError(b.get("/auth/callback?"+back.RawQuery), "/login", "login_expired")
 
 	// The reader said no at the provider.
-	p.Deny = true
+	p.SetDeny(true)
 	denied := e.browser().signIn("/auth/login?return=/en/following")
 	wantError(denied, "/en/login", "access_denied")
 	if location(t, denied).Query().Get("next") != "/en/following" {
 		t.Fatalf("next = %s", location(t, denied))
 	}
-	p.Deny = false
+	p.SetDeny(false)
 
 	// A token that does not check out.
 	for name, tamper := range map[string]func(map[string]any){
@@ -294,14 +295,14 @@ func TestCallbackRefusals(t *testing.T) {
 		"nonce":    func(c map[string]any) { c["nonce"] = "replayed" },
 		"expired":  func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() },
 	} {
-		p.Tamper = tamper
+		p.SetTamper(tamper)
 		br := e.browser()
 		wantError(br.signIn("/auth/login"), "/login", "login_failed")
 		if br.cookies["__Host-explore_session"] != "" {
 			t.Fatalf("%s: a session was set", name)
 		}
 	}
-	p.Tamper = nil
+	p.SetTamper(nil)
 
 	// A forged code or none at all.
 	b = e.browser()
@@ -325,14 +326,14 @@ func TestSignInRules(t *testing.T) {
 	if _, err := e.s.CreateUser(ctx, "local@example.org", "hash", "Local"); err != nil {
 		t.Fatal(err)
 	}
-	p.Next = idptest.User{Subject: "sub-local", SessionID: "s", Email: "local@example.org", Name: "Local"}
+	p.SetUser(idptest.User{Subject: "sub-local", SessionID: "s", Email: "local@example.org", Name: "Local"})
 	wantError(e.browser().signIn("/auth/login"), "email_in_use")
 
 	unverified := false
-	p.Next = idptest.User{Subject: "sub-unverified", SessionID: "s", Email: "unverified@example.org", EmailVerified: &unverified}
+	p.SetUser(idptest.User{Subject: "sub-unverified", SessionID: "s", Email: "unverified@example.org", EmailVerified: &unverified})
 	wantError(e.browser().signIn("/auth/login"), "email_unverified")
 
-	p.Next = idptest.User{Subject: "sub-closed", SessionID: "s", Email: "closed@example.org", Username: "closed"}
+	p.SetUser(idptest.User{Subject: "sub-closed", SessionID: "s", Email: "closed@example.org", Username: "closed"})
 	if err := e.s.SetSetting(ctx, "registration_enabled", "false", "admin@example.org"); err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +382,7 @@ func TestLinkIdentity(t *testing.T) {
 	if w := e.do(req{method: http.MethodPost, path: "/auth/link", body: "csrf_token=" + me.CSRFToken, header: form}); w.Code != http.StatusUnauthorized {
 		t.Fatalf("link signed out = %d", w.Code)
 	}
-	p.Next = idptest.User{Subject: "sub-link", SessionID: "sid-link", Email: "another@example.org", Name: "Another"}
+	p.SetUser(idptest.User{Subject: "sub-link", SessionID: "sid-link", Email: "another@example.org", Name: "Another"})
 	start := b.do(http.MethodPost, "/auth/link", "csrf_token="+me.CSRFToken+"&return=/en/account", form)
 	back := provider(t, location(t, start).String())
 	done := b.get("/auth/callback?" + back.RawQuery)
@@ -416,7 +417,7 @@ func TestLinkIdentity(t *testing.T) {
 	}
 	// The browser must still be signed in to the account that started it.
 	b3, me3 := register("third@example.org")
-	p.Next = idptest.User{Subject: "sub-third", SessionID: "s3", Email: "third-kp@example.org"}
+	p.SetUser(idptest.User{Subject: "sub-third", SessionID: "s3", Email: "third-kp@example.org"})
 	start = b3.do(http.MethodPost, "/auth/link", "csrf_token="+me3.CSRFToken, form)
 	back = provider(t, location(t, start).String())
 	b3.do(http.MethodPost, "/api/v1/auth/logout", "", map[string]string{"X-CSRF-Token": me3.CSRFToken})
@@ -427,10 +428,10 @@ func TestLinkIdentity(t *testing.T) {
 
 func TestBackchannelLogout(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
-	p.Next = idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"}
+	p.SetUser(idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"})
 	first := e.browser()
 	first.signIn("/auth/login")
-	p.Next.SessionID = "sid-2"
+	p.SetSession("sid-2")
 	second := e.browser()
 	second.signIn("/auth/login")
 	logout := func(token string) *httptest.ResponseRecorder {
@@ -474,13 +475,14 @@ func TestBackchannelLogout(t *testing.T) {
 
 func TestIdentityWebhook(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
-	p.Next = idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"}
+	p.SetUser(idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"})
+	p.SetState("sub-1", "USER_STATE_ACTIVE")
 	b := e.browser()
 	b.signIn("/auth/login")
 	me := decode[meOut](t, b.get("/api/v1/me"))
-	event := func(kind string, seq int, at time.Time) string {
-		return `{"aggregateID":"sub-1","aggregateType":"user","resourceOwner":"org","instanceID":"inst","version":"v2",` +
-			`"sequence":` + strconv.Itoa(seq) + `,"event_type":"` + kind + `","created_at":"` + at.UTC().Format(time.RFC3339Nano) + `","event_payload":{}}`
+	event := func(sub, kind string, seq int) string {
+		return `{"aggregateID":"` + sub + `","aggregateType":"user","resourceOwner":"org","instanceID":"inst","version":"v2",` +
+			`"sequence":` + strconv.Itoa(seq) + `,"event_type":"` + kind + `","created_at":"` + time.Now().UTC().Format(time.RFC3339Nano) + `","userID":"admin"}`
 	}
 	send := func(body, signature string) *httptest.ResponseRecorder {
 		return e.do(req{method: http.MethodPost, path: "/hooks/idp", body: body, header: map[string]string{idp.SignatureHeader: signature}})
@@ -488,11 +490,14 @@ func TestIdentityWebhook(t *testing.T) {
 	signed := func(body string) *httptest.ResponseRecorder {
 		return send(body, idp.Sign([]byte(body), webhookSecret, time.Now()))
 	}
-	t0 := time.Now().Add(-time.Hour)
 
-	locked := event("user.locked", 5, t0)
+	locked := event("sub-1", "user.locked", 5)
+	p.SetState("sub-1", "USER_STATE_LOCKED")
 	if w := send(locked, idp.Sign([]byte(locked), "wrong", time.Now())); w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad signature = %d", w.Code)
+	}
+	if w := send(locked, idp.Sign([]byte(locked), webhookSecret, time.Now().Add(-10*time.Minute))); w.Code != http.StatusUnauthorized {
+		t.Fatalf("old signature = %d", w.Code)
 	}
 	if w := send(locked, ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("no signature = %d", w.Code)
@@ -509,7 +514,8 @@ func TestIdentityWebhook(t *testing.T) {
 	if w := e.browser().signIn("/auth/login"); location(t, w).Query().Get("error") != "account_disabled" {
 		t.Fatalf("sign-in while locked went to %s", location(t, w))
 	}
-	if w := signed(event("user.unlocked", 6, t0.Add(time.Minute))); w.Code != http.StatusOK {
+	p.SetState("sub-1", "USER_STATE_ACTIVE")
+	if w := signed(event("sub-1", "user.unlocked", 6)); w.Code != http.StatusOK {
 		t.Fatalf("unlocked = %d", w.Code)
 	}
 	b = e.browser()
@@ -518,19 +524,45 @@ func TestIdentityWebhook(t *testing.T) {
 		t.Fatalf("sign-in after unlocking = %d", w.Code)
 	}
 	// The same delivery again is acknowledged and not applied.
+	p.SetState("sub-1", "USER_STATE_LOCKED")
 	if w := signed(locked); w.Code != http.StatusOK {
 		t.Fatalf("redelivery = %d", w.Code)
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
 		t.Fatal("a redelivered event was applied again")
 	}
-	if w := signed(`{"aggregateID":"sub-1","aggregateType":"user","sequence":7,"event_type":"user.human.profile.changed","created_at":"2026-10-10T08:00:00Z"}`); w.Code != http.StatusOK {
+	// A forged event: the provider says the account is active, so nothing happens.
+	p.SetState("sub-1", "USER_STATE_ACTIVE")
+	if w := signed(event("sub-1", "user.deactivated", 7)); w.Code != http.StatusOK {
+		t.Fatalf("unconfirmed deactivation = %d", w.Code)
+	}
+	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
+		t.Fatal("an event the provider does not confirm was applied")
+	}
+	// Unknown to the provider but not a removal: left alone.
+	p.SetState("sub-1", "")
+	if w := signed(event("sub-1", "user.locked", 8)); w.Code != http.StatusOK {
+		t.Fatalf("missing user = %d", w.Code)
+	}
+	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
+		t.Fatal("a missing user without a removal event was disabled or deleted")
+	}
+	if w := signed(`{"aggregateID":"sub-1","aggregateType":"user","sequence":9,"event_type":"user.human.profile.changed","created_at":"2026-10-10T08:00:00Z"}`); w.Code != http.StatusOK {
 		t.Fatalf("other event = %d", w.Code)
+	}
+	if w := signed(event("stranger", "user.removed", 1)); w.Code != http.StatusOK {
+		t.Fatalf("an account not here = %d", w.Code)
 	}
 	if w := signed(`not json`); w.Code != http.StatusBadRequest {
 		t.Fatalf("garbage = %d", w.Code)
 	}
-	if w := signed(event("user.removed", 8, t0.Add(2*time.Minute))); w.Code != http.StatusOK {
+	// The provider cannot be read: the push fails and reconciliation reads it later.
+	e.srv.IdentityDirectory.Token = "revoked"
+	if w := signed(event("sub-1", "user.removed", 10)); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unreadable provider = %d", w.Code)
+	}
+	e.srv.IdentityDirectory.Token = idptest.DirectoryToken
+	if w := signed(event("sub-1", "user.removed", 10)); w.Code != http.StatusOK {
 		t.Fatalf("removed = %d", w.Code)
 	}
 	if _, err := e.s.AdminUserDetail(context.Background(), me.ID); err == nil {
@@ -545,7 +577,7 @@ func challengeOf(verifier string) string {
 
 func TestAppSignIn(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
-	p.Next = idptest.User{Subject: "sub-app", SessionID: "sid-app", Email: "app@example.org", Name: "App"}
+	p.SetUser(idptest.User{Subject: "sub-app", SessionID: "sid-app", Email: "app@example.org", Name: "App"})
 	verifier := strings.Repeat("v", 50)
 	challenge := challengeOf(verifier)
 
@@ -655,11 +687,11 @@ func TestAppSignIn(t *testing.T) {
 		t.Fatalf("scheme callback = %s", loc)
 	}
 	// A refused sign-in reaches the app with the error.
-	p.Deny = true
+	p.SetDeny(true)
 	if loc := appSignIn("client=ios&challenge=" + challenge); loc.Path != "/app/auth/done" || loc.Query().Get("error") != "access_denied" {
 		t.Fatalf("denied app sign-in = %s", loc)
 	}
-	p.Deny = false
+	p.SetDeny(false)
 
 	page := e.do(req{method: http.MethodGet, path: "/app/auth/done?code=" + code, header: map[string]string{"Accept-Language": "zh-CN"}})
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "请在 Kite 应用中完成登录") || strings.Contains(page.Body.String(), code) ||
@@ -694,7 +726,7 @@ func TestAppLinks(t *testing.T) {
 
 func TestCookieNamesOverHTTP(t *testing.T) {
 	e, p := newOIDCEnv(t, "http://localhost:4321", nil)
-	p.Next = idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"}
+	p.SetUser(idptest.User{Subject: "sub-1", SessionID: "sid-1", Email: "reader@example.org"})
 	b := e.browser()
 	start := b.get("/auth/login")
 	if b.cookies["explore_login"] == "" || strings.Contains(start.Header().Get("Set-Cookie"), "Secure") {

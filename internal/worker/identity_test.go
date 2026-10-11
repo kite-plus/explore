@@ -12,21 +12,31 @@ import (
 
 const issuer = "https://id.example.org"
 
-type fakeEvents struct {
-	events []model.IdentityEvent
-	err    error
-	calls  [][2]time.Time
+type fakeDirectory struct {
+	events  []model.IdentityEvent
+	states  map[string]model.IdentityState
+	err     error
+	froms   []time.Time
+	lookups []string
 }
 
-func (f *fakeEvents) Since(_ context.Context, since, until time.Time) ([]model.IdentityEvent, error) {
-	f.calls = append(f.calls, [2]time.Time{since, until})
+func (f *fakeDirectory) Events(_ context.Context, from time.Time) ([]model.IdentityEvent, error) {
+	f.froms = append(f.froms, from)
 	var out []model.IdentityEvent
 	for _, e := range f.events {
-		if !e.At.Before(since) && !e.At.After(until) {
+		if e.At.After(from) {
 			out = append(out, e)
 		}
 	}
 	return out, f.err
+}
+
+func (f *fakeDirectory) State(_ context.Context, subject string) (model.IdentityState, error) {
+	f.lookups = append(f.lookups, subject)
+	if s, ok := f.states[subject]; ok {
+		return s, nil
+	}
+	return model.IdentityRemoved, nil
 }
 
 func TestReconcileIdentities(t *testing.T) {
@@ -36,9 +46,8 @@ func TestReconcileIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
-	src := &fakeEvents{}
-	w := &Worker{Store: st, Identity: src, IdentityIssuer: issuer, Now: func() time.Time { return now }}
+	dir := &fakeDirectory{states: map[string]model.IdentityState{"sub-1": model.IdentityLocked}}
+	w := &Worker{Store: st, Identity: dir, IdentityIssuer: issuer}
 	disabled := func() bool {
 		t.Helper()
 		found, err := st.UserByIdentity(ctx, issuer, "sub-1")
@@ -47,68 +56,67 @@ func TestReconcileIdentities(t *testing.T) {
 		}
 		return found.Disabled
 	}
-
-	// A lock and its unlock that the pushes lost, then a lock still settling.
-	src.events = []model.IdentityEvent{
-		{ID: "1", Subject: "sub-1", Change: model.IdentityLocked, At: now.Add(-50 * time.Minute)},
-		{ID: "2", Subject: "sub-1", Change: model.IdentityUnlocked, At: now.Add(-40 * time.Minute)},
-		{ID: "3", Subject: "sub-1", Change: model.IdentityDeactivated, At: now.Add(-30 * time.Minute)},
-		{ID: "4", Subject: "sub-1", Change: model.IdentityLocked, At: now.Add(-5 * time.Minute)},
+	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
+	dir.events = []model.IdentityEvent{
+		{ID: "sub-1/3", Subject: "sub-1", Type: "user.locked", At: t0},
+		{ID: "other/1", Subject: "other", Type: "user.locked", At: t0.Add(time.Minute)},
+		{ID: "sub-1/4", Subject: "sub-1", Type: "user.unlocked", At: t0.Add(2 * time.Minute)},
 	}
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !src.calls[0][0].IsZero() || !src.calls[0][1].Equal(now.Add(-identitySettle)) {
-		t.Fatalf("first read = %v", src.calls[0])
+	if !dir.froms[0].IsZero() || len(dir.lookups) != 1 || dir.lookups[0] != "sub-1" {
+		t.Fatalf("froms = %v, lookups = %v", dir.froms, dir.lookups)
 	}
+	// What the provider says now counts, not the order of the events.
 	if !disabled() {
-		t.Fatal("the deactivation was not applied")
+		t.Fatal("the account the provider says is locked is not disabled")
 	}
-	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(now.Add(-identitySettle)) {
+	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(t0.Add(2 * time.Minute)) {
 		t.Fatalf("cursor = %v", c)
 	}
 
 	// A failed read leaves the cursor where it was.
-	now = now.Add(time.Hour)
-	src.err = errors.New("provider down")
+	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/5", Subject: "sub-1", Type: "user.unlocked", At: t0.Add(time.Hour)})
+	dir.states["sub-1"] = model.IdentityActive
+	dir.err = errors.New("provider down")
 	if err := w.ReconcileIdentities(ctx); err == nil {
 		t.Fatal("a failed read reported success")
 	}
-	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(now.Add(-time.Hour - identitySettle)) {
+	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(t0.Add(2 * time.Minute)) {
 		t.Fatalf("cursor after a failure = %v", c)
 	}
-	src.err = nil
-	src.events = append(src.events, model.IdentityEvent{ID: "5", Subject: "sub-1", Change: model.IdentityReactivated, At: now.Add(-20 * time.Minute)})
+	dir.err = nil
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if last := src.calls[len(src.calls)-1]; !last[0].Equal(now.Add(-time.Hour-identitySettle)) || !last[1].Equal(now.Add(-identitySettle)) {
-		t.Fatalf("second read = %v", last)
-	}
-	// Reactivated, but the later lock still holds.
-	if !disabled() {
-		t.Fatal("restored while still locked")
-	}
-	src.events = append(src.events, model.IdentityEvent{ID: "6", Subject: "sub-1", Change: model.IdentityUnlocked, At: now})
-	now = now.Add(time.Hour)
-	if err := w.ReconcileIdentities(ctx); err != nil {
-		t.Fatal(err)
+	if last := dir.froms[len(dir.froms)-1]; !last.Equal(t0.Add(2*time.Minute - identityOverlap)) {
+		t.Fatalf("from = %v", last)
 	}
 	if disabled() {
-		t.Fatal("not restored once unlocked and reactivated")
+		t.Fatal("not restored once active")
+	}
+
+	// Unknown to the provider without a removal event: left alone.
+	delete(dir.states, "sub-1")
+	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/6", Subject: "sub-1", Type: "user.locked", At: t0.Add(2 * time.Hour)})
+	if err := w.ReconcileIdentities(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.UserByIdentity(ctx, issuer, "sub-1"); err != nil {
+		t.Fatalf("deleted without a removal event: %v", err)
 	}
 
 	// A removal that waited for another admin finishes on the next run.
 	if err := st.SetUserAdminByID(ctx, u.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	src.events = append(src.events, model.IdentityEvent{ID: "7", Subject: "sub-1", Change: model.IdentityRemoved, At: now})
-	now = now.Add(time.Hour)
+	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/7", Subject: "sub-1", Type: model.RemovalEvent, At: t0.Add(3 * time.Hour)})
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.UserByIdentity(ctx, issuer, "sub-1"); err != nil {
-		t.Fatalf("the only admin was deleted: %v", err)
+	if found, err := st.UserByIdentity(ctx, issuer, "sub-1"); err != nil || !found.Disabled {
+		t.Fatalf("the only admin: %+v, %v", found, err)
 	}
 	other, err := st.CreateUser(ctx, "admin@example.org", "hash", "Admin")
 	if err != nil {

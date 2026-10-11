@@ -3,9 +3,7 @@ package idp_test
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -50,7 +48,7 @@ func signIn(t *testing.T, c *idp.Client, req idp.AuthRequest) string {
 func TestExchange(t *testing.T) {
 	p := idptest.New(t)
 	verified := true
-	p.Next = idptest.User{Subject: "u-42", SessionID: "s-42", Email: "Reader@Example.org", Name: " Reader ", Username: "reader", EmailVerified: &verified}
+	p.SetUser(idptest.User{Subject: "u-42", SessionID: "s-42", Email: "Reader@Example.org", Name: " Reader ", Username: "reader", EmailVerified: &verified})
 	c := newClient(p)
 	verifier := idp.NewVerifier()
 	code := signIn(t, c, idp.AuthRequest{State: "st", Nonce: "n-1", Verifier: verifier, SelectAccount: true})
@@ -96,7 +94,8 @@ func TestExchangeRefusesBadTokens(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			p := idptest.New(t)
-			p.Tamper, p.SignWith = tc.tamper, tc.signWith
+			p.SetTamper(tc.tamper)
+			p.SetSigner(tc.signWith)
 			c := newClient(p)
 			verifier := idp.NewVerifier()
 			code := signIn(t, c, idp.AuthRequest{State: "st", Nonce: "n-1", Verifier: verifier})
@@ -202,11 +201,11 @@ func TestSignature(t *testing.T) {
 
 func TestParseEvent(t *testing.T) {
 	e, ok, err := idp.ParseEvent([]byte(`{"aggregateID":"u-1","aggregateType":"user","resourceOwner":"o","instanceID":"i",
-		"version":"v2","sequence":7,"event_type":"user.locked","created_at":"2026-10-10T08:00:00.123456Z","userID":"admin","event_payload":{}}`))
+		"version":"v2","sequence":7,"event_type":"user.locked","created_at":"2026-10-10T08:00:00.123456Z","userID":"admin"}`))
 	if err != nil || !ok {
 		t.Fatalf("ok = %v, err = %v", ok, err)
 	}
-	if e.Subject != "u-1" || e.Change != model.IdentityLocked || e.ID != "user/u-1/7" || !e.At.Equal(time.Date(2026, 10, 10, 8, 0, 0, 123456000, time.UTC)) {
+	if e.Subject != "u-1" || e.Type != "user.locked" || e.ID != "u-1/7" || !e.At.Equal(time.Date(2026, 10, 10, 8, 0, 0, 123456000, time.UTC)) {
 		t.Fatalf("event = %+v", e)
 	}
 	if _, ok, err := idp.ParseEvent([]byte(`{"aggregateID":"u-1","aggregateType":"user","sequence":8,"event_type":"user.human.profile.changed","created_at":"2026-10-10T08:00:00Z"}`)); ok || err != nil {
@@ -220,46 +219,56 @@ func TestParseEvent(t *testing.T) {
 	}
 }
 
-func TestEventsSince(t *testing.T) {
-	var requests []map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/admin/v1/events/_search" || r.Header.Get("Authorization") != "Bearer pat" {
-			http.Error(w, "no", http.StatusUnauthorized)
-			return
-		}
-		raw, _ := io.ReadAll(r.Body)
-		var body map[string]any
-		_ = json.Unmarshal(raw, &body)
-		requests = append(requests, body)
-		w.Header().Set("Content-Type", "application/json")
-		if len(requests) == 1 {
-			_, _ = io.WriteString(w, `{"events":[
-				{"aggregate":{"id":"u-1","type":{"type":"user"}},"sequence":"3","creationDate":"2026-10-10T08:00:00Z","type":{"type":"user.locked"}},
-				{"aggregate":{"id":"u-2","type":"user"},"sequence":"9","creationDate":"2026-10-10T08:01:00Z","type":"user.human.added"}]}`)
-			return
-		}
-		_, _ = io.WriteString(w, `{"events":[
-			{"aggregate":{"id":"u-2","type":"user"},"sequence":"9","creationDate":"2026-10-10T08:01:00Z","type":"user.human.added"},
-			{"aggregate":{"id":"u-1","type":"user"},"sequence":"4","creationDate":"2026-10-10T08:02:00Z","type":"user.unlocked"}]}`)
-	}))
-	defer srv.Close()
-	src := &idp.Events{Issuer: srv.URL, Token: "pat", PageSize: 2}
-	until := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
-	events, err := src.Since(t.Context(), time.Time{}, until)
+func TestDirectory(t *testing.T) {
+	p := idptest.New(t)
+	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
+	p.Record(idptest.Event{Subject: "u-1", Sequence: 3, Type: "user.locked", At: t0})
+	p.Record(idptest.Event{Subject: "u-2", Sequence: 9, Type: "user.human.added", At: t0.Add(time.Minute)})
+	p.Record(idptest.Event{Subject: "u-1", Sequence: 4, Type: "user.unlocked", At: t0.Add(2 * time.Minute)})
+	p.Record(idptest.Event{Subject: "u-3", Sequence: 1, Type: "user.removed", At: t0.Add(3 * time.Minute)})
+	d := &idp.Directory{Issuer: p.URL, Token: idptest.DirectoryToken, PageSize: 2}
+	events, err := d.Events(t.Context(), time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 2 || events[0].Change != model.IdentityLocked || events[1].Change != model.IdentityUnlocked || events[1].Subject != "u-1" {
+	if len(events) != 3 || events[0].Type != "user.locked" || events[1].Type != "user.unlocked" || events[2].Subject != "u-3" ||
+		events[2].ID != "u-3/1" || !events[2].At.Equal(t0.Add(3*time.Minute)) {
 		t.Fatalf("events = %+v", events)
 	}
-	first := requests[0]["range"].(map[string]any)
-	if _, has := first["since"]; has || first["until"] != "2026-10-10T09:00:00Z" || requests[0]["asc"] != true {
-		t.Fatalf("first request = %v", requests[0])
+	searches := p.Searches()
+	if _, has := searches[0]["from"]; has || searches[0]["asc"] != true || searches[0]["limit"] != float64(2) {
+		t.Fatalf("first search = %v", searches[0])
 	}
-	if second := requests[1]["range"].(map[string]any); second["since"] != "2026-10-10T08:01:00Z" {
-		t.Fatalf("second request = %v", requests[1])
+	if searches[1]["from"] != "2026-10-10T08:02:00Z" || len(searches[1]["eventTypes"].([]any)) != 5 {
+		t.Fatalf("second search = %v", searches[1])
 	}
-	if _, err := (&idp.Events{Issuer: srv.URL, Token: "wrong"}).Since(t.Context(), time.Time{}, until); err == nil {
-		t.Fatal("unauthorized search succeeded")
+	if later, err := d.Events(t.Context(), t0.Add(2*time.Minute)); err != nil || len(later) != 1 || later[0].Subject != "u-3" {
+		t.Fatalf("after a cursor = %+v, %v", later, err)
+	}
+
+	p.SetState("u-1", "USER_STATE_LOCKED")
+	p.SetState("u-2", "USER_STATE_ACTIVE")
+	p.SetState("u-4", "USER_STATE_INACTIVE")
+	p.SetState("u-5", "USER_STATE_SOMETHING")
+	for sub, want := range map[string]model.IdentityState{"u-1": model.IdentityLocked, "u-2": model.IdentityActive,
+		"u-3": model.IdentityRemoved, "u-4": model.IdentityDeactivated} {
+		if got, err := d.State(t.Context(), sub); err != nil || got != want {
+			t.Errorf("%s: %q, %v", sub, got, err)
+		}
+	}
+	if _, err := d.State(t.Context(), "u-5"); err == nil {
+		t.Error("an unknown state was accepted")
+	}
+	bad := &idp.Directory{Issuer: p.URL, Token: "wrong"}
+	if _, err := bad.Events(t.Context(), time.Time{}); err == nil {
+		t.Error("an unauthorized search succeeded")
+	}
+	if _, err := bad.State(t.Context(), "u-3"); err == nil {
+		t.Error("an unauthorized read counted as removed")
+	}
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close()
+	if _, err := (&idp.Directory{Issuer: srv.URL, Token: "x"}).State(t.Context(), "u-1"); !errors.Is(err, idp.ErrUnavailable) {
+		t.Errorf("unreachable: %v", err)
 	}
 }

@@ -45,9 +45,9 @@ type Worker struct {
 	Store  *store.Store
 	Fetch  *fetch.Client
 	Tagger Tagger
-	// Identity reconciles accounts with the identity provider's events of
+	// Identity reconciles accounts with the identity provider of
 	// IdentityIssuer every hour; nil leaves it off.
-	Identity       IdentityEvents
+	Identity       IdentityDirectory
 	IdentityIssuer string
 	Log            *slog.Logger
 	Concurrency    int

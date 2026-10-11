@@ -40,10 +40,10 @@ type OIDC struct {
 	// account; it defaults to ZITADEL's under the issuer.
 	AccountURL string
 	// WebhookSecret signs the user events the provider pushes; empty turns
-	// the webhook off.
+	// the webhook off. It needs APIToken, which confirms each event.
 	WebhookSecret string
-	// APIToken reads the provider's user events for the hourly
-	// reconciliation; empty turns it off.
+	// APIToken reads the provider's accounts and their events, for the
+	// webhook and the hourly reconciliation; empty turns both off.
 	APIToken string
 }
 
@@ -62,6 +62,9 @@ func (o *OIDC) validate() error {
 	}
 	if o.ClientID == "" || o.ClientSecret == "" {
 		return errors.New("EXPLORE_OIDC_CLIENT_ID and EXPLORE_OIDC_CLIENT_SECRET are required with EXPLORE_OIDC_ISSUER")
+	}
+	if o.WebhookSecret != "" && o.APIToken == "" {
+		return errors.New("EXPLORE_IDP_WEBHOOK_SECRET needs EXPLORE_IDP_API_TOKEN: a pushed event is applied only once the provider confirms it")
 	}
 	if o.AccountURL == "" {
 		o.AccountURL = strings.TrimRight(o.Issuer, "/") + "/ui/console/users/me"

@@ -255,7 +255,7 @@ func TestReceiptsAndCursor(t *testing.T) {
 	}
 }
 
-func TestApplyIdentityEvent(t *testing.T) {
+func TestApplyIdentityState(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	u, err := s.CreateIdentityUser(ctx, testIssuer, "sub-1", "reader@example.com", "Reader")
@@ -266,14 +266,11 @@ func TestApplyIdentityEvent(t *testing.T) {
 	if err := s.CreateSession(ctx, Session{UserID: u.ID, TokenHash: session, Expires: time.Now().Add(time.Hour), SID: "sid"}); err != nil {
 		t.Fatal(err)
 	}
-	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
-	n := 0
-	apply := func(sub string, change model.IdentityChange, at time.Time, want string) {
+	apply := func(sub string, state model.IdentityState, want string) {
 		t.Helper()
-		n++
-		got, err := s.ApplyIdentityEvent(ctx, testIssuer, model.IdentityEvent{ID: string(rune('a' + n)), Subject: sub, Change: change, At: at})
+		got, err := s.ApplyIdentityState(ctx, testIssuer, sub, state)
 		if err != nil || got != want {
-			t.Fatalf("%s %s: got %q, %v; want %q", sub, change, got, err, want)
+			t.Fatalf("%s %s: got %q, %v; want %q", sub, state, got, err, want)
 		}
 	}
 	state := func(id string) (disabled bool, by, reason string) {
@@ -284,41 +281,36 @@ func TestApplyIdentityEvent(t *testing.T) {
 		return
 	}
 
-	apply("nobody", model.IdentityLocked, t0, IdentityIgnored)
-	apply("sub-1", model.IdentityLocked, t0, IdentityDisabled)
+	apply("nobody", model.IdentityLocked, IdentityIgnored)
+	apply("sub-1", model.IdentityActive, IdentityUnchanged)
+	apply("sub-1", model.IdentityLocked, IdentityDisabled)
 	if d, by, reason := state(u.ID); !d || by != "idp" || reason != "locked" {
 		t.Fatalf("locked: %v %q %q", d, by, reason)
 	}
 	if _, err := s.UserBySession(ctx, session); !errors.Is(err, ErrNotFound) {
 		t.Fatal("session survived the lock")
 	}
-	apply("sub-1", model.IdentityDeactivated, t0.Add(time.Minute), IdentityDisabled)
-	if _, _, reason := state(u.ID); reason != "deactivated,locked" {
-		t.Fatalf("reasons = %q", reason)
+	apply("sub-1", model.IdentityLocked, IdentityUnchanged)
+	apply("sub-1", model.IdentityDeactivated, IdentityDisabled)
+	if _, _, reason := state(u.ID); reason != "deactivated" {
+		t.Fatalf("reason = %q", reason)
 	}
-	apply("sub-1", model.IdentityUnlocked, t0.Add(2*time.Minute), IdentityUnchanged)
-	if d, _, reason := state(u.ID); !d || reason != "deactivated" {
-		t.Fatalf("unlocked but deactivated: %v %q", d, reason)
-	}
-	// Delivered late: older than what was applied.
-	apply("sub-1", model.IdentityLocked, t0.Add(90*time.Second), IdentityIgnored)
-	apply("sub-1", model.IdentityReactivated, t0.Add(3*time.Minute), IdentityRestored)
+	apply("sub-1", model.IdentityActive, IdentityRestored)
 	if d, by, reason := state(u.ID); d || by != "" || reason != "" {
 		t.Fatalf("restored: %v %q %q", d, by, reason)
 	}
-	apply("sub-1", model.IdentityReactivated, t0.Add(3*time.Minute), IdentityUnchanged)
 
 	// An admin's disabling is not the provider's to undo.
 	if err := s.SetUserDisabled(ctx, u.ID, true, "spam", "admin@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	apply("sub-1", model.IdentityLocked, t0.Add(4*time.Minute), IdentityUnchanged)
-	apply("sub-1", model.IdentityUnlocked, t0.Add(5*time.Minute), IdentityUnchanged)
+	apply("sub-1", model.IdentityLocked, IdentityUnchanged)
+	apply("sub-1", model.IdentityActive, IdentityUnchanged)
 	if d, by, reason := state(u.ID); !d || by != "admin@example.com" || reason != "spam" {
 		t.Fatalf("admin's disabling: %v %q %q", d, by, reason)
 	}
 
-	apply("sub-1", model.IdentityRemoved, t0.Add(6*time.Minute), IdentityDeleted)
+	apply("sub-1", model.IdentityRemoved, IdentityDeleted)
 	if _, err := s.UserByIdentity(ctx, testIssuer, "sub-1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("removed account: %v", err)
 	}
@@ -331,11 +323,13 @@ func TestApplyIdentityEvent(t *testing.T) {
 	if err := s.SetUserAdminByID(ctx, admin.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	apply("sub-admin", model.IdentityRemoved, t0, IdentityPendingRemoval)
+	apply("sub-admin", model.IdentityRemoved, IdentityPendingRemoval)
 	if d, by, reason := state(admin.ID); !d || by != "idp" || reason != "removed" {
 		t.Fatalf("pending removal: %v %q %q", d, by, reason)
 	}
-	apply("sub-admin", model.IdentityUnlocked, t0.Add(time.Minute), IdentityUnchanged)
+	apply("sub-admin", model.IdentityRemoved, IdentityUnchanged)
+	apply("sub-admin", model.IdentityActive, IdentityUnchanged)
+	apply("sub-admin", model.IdentityLocked, IdentityUnchanged)
 	if pending, err := s.SetupPending(ctx); err != nil || pending {
 		t.Fatalf("setup reopened: %v %v", pending, err)
 	}
@@ -363,5 +357,8 @@ func TestApplyIdentityEvent(t *testing.T) {
 	if err := s.SetUserAdminByID(ctx, second.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	apply("sub-second", model.IdentityRemoved, t0, IdentityDeleted)
+	apply("sub-second", model.IdentityRemoved, IdentityDeleted)
+	if _, err := s.ApplyIdentityState(ctx, testIssuer, "sub-x", "strange"); err != nil {
+		t.Fatalf("an unknown subject with an odd state: %v", err)
+	}
 }

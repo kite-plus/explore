@@ -78,7 +78,10 @@ func newServeCmd() *cobra.Command {
 				srv.OIDC = idp.New(idp.Config{Issuer: cfg.OIDC.Issuer, ClientID: cfg.OIDC.ClientID,
 					ClientSecret: cfg.OIDC.ClientSecret, RedirectURL: cfg.PublicURL + "/auth/callback"})
 				srv.IdentityAccountURL = cfg.OIDC.AccountURL
-				srv.IdentityWebhookSecret = cfg.OIDC.WebhookSecret
+				if cfg.OIDC.WebhookSecret != "" {
+					srv.IdentityWebhookSecret = cfg.OIDC.WebhookSecret
+					srv.IdentityDirectory = &idp.Directory{Issuer: cfg.OIDC.Issuer, Token: cfg.OIDC.APIToken}
+				}
 				log.Info("sign-in with the identity provider is on", "issuer", cfg.OIDC.Issuer,
 					"webhook", cfg.OIDC.WebhookSecret != "")
 			}
@@ -139,7 +142,7 @@ func newWorkerCmd() *cobra.Command {
 			defer st.Close()
 			w := &worker.Worker{Store: st, Fetch: newFetcher(cfg), Log: log, Concurrency: cfg.WorkerConcurrency}
 			if cfg.OIDC.Enabled() && cfg.OIDC.APIToken != "" {
-				w.Identity = &idp.Events{Issuer: cfg.OIDC.Issuer, Token: cfg.OIDC.APIToken}
+				w.Identity = &idp.Directory{Issuer: cfg.OIDC.Issuer, Token: cfg.OIDC.APIToken}
 				w.IdentityIssuer = cfg.OIDC.Issuer
 			}
 			if cfg.Tagger.Enabled() {

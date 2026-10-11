@@ -2,23 +2,28 @@ package model
 
 import "time"
 
-// IdentityChange is what happened to a reader's account at the identity
-// provider; see docs/design/accounts.md section 1.
-type IdentityChange string
+// IdentityState is what the identity provider says of a reader's account
+// now; see docs/design/accounts.md section 1.
+type IdentityState string
 
 const (
-	IdentityRemoved     IdentityChange = "removed"
-	IdentityDeactivated IdentityChange = "deactivated"
-	IdentityReactivated IdentityChange = "reactivated"
-	IdentityLocked      IdentityChange = "locked"
-	IdentityUnlocked    IdentityChange = "unlocked"
+	IdentityActive      IdentityState = "active"
+	IdentityDeactivated IdentityState = "deactivated"
+	IdentityLocked      IdentityState = "locked"
+	IdentityRemoved     IdentityState = "removed"
 )
 
-// IdentityEvent is one such change of the account the provider knows by
-// Subject. ID is unique per event, for refusing a delivery seen before.
+// IdentityEvent is a change the provider recorded, or pushed, for the
+// account it knows by Subject. It says which account to look at; what to do
+// follows from the account's state, read from the provider. ID is unique
+// per event; Type is the provider's, such as "user.locked".
 type IdentityEvent struct {
 	ID      string
 	Subject string
-	Change  IdentityChange
+	Type    string
 	At      time.Time
 }
+
+// RemovalEvent is the event type of an account's deletion. Explore deletes
+// an account only when such an event and the provider's state agree.
+const RemovalEvent = "user.removed"

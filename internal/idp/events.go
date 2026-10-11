@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -78,19 +80,9 @@ func VerifySignature(header string, body []byte, secret string, now time.Time) e
 	return ErrBadSignature
 }
 
-// userChanges maps the provider's user event types to what they mean here.
-var userChanges = map[string]model.IdentityChange{
-	"user.removed":     model.IdentityRemoved,
-	"user.deactivated": model.IdentityDeactivated,
-	"user.reactivated": model.IdentityReactivated,
-	"user.locked":      model.IdentityLocked,
-	"user.unlocked":    model.IdentityUnlocked,
-}
-
-// UserEventTypes are the provider's event types that change an account here.
-func UserEventTypes() []string {
-	return []string{"user.removed", "user.deactivated", "user.reactivated", "user.locked", "user.unlocked"}
-}
+// userEventTypes are the provider's event types that can change an account
+// here; the identity repository's README names them.
+var userEventTypes = []string{model.RemovalEvent, "user.deactivated", "user.reactivated", "user.locked", "user.unlocked"}
 
 // pushed is the body of an event ZITADEL's Actions push to a webhook target.
 type pushed struct {
@@ -110,32 +102,63 @@ func ParseEvent(body []byte) (e model.IdentityEvent, ok bool, err error) {
 	if err := dec.Decode(&p); err != nil {
 		return model.IdentityEvent{}, false, fmt.Errorf("event: %w", err)
 	}
-	change, known := userChanges[p.EventType]
-	if !known || (p.AggregateType != "" && p.AggregateType != "user") {
+	if !slices.Contains(userEventTypes, p.EventType) || (p.AggregateType != "" && p.AggregateType != "user") {
 		return model.IdentityEvent{}, false, nil
 	}
 	if p.AggregateID == "" || p.Sequence == "" || p.CreatedAt.IsZero() {
 		return model.IdentityEvent{}, false, errors.New("event: missing aggregateID, sequence or created_at")
 	}
-	return model.IdentityEvent{ID: eventID(p.AggregateID, p.Sequence.String()), Subject: p.AggregateID,
-		Change: change, At: p.CreatedAt}, true, nil
+	return model.IdentityEvent{ID: p.AggregateID + "/" + p.Sequence.String(), Subject: p.AggregateID,
+		Type: p.EventType, At: p.CreatedAt}, true, nil
 }
 
-// An event is the sequence-th of its aggregate.
-func eventID(aggregate, sequence string) string {
-	return "user/" + aggregate + "/" + sequence
-}
-
-// Events reads the user events the provider recorded, for reconciling ones
-// a push lost. Only ZITADEL's event search is implemented.
-type Events struct {
+// Directory reads the provider's accounts and their recorded events with
+// a service account's token: ZITADEL's admin event search and user API,
+// as the identity repository's README describes them. A pushed event is
+// only a hint, since other services' tokens can read the signing key too,
+// so the account's state comes from here before anything is done.
+type Directory struct {
 	Issuer string
-	// Token is a personal access token of a service user allowed to read
-	// events.
+	// Token is a personal access token of a machine user allowed to read
+	// events and users.
 	Token string
 	HTTP  *http.Client
-	// PageSize is how many events one request asks for; 0 means 500.
+	// PageSize is how many events one request asks for; 0 means 1000.
 	PageSize int
+}
+
+func (d *Directory) do(ctx context.Context, method, path string, body any) (int, []byte, error) {
+	var payload io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return 0, nil, err
+		}
+		payload = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(d.Issuer, "/")+path, payload)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+d.Token)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	client := d.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	return resp.StatusCode, raw, nil
 }
 
 // eventsResponse is ZITADEL's answer to an event search.
@@ -165,46 +188,26 @@ func typeName(raw json.RawMessage) string {
 	return o.Type
 }
 
-// Since returns the account events recorded from since (inclusive; the zero
-// time means from the start) up to until, oldest first.
-func (e *Events) Since(ctx context.Context, since, until time.Time) ([]model.IdentityEvent, error) {
-	size := e.PageSize
+// Events returns the account events recorded after from (the zero time
+// means from the start), oldest first, reading page after page.
+func (d *Directory) Events(ctx context.Context, from time.Time) ([]model.IdentityEvent, error) {
+	size := d.PageSize
 	if size <= 0 {
-		size = 500
-	}
-	client := e.HTTP
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		size = 1000
 	}
 	var out []model.IdentityEvent
 	seen := map[string]bool{}
 	for {
-		dateRange := map[string]any{"until": until.UTC().Format(time.RFC3339Nano)}
-		if !since.IsZero() {
-			dateRange["since"] = since.UTC().Format(time.RFC3339Nano)
+		query := map[string]any{"asc": true, "limit": size, "aggregateTypes": []string{"user"}, "eventTypes": userEventTypes}
+		if !from.IsZero() {
+			query["from"] = from.UTC().Format(time.RFC3339Nano)
 		}
-		body, _ := json.Marshal(map[string]any{
-			"asc": true, "limit": size, "aggregate_types": []string{"user"},
-			"event_types": UserEventTypes(), "range": dateRange,
-		})
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(e.Issuer, "/")+"/admin/v1/events/_search", bytes.NewReader(body))
+		status, raw, err := d.do(ctx, http.MethodPost, "/admin/v1/events/_search", query)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("Authorization", "Bearer "+e.Token)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
-		}
-		raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-		_ = resp.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("event search: HTTP %d: %.200s", resp.StatusCode, raw)
+		if status != http.StatusOK {
+			return nil, fmt.Errorf("event search: HTTP %d: %.200s", status, raw)
 		}
 		var page eventsResponse
 		dec := json.NewDecoder(bytes.NewReader(raw))
@@ -214,24 +217,62 @@ func (e *Events) Since(ctx context.Context, since, until time.Time) ([]model.Ide
 		}
 		fresh := 0
 		for _, ev := range page.Events {
-			id := eventID(ev.Aggregate.ID, ev.Sequence.String())
+			id := ev.Aggregate.ID + "/" + ev.Sequence.String()
 			if seen[id] {
 				continue
 			}
 			seen[id] = true
 			fresh++
-			if ev.CreationDate.After(since) {
-				since = ev.CreationDate
+			if ev.CreationDate.After(from) {
+				from = ev.CreationDate
 			}
-			change, known := userChanges[typeName(ev.Type)]
-			if t := typeName(ev.Aggregate.Type); known && (t == "" || t == "user") && ev.Aggregate.ID != "" {
-				out = append(out, model.IdentityEvent{ID: id, Subject: ev.Aggregate.ID, Change: change, At: ev.CreationDate})
+			if t := typeName(ev.Aggregate.Type); ev.Aggregate.ID != "" && (t == "" || t == "user") {
+				out = append(out, model.IdentityEvent{ID: id, Subject: ev.Aggregate.ID, Type: typeName(ev.Type), At: ev.CreationDate})
 			}
 		}
-		// A short page is the last; a page of events all seen before means
+		// A short page is the last; a full page of events seen before means
 		// more than a page share one time, which paging by time cannot pass.
 		if len(page.Events) < size || fresh == 0 {
 			return out, nil
 		}
 	}
+}
+
+// userStates maps ZITADEL's user states to what they mean here. An initial
+// user has not finished signing up, and has no account here yet.
+var userStates = map[string]model.IdentityState{
+	"USER_STATE_ACTIVE":   model.IdentityActive,
+	"USER_STATE_INITIAL":  model.IdentityActive,
+	"USER_STATE_INACTIVE": model.IdentityDeactivated,
+	"USER_STATE_LOCKED":   model.IdentityLocked,
+	"USER_STATE_DELETED":  model.IdentityRemoved,
+}
+
+// State reads the account's state now. A user the provider does not know
+// is IdentityRemoved.
+func (d *Directory) State(ctx context.Context, subject string) (model.IdentityState, error) {
+	status, raw, err := d.do(ctx, http.MethodGet, "/v2/users/"+url.PathEscape(subject), nil)
+	if err != nil {
+		return "", err
+	}
+	switch status {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return model.IdentityRemoved, nil
+	default:
+		return "", fmt.Errorf("user: HTTP %d: %.200s", status, raw)
+	}
+	var body struct {
+		User struct {
+			State string `json:"state"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return "", fmt.Errorf("user: %w", err)
+	}
+	state, ok := userStates[body.User.State]
+	if !ok {
+		return "", fmt.Errorf("user: unknown state %q", body.User.State)
+	}
+	return state, nil
 }

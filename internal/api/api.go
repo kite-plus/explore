@@ -41,9 +41,11 @@ type Server struct {
 	// IdentityAccountURL is the provider's page where readers manage and
 	// delete their account.
 	IdentityAccountURL string
-	// IdentityWebhookSecret checks the user events the provider pushes;
-	// empty turns the webhook off.
+	// IdentityWebhookSecret checks the user events the provider pushes, and
+	// IdentityDirectory reads the accounts they name; the webhook is off
+	// without both.
 	IdentityWebhookSecret string
+	IdentityDirectory     *idp.Directory
 	// AppleAppIDs, AndroidPackage and AndroidCertSHA256 publish the files
 	// that let the apps claim the sign-in callback; each is served only when
 	// set. See docs/design/accounts.md section 1.1.
@@ -129,7 +131,7 @@ func (s *Server) Handler() (http.Handler, error) {
 		r.GET("/auth/app/start", s.limit(s.flowLimit), s.appStart)
 		r.GET("/app/auth/done", s.limit(s.readLimit), s.appDone)
 		r.POST("/auth/backchannel-logout", s.backchannelLogout)
-		if s.IdentityWebhookSecret != "" {
+		if s.IdentityWebhookSecret != "" && s.IdentityDirectory != nil {
 			r.POST("/hooks/idp", s.identityHook)
 		}
 	}

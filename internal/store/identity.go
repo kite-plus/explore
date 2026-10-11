@@ -5,8 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"slices"
-	"strings"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -308,10 +307,11 @@ func (s *Store) SeenReceipt(ctx context.Context, kind, id string) (bool, error) 
 }
 
 // disabledByIdentity is users.disabled_by for an account the identity
-// provider disabled; no admin's email looks like it.
+// provider disabled; no admin's email looks like it. disabled_reason then
+// holds the provider's state: deactivated, locked or removed.
 const disabledByIdentity = "idp"
 
-// What ApplyIdentityEvent did.
+// What ApplyIdentityState did.
 const (
 	IdentityIgnored        = "ignored"
 	IdentityUnchanged      = "unchanged"
@@ -321,31 +321,25 @@ const (
 	IdentityPendingRemoval = "pending_removal"
 )
 
-// ApplyIdentityEvent carries out what a provider event means for the account
-// linked to its subject (docs/design/accounts.md section 1). Removed deletes
-// the account as DeleteUser does, except that an admin with no other active
-// admin beside it is disabled instead and left for FinishIdentityRemovals,
-// so the setup wizard does not open to anyone. Deactivated and locked
-// disable the account and end its sessions; reactivated and unlocked restore
-// it once nothing the provider disabled it for is left, and never undo an
-// admin's disabling. The reasons are kept in disabled_reason. An event older
-// than the newest one applied to the account changes nothing, nor does one
-// whose subject no account is linked to.
-func (s *Store) ApplyIdentityEvent(ctx context.Context, issuer string, e model.IdentityEvent) (string, error) {
+// ApplyIdentityState brings the account linked to the identity in line with
+// what the provider says of it now (docs/design/accounts.md section 1).
+// Removed deletes the account as DeleteUser does, except that an admin with
+// no other active admin beside it is disabled instead and left for
+// FinishIdentityRemovals, so the setup wizard does not open to anyone.
+// Deactivated and locked disable the account and end its sessions; active
+// restores it when the provider disabled it, and never undoes an admin's
+// disabling. A subject no account is linked to is ignored.
+func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, state model.IdentityState) (string, error) {
 	outcome := IdentityIgnored
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var userID string
-		var eventAt *time.Time
-		err := tx.QueryRow(ctx, `SELECT user_id::text, event_at FROM user_identities WHERE issuer = $1 AND subject = $2`,
-			issuer, e.Subject).Scan(&userID, &eventAt)
+		err := tx.QueryRow(ctx, `SELECT user_id::text FROM user_identities WHERE issuer = $1 AND subject = $2`,
+			issuer, subject).Scan(&userID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
-		}
-		if eventAt != nil && e.At.Before(*eventAt) {
-			return nil
 		}
 		admin, disabled, err := lockUser(ctx, tx, userID)
 		if err != nil {
@@ -356,13 +350,8 @@ func (s *Store) ApplyIdentityEvent(ctx context.Context, issuer string, e model.I
 			return err
 		}
 		ours := disabled && by == disabledByIdentity
-		var reasons []string
-		if ours && reason != "" {
-			reasons = strings.Split(reason, ",")
-		}
-		removed := ours && slices.Contains(reasons, string(model.IdentityRemoved))
 		outcome = IdentityUnchanged
-		switch e.Change {
+		switch state {
 		case model.IdentityRemoved:
 			if admin {
 				var others int
@@ -371,52 +360,37 @@ func (s *Store) ApplyIdentityEvent(ctx context.Context, issuer string, e model.I
 					return err
 				}
 				if others == 0 {
-					outcome = IdentityPendingRemoval
-					return disableForIdentity(ctx, tx, userID, []string{string(model.IdentityRemoved)})
+					if !ours || reason != string(model.IdentityRemoved) {
+						outcome = IdentityPendingRemoval
+					}
+					return disableForIdentity(ctx, tx, userID, model.IdentityRemoved)
 				}
 			}
 			outcome = IdentityDeleted
 			_, err := tx.Exec(ctx, `DELETE FROM users WHERE id::text = $1`, userID)
 			return err
 		case model.IdentityDeactivated, model.IdentityLocked:
-			if (disabled && !ours) || removed {
-				break
-			}
-			if !slices.Contains(reasons, string(e.Change)) {
-				reasons = append(reasons, string(e.Change))
-				slices.Sort(reasons)
+			if (disabled && !ours) || (ours && (reason == string(state) || reason == string(model.IdentityRemoved))) {
+				return nil
 			}
 			outcome = IdentityDisabled
-			if err := disableForIdentity(ctx, tx, userID, reasons); err != nil {
-				return err
+			return disableForIdentity(ctx, tx, userID, state)
+		case model.IdentityActive:
+			if !ours || reason == string(model.IdentityRemoved) {
+				return nil
 			}
-		case model.IdentityReactivated, model.IdentityUnlocked:
-			if !ours || removed {
-				break
-			}
-			cause := model.IdentityDeactivated
-			if e.Change == model.IdentityUnlocked {
-				cause = model.IdentityLocked
-			}
-			reasons = slices.DeleteFunc(reasons, func(r string) bool { return r == string(cause) })
-			if len(reasons) == 0 {
-				outcome = IdentityRestored
-				if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = NULL, disabled_reason = '', disabled_by = '' WHERE id::text = $1`, userID); err != nil {
-					return err
-				}
-			} else if _, err := tx.Exec(ctx, `UPDATE users SET disabled_reason = $2 WHERE id::text = $1`, userID, strings.Join(reasons, ",")); err != nil {
-				return err
-			}
+			outcome = IdentityRestored
+			_, err := tx.Exec(ctx, `UPDATE users SET disabled_at = NULL, disabled_reason = '', disabled_by = '' WHERE id::text = $1`, userID)
+			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE user_identities SET event_at = $3 WHERE issuer = $1 AND subject = $2`, issuer, e.Subject, e.At)
-		return err
+		return fmt.Errorf("unknown identity state %q", state)
 	})
 	return outcome, err
 }
 
-func disableForIdentity(ctx context.Context, tx pgx.Tx, userID string, reasons []string) error {
+func disableForIdentity(ctx context.Context, tx pgx.Tx, userID string, state model.IdentityState) error {
 	if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = coalesce(disabled_at, now()), disabled_reason = $2, disabled_by = $3
-		WHERE id::text = $1`, userID, strings.Join(reasons, ","), disabledByIdentity); err != nil {
+		WHERE id::text = $1`, userID, string(state), disabledByIdentity); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id::text = $1`, userID)
