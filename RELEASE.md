@@ -47,3 +47,5 @@ A tag with a `-` suffix, such as `v0.2.0-rc.1`, is a prerelease: it does not mov
 ## 5. Upgrade servers
 
 As the README says: set `EXPLORE_VERSION` to the new version, then `docker compose pull && docker compose up -d`. The database is migrated before the new version starts. Without Docker, run `explore migrate up` with the new binary before starting it.
+
+On a server where other services share Explore's Caddy (`docs/design/project-layout.md` section 10, such as the one that also runs the Kite Plus identity and comment services), `docker-compose.override.yaml` and `sites/` stay as they are. A release's `Caddyfile` and `docker-compose.yaml` keep the `sites` import and mount, so fetching them as usual is enough; recreating Caddy takes those services' sites down for the same few seconds.

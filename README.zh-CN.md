@@ -56,7 +56,7 @@ Explore 是 [Kite Plus](https://github.com/kite-plus) 负责「发现」的部�
 docker compose exec -T postgres pg_dump -U explore --exclude-table-data=entries explore > explore.sql
 ```
 
-想用服务器上已有的反向代理代替 Caddy，见 [docs/design/project-layout.md](docs/design/project-layout.md#10-部署)。
+想用服务器上已有的反向代理代替 Caddy，见 [docs/design/project-layout.md](docs/design/project-layout.md#10-部署)；同一台服务器上还有别的服务要共用这个 Caddy，见同一节的「与同机其他服务共用入口」。
 
 ### 不用 Docker
 

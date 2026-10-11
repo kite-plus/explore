@@ -56,7 +56,7 @@ Every release publishes two images for amd64 and arm64: `ghcr.io/kite-plus/explo
 docker compose exec -T postgres pg_dump -U explore --exclude-table-data=entries explore > explore.sql
 ```
 
-To put a reverse proxy you already run in place of Caddy, see [docs/design/project-layout.md](docs/design/project-layout.md#10-部署).
+To put a reverse proxy you already run in place of Caddy, see [docs/design/project-layout.md](docs/design/project-layout.md#10-部署); for other services on the same server that should share this Caddy, see "与同机其他服务共用入口" in the same section.
 
 ### Without Docker
 

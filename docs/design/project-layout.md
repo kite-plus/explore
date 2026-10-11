@@ -1,6 +1,6 @@
 # 工程结构
 
-> 状态：设计中 · 最近更新：2026-10-10
+> 状态：设计中 · 最近更新：2026-10-11
 > E0、E1 开工时的代码骨架约定。与 Kite 一致的地方（Go 版本、命令行、lint、Makefile、import 守护）直接沿用 Kite 的做法。
 
 ---
@@ -30,7 +30,7 @@ explore/
 │   ├── feeds/          fixture feeds per blog system
 │   └── schema/         column list golden file
 ├── scripts/            check-imports.sh
-├── deploy/             Dockerfile, docker-compose.yaml, Caddyfile
+├── deploy/             Dockerfile, docker-compose.yaml, Caddyfile, docker-compose.edge.example.yaml
 ├── docs/design/
 ├── .golangci.yml       same linters as Kite
 ├── Makefile
@@ -214,7 +214,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 | 服务 | 镜像与命令 | 说明 |
 |---|---|---|
-| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz`，以及 Kite Plus 登录用的 `/auth/`、`/hooks/`、`/app/auth/done` 和 `/.well-known/` 下的两个应用认领文件转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
+| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz`，以及 Kite Plus 登录用的 `/auth/`、`/hooks/`、`/app/auth/done` 和 `/.well-known/` 下的两个应用认领文件转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时”。最后读入 `./sites` 里同机其他服务的站点文件，见下文“与同机其他服务共用入口” |
 | `postgres` | `postgres:16-alpine` | 数据卷持久化；备份时排除 `entries` 的数据（[data-model.md §5](data-model.md#5-数据保留)） |
 | `migrate` | `ghcr.io/kite-plus/explore`，`explore migrate up` | 每次 `up` 先跑一次，跑完退出 |
 | `serve` | 同一镜像，`explore serve` | API；可以多实例 |
@@ -223,7 +223,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 **发版**：推送 `v*` 标签（例如 `v0.1.0`）后，`.github/workflows/release.yml` 先跑一遍 CI 的全部检查，再为 amd64 和 arm64 构建两个镜像，推送到 GitHub Container Registry：后端的 `ghcr.io/kite-plus/explore`（`deploy/Dockerfile`，serve、worker 和 migrate 共用）和前端的 `ghcr.io/kite-plus/explore-web`（`web/Dockerfile`）。镜像标签是 `0.1.0`、`0.1` 和 `latest`；带 `-` 的预发布版本不更新 `latest`。同时构建原生版本：`explore-<版本>-<系统>-<架构>`（Linux、macOS、Windows 的 amd64 和 arm64，Go 交叉编译）、`explore-web-<版本>.tar.gz`（前台的 `dist`，依赖已打包进去，用 Node.js 22 运行）和 `SHA256SUMS.txt`，最后发布 GitHub Release：说明取自两份更新日志里这个版本的段落（`scripts/release-notes.mjs`），没有这一段时在推送镜像前就失败。手动运行这个工作流只构建、不发布。步骤见仓库根目录的 `RELEASE.md`。GitHub 上新建的包默认私有，第一次发版后要在组织的 Packages 设置里把两个包改为公开，服务器才能不登录直接拉取。
 
-**服务器部署**：服务器上只需要 Docker 和三个文件，不需要源码：`deploy/docker-compose.yaml`、`deploy/Caddyfile`，以及照 `deploy/.env.example` 填好的 `.env`（不进版本库）。三个文件放在同一个目录里运行：
+**服务器部署**：服务器上只需要 Docker 和三个文件，不需要源码：`deploy/docker-compose.yaml`、`deploy/Caddyfile`，以及照 `deploy/.env.example` 填好的 `.env`（不进版本库）；和同机其他服务共用 Caddy 时再加 `docker-compose.override.yaml` 和 `sites/`，见下文。三个文件放在同一个目录里运行：
 
 ```bash
 docker compose up -d
@@ -232,6 +232,28 @@ docker compose up -d
 `EXPLORE_PUBLIC_URL` 的域名要先解析到服务器，Caddy 才能拿到证书。`EXPLORE_VERSION` 固定运行的版本；升级时改掉它，再运行 `docker compose pull && docker compose up -d`，`migrate` 会先把数据库迁移到新版本。服务器上已经有别的反向代理时，去掉 `caddy` 服务，按上表的路径把请求转给 `127.0.0.1:8080`（serve）和 `127.0.0.1:4321`（web）。页面自带 `Cache-Control`，前面再加 CDN 时可以直接按它缓存。
 
 **前面有 CDN 时**（例如 Cloudflare 代理了域名）：连到 Caddy 的是 CDN 的地址，不是读者。把 CDN 的地址段写进 `.env` 的 `EXPLORE_CDN_RANGES`（空格分隔；Cloudflare 的地址段已写在 `.env.example` 里），Caddy 只信任来自这些地址的 `X-Forwarded-For`，从右往左取第一个不在其中的地址作为读者（`trusted_proxies_strict`），再把这个地址作为 `X-Forwarded-For` 转给 `serve` 和 `web`。CDN 会把连到它的地址追加在这个头的最后，读者自己写进去的值都在它左边，取不到。没有设置时，读者就是连到 Caddy 的地址，请求带来的 `X-Forwarded-For` 一律不用。不设置的话限流按 CDN 的节点计数，许多读者共用一份额度。
+
+**与同机其他服务共用入口**：一台服务器上只能有一个进程占 80 和 443。同机还跑别的服务时（比如 Kite Plus 的身份服务和评论服务，[identity architecture.md §4](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md#4-部署)），由 Explore 的 Caddy 做整台机器的入口，证书也都由它申请。`Caddyfile` 的最后一行 `import /etc/caddy/sites/*.caddy` 读入 compose 挂载的 `./sites` 目录里各服务的站点文件；目录空着或不存在时 Caddy 只记一条 `No files matching import glob pattern` 警告，单独部署的 Explore 不受影响 `[EV]`。这些站点和 Explore 共用上面那套读者地址规则：Caddy 先按 `EXPLORE_CDN_RANGES` 找出读者，各站点文件再用 `header_up X-Forwarded-For {client_ip}` 只把这一个地址交给后面的服务。Caddy 经共用的 Docker 网络 `kite-edge` 找到那些服务的入口容器：
+
+1. 建网络，每台服务器一次：`docker network create --subnet 172.30.10.0/24 kite-edge`。
+2. 在 compose 目录放 `docker-compose.override.yaml`（`docker compose` 会自己读它），内容就是 `deploy/docker-compose.edge.example.yaml` 去掉注释：
+
+   ```yaml
+   services:
+     caddy:
+       networks:
+         default:
+         kite-edge:
+
+   networks:
+     kite-edge:
+       external: true
+   ```
+
+   只有 Caddy 接 kite-edge：worker 会抓任意外部地址，不能让它够到别的服务。Caddy 在 Explore 自己的网络上用 `serve`、`web` 两个名字找上游，接上 kite-edge 的容器不能再叫这两个名字，否则 Docker 可能答成别人的地址。
+3. `mkdir -p sites`，放进各服务的站点文件（放哪几个文件见各服务的文档），然后 `docker compose up -d caddy`：第一次接 kite-edge 要重建容器，这几秒整台机器的站点都不通。以后增改站点文件只需 `docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`；文件写错时 reload 报错，旧配置照常运行 `[EV]`。
+
+0.1.19 及以前的 `Caddyfile` 和 `docker-compose.yaml` 没有这两处：把 `import /etc/caddy/sites/*.caddy` 加到 `Caddyfile` 末尾，在 caddy 的 `volumes` 下加一行 `- ./sites:/etc/caddy/sites:ro`。升级 Explore 时 `docker-compose.override.yaml` 和 `sites/` 原样保留。
 
 **首次安装**：还没有管理员账号时，打开 `/admin` 进入安装向导：创建第一个管理员账号，再选择是否开放注册和投稿。向导不要求安装码，第一个完成安装的人就成为管理员，所以 `docker compose up -d` 之后要马上完成这一步；安装完成前，`serve` 每次启动都会在日志里提醒。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
 

@@ -1,6 +1,6 @@
 # Kite Plus 统一身份与跨博客评论
 
-> 状态：架构决定；域名和部署地已定；Explore 已按 §3 接入（本地身份服务实测，生产未启用）。身份服务本身的规划在 [identity 仓库](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md)，评论服务的详细设计在 [comments 仓库](https://github.com/kite-plus/comments/blob/main/docs/design/README.md) · 最近更新：2026-10-10
+> 状态：架构决定；域名和部署地已定（2026-10-11 改为与 Explore 同机）；Explore 已按 §3 接入（本地身份服务实测，生产未启用）。身份服务本身的规划在 [identity 仓库](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md)，评论服务的详细设计在 [comments 仓库](https://github.com/kite-plus/comments/blob/main/docs/design/README.md) · 最近更新：2026-10-11
 
 本文只记跨项目的约定：各应用怎么接入身份服务（§3），以及三个项目的分工和先后。身份服务本身（选型、登录方式、部署、运维）在 identity 仓库，评论服务自己的设计在 comments 仓库，这里都不重复。
 
@@ -33,7 +33,7 @@
 - **身份服务**部署在 `id.kite.plus`，issuer 是 `https://id.kite.plus`，一经公开不能更换。读者看到的名字是「Kite Plus 账号」。
 - **评论服务**部署在 `comments.kite.plus`，提供无需框架依赖的嵌入组件。
 - Explore 与评论服务分别注册 OIDC 客户端。
-- 身份服务和评论服务都部署在境外，首选香港。在境内运营评论服务，要做评论者实名、公安交互式备案和安全评估，对这个项目不现实，理由见 [comments architecture.md §5](https://github.com/kite-plus/comments/blob/main/docs/design/architecture.md#5-部署地与合规)。
+- 身份服务和评论服务都部署在境外：和 Explore 放在同一台美国 RackNerd 服务器上，Explore 的 Caddy 做整台机器的入口，各服务经共用的 Docker 网络接在它后面（2026-10-11 定；部署细节、资源和 Cloudflare 设置在 [identity architecture.md §4](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md#4-部署)，Explore 这边的做法见 [project-layout.md §10](project-layout.md#10-部署)）。以后迁到香港仍然可行：issuer 和各服务的 origin 都是域名，不绑机器，迁移就是恢复备份再改 DNS。在境内运营评论服务，要做评论者实名、公安交互式备案和安全评估，对这个项目不现实，理由见 [comments architecture.md §5](https://github.com/kite-plus/comments/blob/main/docs/design/architecture.md#5-部署地与合规)。
 
 - **身份服务是基础设施，先于评论服务**：自托管开源实现，不自己写；首选 ZITADEL，与 Logto 实测对比后定案。选型、部署、运维都在 [identity 仓库](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md)（`kite-plus/identity`），各应用对它的要求也列在那里（[§1](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md#1-各服务对身份服务的要求)）。
 
