@@ -23,18 +23,17 @@
 
 ### 账号与个人接口
 
-`POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；配置了 Kite Plus 账号登录后返回 `403 feature_disabled`。`POST /api/v1/auth/login` 接收邮箱和密码，成功后和注册一样设置本站会话 Cookie 并返回用户资料与 `csrf_token`；应用另带 `client`（`ios` 或 `android`），这时不设 Cookie，返回 `{token, expires_at, user}`，与应用兑换相同。没有密码的账号（用 Kite Plus 账号登录的）密码登录一律 `401 bad_credentials`。`POST /api/v1/auth/logout` 撤销当前会话（Cookie 或 Bearer）。
+配置了 Kite Plus 账号登录（`EXPLORE_OIDC_ISSUER`）的服务器只用它登录，下面这些密码接口都不存在，返回 `404 not_found`：`POST /api/v1/auth/register`、`POST /api/v1/auth/login`（包括应用带 `client` 的）、`PUT /api/v1/me/password`、`PUT /api/v1/admin/users/{id}/password` 和 `POST /api/v1/setup`（[accounts.md §1](accounts.md#1-登录与会话)）。没有配置时：`POST /api/v1/auth/register` 接收 `email`、`password`（12–72 字节）和 `display_name`；`POST /api/v1/auth/login` 接收邮箱和密码，成功后和注册一样设置本站会话 Cookie 并返回用户资料与 `csrf_token`；应用另带 `client`（`ios` 或 `android`），这时不设 Cookie，返回 `{token, expires_at, user}`，与应用兑换相同。`POST /api/v1/auth/logout` 撤销当前会话（Cookie 或 Bearer）。
 
-`GET /api/v1/auth/options` 返回服务器提供的登录方式：`{"password": true, "oidc": {"name": "Kite Plus 账号", "account_url": "…"}}`，没有配置 Kite Plus 账号登录时 `oidc` 为 `null`；`name` 按 `Accept-Language`，缓存一分钟。下面几项只在配置了 Kite Plus 账号登录时存在，否则返回 `404`，规则见 [accounts.md §1、§1.1](accounts.md#1-登录与会话)：
+`GET /api/v1/auth/options` 返回服务器提供的登录方式：配置了 Kite Plus 时是 `{"password": false, "oidc": {"name": "Kite Plus 账号", "account_url": "…"}}`，没有配置时是 `{"password": true, "oidc": null}`；`name` 按 `Accept-Language`，缓存一分钟。下面几项只在配置了 Kite Plus 账号登录时存在，否则返回 `404`，规则见 [accounts.md §1、§1.1](accounts.md#1-登录与会话)：
 
-- `GET /auth/login?return=<站内相对路径>`、`GET /auth/callback`：网页登录，回调成功后设置会话 Cookie 并跳回原路径，失败时跳到 `/login?error=<原因>`。这几个地址在 `/api` 之外，因为它们是浏览器整页跳转的目标，不是给脚本调用的。
-- `POST /api/v1/auth/link`：已登录的密码账号关联 Kite Plus 账号，接收 `password`（当前密码）和可选的 `return`，要 CSRF 头，与登录共用限流；返回 `{"url": "…"}`，前端把浏览器带到这个地址（身份服务会让读者选择账号）。当前密码不对返回 `403 wrong_password`，账号已关联返回 `409 already_linked`，身份服务连不上返回 `503 identity_unavailable`。关联成功后这个账号的其他会话退出。
+- `GET /auth/login?return=<站内相对路径>`、`GET /auth/callback`：网页登录，回调成功后设置会话 Cookie 并跳回原路径，失败时跳到 `/login?error=<原因>`。没有关联的身份带着已验证的邮箱回来、恰好有一个还没关联的账号用这个邮箱时，关联到那个账号。这几个地址在 `/api` 之外，因为它们是浏览器整页跳转的目标，不是给脚本调用的。
 - `GET /api/v1/me/identity`：关联的 Kite Plus 账号 `{"email": "…", "linked_at": "…"}`，没有关联时 `404 not_found`；不依赖 Kite Plus 账号登录是否配置。
 - `GET /auth/app/start?challenge=…&client=ios|android[&switch=1][&callback=scheme]`、`GET /app/auth/done`、`POST /api/v1/auth/app/exchange`：应用登录。兑换接收 `{code, verifier}`，返回 `{token, expires_at, user}`，任何问题都是 `400 invalid_grant`，与登录共用限流。`callback=scheme` 时身份服务回跳后先显示确认页，读者点「继续」（`POST /auth/app/confirm`）后才跳到 `explore://app/auth/done?code=…`（[accounts.md §1.1](accounts.md#11-应用登录) 第 10 条）。
 - `POST /auth/backchannel-logout`（表单字段 `logout_token`，按来源地址每分钟 120 次，签名密钥取不到时 `503`）和 `POST /hooks/idp`（带 `ZITADEL-Signature` 的用户事件）：身份服务调用；后者还要配置 `EXPLORE_IDP_WEBHOOK_SECRET` 和 `EXPLORE_IDP_API_TOKEN`。
 - `GET /.well-known/apple-app-site-association`、`GET /.well-known/assetlinks.json`：配置了应用认领的值才提供，不依赖 Kite Plus 账号登录。
 
-`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、密码是否为管理员重置的临时密码 `temporary_password`、`email`、`display_name`、`is_admin`、`csrf_token`、能否用密码登录 `password_login`、关联 Kite Plus 账号的时间 `identity_linked_at`，没有关联时为 `null`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；没有密码的账号返回 `409 password_disabled`；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。`GET /api/v1/me/following-feed` 返回订阅流公开发布的地址 `{"json_url": "...", "rss_url": "...", "opml_url": "..."}`（§3），没有发布时三项都是 `null`；`POST` 换一个新地址并返回它，原来的地址立即失效，没有发布时就是开始发布；`DELETE` 停止发布，返回 `204`。所有个人响应为 `private, no-store`。
+`GET /api/v1/me` 返回当前用户（内部的 `id`、给用户看的 ID `number`、注册时间 `created_at`、密码是否为管理员重置的临时密码 `temporary_password`、`email`、`display_name`、`is_admin`、`csrf_token`、能否用密码登录 `password_login`、关联 Kite Plus 账号的时间 `identity_linked_at`，没有关联时为 `null`；只用 Kite Plus 时 `temporary_password` 和 `password_login` 一律为 `false`），注册和登录的响应也是这个结构；`PATCH /api/v1/me` 修改显示名称；`PUT /api/v1/me/password` 接收 `current_password` 和 `new_password`（12–72 字节），当前密码不对返回 `403 wrong_password`，成功返回 `204` 并撤销这个账号的其他会话，当前会话保留，与登录共用限流；没有密码的账号返回 `409 password_disabled`；`DELETE /api/v1/me` 删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人；唯一可用的管理员不能删除自己的账号，返回 `409 last_admin`。`GET /api/v1/me/subscriptions` 返回订阅博客；`PUT`、`DELETE /api/v1/me/subscriptions/{host}` 分别订阅和取消。`GET /api/v1/me/subscriptions.opml` 以附件返回订阅博客的 OPML 2.0，格式同 `/blogs.opml`。`POST /api/v1/me/subscriptions/import` 的请求体是 OPML 文件本身，最大 2 MiB，展开文件夹后读取前 1,000 个订阅，匹配规则见 [accounts.md §2](accounts.md#2-订阅)；返回 `{"outlines": 12, "added": 8, "already_following": 2, "ignored": 0, "not_listed": [{"title": "...", "site_url": "...", "feed_url": "..."}]}`，`ignored` 是超出 1,000 个没有读取的数量。文件不是 OPML 时返回 `400 invalid_opml`；按客户端地址每小时最多导入 10 次。`GET /api/v1/me/entries` 返回订阅流，使用与公开时间流相同的 `cursor`、`limit`、`lang`、`tag` 参数。`GET /api/v1/me/following-feed` 返回订阅流公开发布的地址 `{"json_url": "...", "rss_url": "...", "opml_url": "..."}`（§3），没有发布时三项都是 `null`；`POST` 换一个新地址并返回它，原来的地址立即失效，没有发布时就是开始发布；`DELETE` 停止发布，返回 `204`。所有个人响应为 `private, no-store`。
 
 `GET /api/v1/me/blogs` 返回已认领博客。`POST /api/v1/me/blog-claims/{host}` 生成 30 分钟有效的 DNS TXT 验证值；用户在响应中的 `record` 设置 `value` 后调用 `POST /api/v1/me/blog-claims/{host}/verify` 完成认领。管理员账号可登录 `/admin`。
 
@@ -284,7 +283,7 @@ Explore 自己发布的公告和广告，正在显示的才返回；字段、`au
 
 ## 4. 管理接口
 
-**认证**：管理员账号的会话 Cookie 或 Bearer 令牌。账号需要后台权限（`is_admin`），Cookie 会话的写操作和账号接口一样要带 `X-CSRF-Token`；其他情况返回 `401`。审核人记为管理员的邮箱。后台用户详情（`GET /api/v1/admin/users/{id}`）另有关联的身份 `identities`（`issuer`、`subject`、`email`、`linked_at`）、会话的来源 `client` 和 `password_login`；给关联着 Kite Plus 账号的账号重置密码返回 `409 password_disabled`。`DELETE /api/v1/admin/users/{id}/identities` 解除它的 Kite Plus 关联、撤销它的全部会话，返回 `{"unlinked": 1}`，之后就能重置密码；对自己的账号返回 `403 own_account`。应用的 Bearer 请求要直接发给 API（部署时反向代理把 `/api/*` 交给 serve）：前端的 `/api/v1/admin` 代理不转发 `Authorization`，免得旧版后台留在浏览器里的令牌盖过会话 Cookie。
+**认证**：管理员账号的会话 Cookie 或 Bearer 令牌。账号需要后台权限（`is_admin`），Cookie 会话的写操作和账号接口一样要带 `X-CSRF-Token`；其他情况返回 `401`。审核人记为管理员的邮箱。后台用户详情（`GET /api/v1/admin/users/{id}`）另有关联的身份 `identities`（`issuer`、`subject`、`email`、`linked_at`）、会话的来源 `client` 和 `password_login`；给关联着 Kite Plus 账号的账号重置密码返回 `409 password_disabled`。`DELETE /api/v1/admin/users/{id}/identities` 解除它的 Kite Plus 关联、撤销它的全部会话，返回 `{"unlinked": 1}`；没有 Kite Plus 时之后就能重置密码，只用 Kite Plus 时账号只能靠邮箱相同、已验证的 Kite Plus 账号登录重新关联；对自己的账号返回 `403 own_account`。应用的 Bearer 请求要直接发给 API（部署时反向代理把 `/api/*` 交给 serve）：前端的 `/api/v1/admin` 代理不转发 `Authorization`，免得旧版后台留在浏览器里的令牌盖过会话 Cookie。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -330,12 +329,10 @@ Explore 自己发布的公告和广告，正在显示的才返回；字段、`au
 | `account_disabled` | 409 | 给已停用的账号授予后台权限 |
 | `own_account` | 403 | 管理员在后台停用、降级、强制下线、重置密码或删除自己的账号 |
 | `email_taken` | 409 | 后台修改账号邮箱时，邮箱已被其他账号使用 |
-| `wrong_password` | 403 | 修改密码或关联 Kite Plus 账号时当前密码不正确 |
-| `feature_disabled` | 403 | 功能已关闭，例如配置了 Kite Plus 账号登录后的密码注册 |
+| `wrong_password` | 403 | 修改密码时当前密码不正确 |
+| `feature_disabled` | 403 | 功能已关闭，例如后台关闭了注册 |
 | `password_disabled` | 409 | 账号用 Kite Plus 账号登录，没有密码可改或重置 |
-| `already_linked` | 409 | 账号已经关联了 Kite Plus 账号 |
 | `invalid_grant` | 400 | 应用登录的授权码无效、过期、用过或与 verifier 不符 |
-| `identity_unavailable` | 503 | 身份服务暂时连不上 |
 | `internal` | 500 | 服务端错误，细节只写日志 |
 
 ---

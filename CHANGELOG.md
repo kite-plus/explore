@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- With Kite Plus configured, Explore keeps no passwords of its own: Sign in goes straight to Kite Plus, from the sign-in page and the header alike, and there is no password form, sign-up, password change or admin password reset anywhere, on the site, in the admin or for the apps. The sign-in page only shows when a sign-in comes back with an error, to say why and try again, also when Kite Plus cannot be reached. The account page's "Link a Kite Plus account" is gone. In the admin, sign-in is a Kite Plus button, and a server with no admin yet explains running `explore users promote-admin EMAIL` after that person's first Kite Plus sign-in instead of showing the setup form. Without Kite Plus nothing changes.
+- An account made with a password now comes back by signing in with a Kite Plus account of the same email: when Kite Plus has verified the email and exactly one account here uses it with no Kite Plus account linked yet, the two are linked, follows and all, as a reset by email would. Its old password and sessions end. An unverified email is still refused, and an email used by an account linked to another Kite Plus account still stops the sign-in.
+- The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`. Password hashes left in the database are unused and cleared when their account links; nothing needs to remove them.
+
 ## [0.1.20] - 2026-10-11
 
 A release for the Kite Plus account: readers can sign in with the account shared by Kite Plus services, now live at id.kite.plus, and the Kite apps can sign in through the server. It stays off until `.env` sets `EXPLORE_OIDC_ISSUER` and its client. The upgrade runs two migrations and needs this version's `Caddyfile` and `docker-compose.yaml`: fetch both again as in the README's first step, or add the lines `docs/design/project-layout.md` section 10 lists. `.env.example` lists the new variables, all optional.

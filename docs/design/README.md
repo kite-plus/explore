@@ -44,15 +44,15 @@ Explore 的产品与技术设计。这些文档是**开发期的约束来源**�
 | architecture.md | E0、E1 已实现，E2 的读者页面和文章标签已实现，E3 的 ping 已实现，E4 已用 Kite 开发分支实测；§13 的问题待确认 | 2026-10-03 |
 | data-model.md | E1、文章标签与推荐评分的表结构已实现；Kite Plus 登录用到的表见 accounts.md §5 | 2026-10-10 |
 | worker.md | E1 与打标签循环已实现；阈值已按 E0 实测回填（§10）；ping 与 Kite 提示已补 | 2026-10-03 |
-| api.md | E1、标签与发布即出现（ping）接口已实现；Kite Plus 账号登录与应用登录接口已实现；OpenAPI 待定 | 2026-10-10 |
+| api.md | E1、标签与发布即出现（ping）接口已实现；Kite Plus 账号登录与应用登录接口已实现，配置了 Kite Plus 时没有密码接口；OpenAPI 待定 | 2026-10-11 |
 | frontend.md | E2 的读者页面、标签筛选和推荐流已实现；账号相关页面见 accounts.md | 2026-10-03 |
-| project-layout.md | 已按本文搭建；加入 `internal/idp` 和 Kite Plus 登录的配置；§10 加上与同机其他服务共用 Caddy | 2026-10-11 |
-| accounts.md | 本站账号、订阅流、OPML 导入导出、推荐评分和域名认领已实现；Kite Plus 账号登录、关联、退出与删号同步、应用登录（§1.1）已实现，本地实测，生产未启用 | 2026-10-10 |
+| project-layout.md | 已按本文搭建；加入 `internal/idp` 和 Kite Plus 登录的配置；§10 加上与同机其他服务共用 Caddy，配置了 Kite Plus 时用 promote-admin 代替安装向导 | 2026-10-11 |
+| accounts.md | 本站账号、订阅流、OPML 导入导出、推荐评分和域名认领已实现；Kite Plus 账号登录、退出与删号同步、应用登录（§1.1）已实现并在生产启用；配置了 Kite Plus 时只用它登录，旧账号按已验证的邮箱关联 | 2026-10-11 |
 | recommendation.md | 设计中，R0 待实施 | 2026-10-05 |
 | notices.md | 第一版已实现 | 2026-10-06 |
-| identity-and-comments.md | 架构决定；身份服务先行（ZITADEL）；原生应用由所属服务代办登录；Explore 已按 §3 接入；身份服务和评论服务与 Explore 同机 | 2026-10-11 |
+| identity-and-comments.md | 架构决定；身份服务先行（ZITADEL）；原生应用由所属服务代办登录；Explore 已按 §3 接入，按已验证邮箱关联旧账号是 Explore 独有的例外；身份服务和评论服务与 Explore 同机 | 2026-10-11 |
 | admin.md | 初始后台设计；当前实现状态见 admin-operations.md | 2026-09-24 |
 | admin-frontend.md | 初始页面设计；当前页面与接口见 admin-operations.md | 2026-09-24 |
-| admin-operations.md | 完整后台页面、真实接口与内容治理流程已实现 | 2026-09-24 |
+| admin-operations.md | 完整后台页面、真实接口与内容治理流程已实现；配置了 Kite Plus 时后台没有密码 | 2026-10-11 |
 
 里程碑定义见 [architecture.md §9](architecture.md#9-里程碑)。

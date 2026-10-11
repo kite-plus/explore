@@ -42,7 +42,7 @@
 ## 3. 协议与数据
 
 1. 各服务通过 OIDC Discovery 获取端点和 JWKS。使用 Authorization Code + PKCE，随机 `state` 和 `nonce`，精确注册回调地址。
-2. 回调校验 `state`、`nonce`、ID Token 签名及 `iss`、`aud`、有效期；用户身份以 `(iss, sub)` 标识，不能用邮箱、显示名或 GitHub ID。ZITADEL 的 `sub` 是整个实例统一的用户 ID，各应用拿到的一致（2026-09 核实）；换用其他实现时也必须满足这一点。
+2. 回调校验 `state`、`nonce`、ID Token 签名及 `iss`、`aud`、有效期；用户身份以 `(iss, sub)` 标识，不能用邮箱、显示名或 GitHub ID。评论服务从不按邮箱匹配账号。唯一的例外在 Explore：它只用 Kite Plus 登录、不再有本站密码，以前用密码注册的账号无从回来，所以一个还没关联的身份带着身份服务验证过（`email_verified` 为 `true`）的邮箱首次登录、而恰好一个没有关联任何身份的 Explore 账号用这个邮箱时，Explore 把身份关联到那个账号，等同于按邮箱找回账号（[accounts.md §1](accounts.md#1-登录与会话)）。已经关联的身份照样只按 `(iss, sub)` 认人。ZITADEL 的 `sub` 是整个实例统一的用户 ID，各应用拿到的一致（2026-09 核实）；换用其他实现时也必须满足这一点。
 3. 每个应用建立自己的本地会话，Cookie 只发给自己的域名，名称用 `__Host-` 前缀：`comments.kite.plus` 承载用户生成的内容，前缀能防止兄弟子域覆盖别的应用的 Cookie。应用退出只结束本地会话。读者在身份服务退出时，身份服务用 back-channel logout 通知各应用，各应用按 `sid` 删除这次身份服务会话期间签发的本地会话，所以本地会话要记下签发时 ID Token 里的 `sid`。更早的身份服务会话期间签发、仍然有效的本地会话不受影响，各应用自己提供「退出所有设备」一类的入口。
 4. Explore 只持有身份键和订阅；评论服务持有身份键、公开昵称、评论、站点归属与审核信息。隐私导出、删除和身份服务停用事件需跨服务协调：身份服务推送用户删除和停用事件，各应用删除或暂停本地数据；推送可能丢失，各应用另外定时对账（[comments login.md §7](https://github.com/kite-plus/comments/blob/main/docs/design/login.md#7-账号删除与停用)）。推送只当提示：每个服务的同步令牌都读得到所有推送的签名密钥，一个服务被攻破就能给别的服务伪造推送，所以收到推送和对账时都先用身份服务的接口读这个用户现在的状态，按状态处理；查不到用户时，还要身份服务自己的事件记录里有删除事件才删除本地账号。锁定不当作停用：知道邮箱的人输错几次密码就能锁定别人的账号，所以只有停用暂停本地账号。推送的格式、签名和对账接口以 [identity 仓库 README](https://github.com/kite-plus/identity#contract-for-kite-plus-services) 为准，Explore 的做法见 [accounts.md §1](accounts.md#1-登录与会话)。
 5. 面向跨域博客的评论登录用弹窗进入身份服务，再返回评论服务；弹窗不可用时整页跳转。组件运行在评论服务自己的 iframe 里，宿主页拿不到任何凭据；不依赖第三方 Cookie。协议和威胁分析见 [comments login.md §4](https://github.com/kite-plus/comments/blob/main/docs/design/login.md#4-组件登录协议)。

@@ -255,7 +255,7 @@ docker compose up -d
 
 0.1.19 及以前的 `Caddyfile` 和 `docker-compose.yaml` 没有这两处：把 `import /etc/caddy/sites/*.caddy` 加到 `Caddyfile` 末尾，在 caddy 的 `volumes` 下加一行 `- ./sites:/etc/caddy/sites:ro`。升级 Explore 时 `docker-compose.override.yaml` 和 `sites/` 原样保留。
 
-**首次安装**：还没有管理员账号时，打开 `/admin` 进入安装向导：创建第一个管理员账号，再选择是否开放注册和投稿。向导不要求安装码，第一个完成安装的人就成为管理员，所以 `docker compose up -d` 之后要马上完成这一步；安装完成前，`serve` 每次启动都会在日志里提醒。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
+**首次安装**：配置了 Kite Plus 账号登录（`EXPLORE_OIDC_ISSUER`）时没有安装向导，也没有本站密码：第一位管理员先用 Kite Plus 账号登录一次 Explore，再在服务器上运行 `explore users promote-admin EMAIL`（[accounts.md §1](accounts.md#1-登录与会话)）。没有配置时，还没有管理员账号时打开 `/admin` 进入安装向导：创建第一个管理员账号，再选择是否开放注册和投稿。向导不要求安装码，第一个完成安装的人就成为管理员，所以 `docker compose up -d` 之后要马上完成这一步；安装完成前，`serve` 每次启动都会在日志里提醒。之后在后台「用户管理」里给其他账号授予后台权限，或者在服务器上运行 `explore users promote-admin EMAIL`。
 
 本地从源码构建同名镜像用 `make docker docker-web`，compose 会优先使用本地已有的镜像。
 

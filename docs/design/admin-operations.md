@@ -1,6 +1,6 @@
 # 内容运营后台
 
-后台入口为 `/admin`，只接受具有后台权限（`is_admin`）的本站账号：登录后使用 HttpOnly 会话 Cookie，写操作校验 CSRF 令牌。新安装还没有管理员时，`/admin` 显示安装向导，第一个管理员在那里创建（[project-layout.md §10](project-layout.md#10-部署)）。后续接入 OIDC 时，可替换账号登录入口，用户、订阅、认领及后台权限数据不需要重建。
+后台入口为 `/admin`，只接受具有后台权限（`is_admin`）的本站账号：登录后使用 HttpOnly 会话 Cookie，写操作校验 CSRF 令牌。新安装还没有管理员时，`/admin` 显示安装向导，第一个管理员在那里创建（[project-layout.md §10](project-layout.md#10-部署)）。配置了 Kite Plus 账号登录时，后台也只用它登录，没有修改密码和重置密码，安装向导改为说明 `explore users promote-admin EMAIL`（[accounts.md §1](accounts.md#1-登录与会话)）；用户、订阅、认领及后台权限数据不需要重建。
 
 ## 页面与真实数据
 

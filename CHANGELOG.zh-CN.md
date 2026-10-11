@@ -8,6 +8,12 @@
 
 ## [未发布]
 
+### 变更
+
+- 配置了 Kite Plus 的 Explore 不再保留本站密码：登录页和页头的「登录」都直接跳到 Kite Plus，网站、后台和应用里都没有密码表单、注册、修改密码和后台重置密码。只有登录带着错误回来时才显示登录页，说明原因并可以重试，连不上 Kite Plus 时也一样。账号页的「关联 Kite Plus 账号」去掉了。后台登录是一个 Kite Plus 按钮；还没有管理员的服务器不再显示安装表单，而是说明请那个人先用 Kite Plus 账号登录一次，再运行 `explore users promote-admin EMAIL`。没有配置 Kite Plus 时一切照旧。
+- 以前用密码注册的账号，现在用邮箱相同的 Kite Plus 账号登录就能回来：Kite Plus 验证过这个邮箱、本站恰好有一个账号用它而且还没关联 Kite Plus 账号时，两者自动关联，订阅都在，相当于按邮箱找回账号；旧密码和旧会话随之失效。邮箱没验证的照样拒绝；邮箱被一个关联了别的 Kite Plus 账号的账号使用时，照样不能登录。
+- 这次升级没有数据库迁移，`.env`、`docker-compose.yaml` 和 `Caddyfile` 都不用改。库里留下的密码哈希不再使用，账号关联时会清空，不需要另外删除。
+
 ## [0.1.20] - 2026-10-11
 
 一个 Kite Plus 账号的版本：读者可以用 Kite Plus 各服务共用的账号登录（已在 id.kite.plus 上线），Kite 应用也可以经服务器登录。`.env` 设了 `EXPLORE_OIDC_ISSUER` 和客户端之后才会打开。这次升级有两个数据库迁移，并且要用这个版本的 `Caddyfile` 和 `docker-compose.yaml`：按 README 第一步重新下载这两个文件，或者照 `docs/design/project-layout.md` 第 10 节加上那几行。新的环境变量都列在 `.env.example` 里，全部可选。
