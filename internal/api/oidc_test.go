@@ -225,20 +225,47 @@ func TestWebSignIn(t *testing.T) {
 		t.Fatal("a second sign-in made another account")
 	}
 
-	// Password registration is closed once Kite Plus is configured.
-	register := e.do(req{method: http.MethodPost, path: "/api/v1/auth/register",
-		body: `{"email":"new@example.org","password":"long-password-123","display_name":"New"}`})
-	if code, _ := errorCode(t, register); register.Code != http.StatusForbidden || code != "feature_disabled" {
-		t.Fatalf("register = %d %s", register.Code, code)
+}
+
+// With Kite Plus configured, Explore has no passwords: every password
+// route is gone, as the Kite Plus ones are without it.
+func TestNoPasswordsWithKitePlus(t *testing.T) {
+	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
+	ctx := context.Background()
+	if _, err := e.s.CreateUser(ctx, "local@example.org", mustHash(t, "long-password-123"), "Local"); err != nil {
+		t.Fatal(err)
 	}
-	// No password to sign in with.
-	login := e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"reader@example.org","password":"unused-password-value"}`})
-	if login.Code != http.StatusUnauthorized {
-		t.Fatalf("password login of an identity account = %d", login.Code)
+	options := e.get("/api/v1/auth/options")
+	if !strings.Contains(options.Body.String(), `"password":false`) {
+		t.Fatalf("options = %s", options.Body.String())
 	}
-	if w := b.do(http.MethodPut, "/api/v1/me/password", `{"current_password":"x","new_password":"long-password-123"}`,
-		map[string]string{"X-CSRF-Token": me.CSRFToken}); w.Code != http.StatusConflict {
-		t.Fatalf("change password = %d", w.Code)
+	p.SetUser(idptest.User{Subject: "sub-admin", SessionID: "sid", Email: "admin@example.org", Name: "Admin"})
+	b := e.browser()
+	b.signIn("/auth/login")
+	if err := e.s.SetUserAdmin(ctx, "admin@example.org", true); err != nil {
+		t.Fatal(err)
+	}
+	me := decode[meOut](t, b.get("/api/v1/me"))
+	if me.PasswordLogin {
+		t.Fatal("password_login is true without passwords")
+	}
+	write := map[string]string{"X-CSRF-Token": me.CSRFToken}
+	for name, w := range map[string]*httptest.ResponseRecorder{
+		"register": e.do(req{method: http.MethodPost, path: "/api/v1/auth/register",
+			body: `{"email":"new@example.org","password":"long-password-123","display_name":"New"}`}),
+		"login":           e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"local@example.org","password":"long-password-123"}`}),
+		"app login":       e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"local@example.org","password":"long-password-123","client":"ios"}`}),
+		"setup":           e.do(req{method: http.MethodPost, path: "/api/v1/setup", body: `{"email":"x@example.org","password":"long-password-123","display_name":"X"}`}),
+		"change password": b.do(http.MethodPut, "/api/v1/me/password", `{"current_password":"x","new_password":"long-password-123"}`, write),
+		"link":            b.do(http.MethodPost, "/api/v1/auth/link", `{"password":"x"}`, write),
+		"admin reset":     b.do(http.MethodPut, "/api/v1/admin/users/"+me.ID+"/password", `{"password":"temporary-pass-123"}`, write),
+	} {
+		if code, _ := errorCode(t, w); w.Code != http.StatusNotFound || code != "not_found" {
+			t.Errorf("%s = %d %s", name, w.Code, code)
+		}
+	}
+	if w := e.get("/api/v1/setup"); w.Code != http.StatusOK {
+		t.Fatalf("setup state = %d", w.Code)
 	}
 }
 
@@ -376,161 +403,118 @@ func TestSignInRules(t *testing.T) {
 	wantError(e.browser().signIn("/auth/login"), "account_disabled")
 }
 
-func TestLinkIdentity(t *testing.T) {
+// Rule 4 of docs/design/accounts.md section 1: an account made with a
+// password comes back through a Kite Plus account with its verified email.
+func TestLinkByVerifiedEmail(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
 	ctx := context.Background()
-	// register makes a password account signed in through a session made in
-	// the store, which keeps the login rate limit for the calls under test.
-	register := func(email string) (*browser, meOut) {
+	verified, unverified := true, false
+	local, err := e.s.CreateUser(ctx, "local@example.org", mustHash(t, "long-password-123"), "Local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A session from before the switch, which linking ends.
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		t.Fatal(err)
+	}
+	old := base64.RawURLEncoding.EncodeToString(raw[:])
+	if err := e.s.CreateSession(ctx, store.Session{UserID: local.ID, TokenHash: sha256.Sum256([]byte(old)), Expires: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	wantError := func(w *httptest.ResponseRecorder, code string) {
 		t.Helper()
-		u, err := e.s.CreateUser(ctx, email, mustHash(t, "long-password-123"), "Local")
-		if err != nil {
-			t.Fatal(err)
+		if got := location(t, w).Query().Get("error"); got != code {
+			t.Fatalf("error = %q, want %q", got, code)
 		}
-		var raw [32]byte
-		if _, err := rand.Read(raw[:]); err != nil {
-			t.Fatal(err)
-		}
-		token := base64.RawURLEncoding.EncodeToString(raw[:])
-		if err := e.s.CreateSession(ctx, store.Session{UserID: u.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: time.Now().Add(time.Hour)}); err != nil {
-			t.Fatal(err)
-		}
-		b := e.browser()
-		b.cookies["__Host-explore_session"] = token
-		return b, decode[meOut](t, b.get("/api/v1/me"))
-	}
-	// link starts linking and returns where at the provider it goes on.
-	link := func(b *browser, me meOut, body string) *httptest.ResponseRecorder {
-		t.Helper()
-		return b.do(http.MethodPost, "/api/v1/auth/link", body, map[string]string{"X-CSRF-Token": me.CSRFToken})
-	}
-	started := func(t *testing.T, w *httptest.ResponseRecorder) string {
-		t.Helper()
-		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "private, no-store" {
-			t.Fatalf("link = %d %s", w.Code, w.Body.String())
-		}
-		return decode[struct {
-			URL string `json:"url"`
-		}](t, w).URL
-	}
-	b, me := register("local@example.org")
-	if !me.PasswordLogin || me.IdentityLinkedAt != nil {
-		t.Fatalf("before linking: %+v", me)
-	}
-	if w := b.do(http.MethodPost, "/api/v1/auth/link", `{"password":"long-password-123"}`, nil); w.Code != http.StatusForbidden {
-		t.Fatalf("link without the CSRF header = %d", w.Code)
-	}
-	if w := e.do(req{method: http.MethodPost, path: "/api/v1/auth/link", body: `{"password":"long-password-123"}`}); w.Code != http.StatusUnauthorized {
-		t.Fatalf("link signed out = %d", w.Code)
-	}
-	if w := link(b, me, `{"password":"wrong-password-123"}`); w.Code != http.StatusForbidden {
-		t.Fatalf("link with a wrong password = %d", w.Code)
-	}
-	// Another device signed in to the same account, signed out by linking.
-	elsewhere := e.browser()
-	{
-		var raw [32]byte
-		if _, err := rand.Read(raw[:]); err != nil {
-			t.Fatal(err)
-		}
-		token := base64.RawURLEncoding.EncodeToString(raw[:])
-		if err := e.s.CreateSession(ctx, store.Session{UserID: me.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: time.Now().Add(time.Hour)}); err != nil {
-			t.Fatal(err)
-		}
-		elsewhere.cookies["__Host-explore_session"] = token
-	}
-	if w := b.get("/api/v1/me/identity"); w.Code != http.StatusNotFound {
-		t.Fatalf("identity before linking = %d", w.Code)
-	}
-	p.SetUser(idptest.User{Subject: "sub-link", SessionID: "sid-link", Email: "another@example.org", Name: "Another"})
-	back := provider(t, started(t, link(b, me, `{"password":"long-password-123","return":"/en/account"}`)))
-	if auths := p.Authorizations(); auths[len(auths)-1].Prompt != "select_account" {
-		t.Fatalf("link prompt = %q", auths[len(auths)-1].Prompt)
-	}
-	done := b.get("/auth/callback?" + back.RawQuery)
-	if loc := location(t, done); loc.String() != "/en/account?linked=1" {
-		t.Fatalf("link went to %s", loc)
-	}
-	if w := elsewhere.get("/api/v1/me"); w.Code != http.StatusUnauthorized {
-		t.Fatalf("another session after linking = %d", w.Code)
-	}
-	identity := decode[struct {
-		Email    string    `json:"email"`
-		LinkedAt time.Time `json:"linked_at"`
-	}](t, b.get("/api/v1/me/identity"))
-	if identity.Email != "another@example.org" || identity.LinkedAt.IsZero() {
-		t.Fatalf("identity = %+v", identity)
-	}
-	after := decode[meOut](t, b.get("/api/v1/me"))
-	if after.ID != me.ID || after.PasswordLogin || after.IdentityLinkedAt == nil || after.Email != "local@example.org" {
-		t.Fatalf("after linking: %+v", after)
-	}
-	if w := e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"local@example.org","password":"long-password-123"}`}); w.Code != http.StatusUnauthorized {
-		t.Fatalf("password after linking = %d", w.Code)
-	}
-	// Signing in with Kite Plus now reaches the same account.
-	k := e.browser()
-	k.signIn("/auth/login")
-	if decode[meOut](t, k.get("/api/v1/me")).ID != me.ID {
-		t.Fatal("sign-in after linking reached another account")
-	}
-	// Linking again is refused; so is an identity linked elsewhere.
-	if w := link(b, after, `{"password":"long-password-123"}`); w.Code != http.StatusConflict {
-		t.Fatalf("second link = %d", w.Code)
-	}
-	b2, me2 := register("second@example.org")
-	back = provider(t, started(t, link(b2, me2, `{"password":"long-password-123"}`)))
-	if loc := location(t, b2.get("/auth/callback?"+back.RawQuery)); loc.String() != "/account?error=identity_taken" {
-		t.Fatalf("taken identity went to %s", loc)
-	}
-	if !decode[meOut](t, b2.get("/api/v1/me")).PasswordLogin {
-		t.Fatal("a refused link turned the password off")
-	}
-	// The browser must still be signed in to the account that started it.
-	b3, me3 := register("third@example.org")
-	p.SetUser(idptest.User{Subject: "sub-third", SessionID: "s3", Email: "third-kp@example.org"})
-	back = provider(t, started(t, link(b3, me3, `{"password":"long-password-123","return":"//evil.example"}`)))
-	b3.do(http.MethodPost, "/api/v1/auth/logout", "", map[string]string{"X-CSRF-Token": me3.CSRFToken})
-	if loc := location(t, b3.get("/auth/callback?"+back.RawQuery)); loc.String() != "/account?error=login_expired" {
-		t.Fatalf("link after signing out went to %s", loc)
-	}
-	// A link flow's state is no web sign-in: another browser cannot finish it.
-	b4, me4 := register("fourth@example.org")
-	back = provider(t, started(t, link(b4, me4, `{"password":"long-password-123"}`)))
-	if loc := location(t, e.browser().get("/auth/callback?"+back.RawQuery)); loc.Query().Get("error") != "login_expired" {
-		t.Fatalf("another browser finished the link: %s", loc)
 	}
 
-	// An admin detaches the identity: the account is signed out, keeps no
-	// password, and can be given one again.
-	admin, adminMe := register("admin@example.org")
+	// Unverified, or verification not said: no match by email.
+	p.SetUser(idptest.User{Subject: "sub-local", SessionID: "s1", Email: "local@example.org", EmailVerified: &unverified})
+	wantError(e.browser().signIn("/auth/login"), "email_unverified")
+	p.SetUser(idptest.User{Subject: "sub-local", SessionID: "s1", Email: "local@example.org"})
+	wantError(e.browser().signIn("/auth/login"), "email_in_use")
+
+	// Verified, in another case: linked to that account, even with sign-ups closed.
+	if err := e.s.SetSetting(ctx, "registration_enabled", "false", "admin@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	p.SetUser(idptest.User{Subject: "sub-local", SessionID: "s1", Email: "Local@Example.org", EmailVerified: &verified})
+	b := e.browser()
+	if loc := location(t, b.signIn("/auth/login?return=/following")); loc.String() != "/following" {
+		t.Fatalf("linked sign-in went to %s", loc)
+	}
+	me := decode[meOut](t, b.get("/api/v1/me"))
+	if me.ID != local.ID || me.Email != "local@example.org" || me.IdentityLinkedAt == nil || me.PasswordLogin {
+		t.Fatalf("me = %+v", me)
+	}
+	if w := e.do(req{method: http.MethodGet, path: "/api/v1/me", header: map[string]string{"Cookie": "__Host-explore_session=" + old}}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("a session from before linking = %d", w.Code)
+	}
+	if u, err := e.s.UserByEmail(ctx, "local@example.org"); err != nil || u.PasswordHash != "" {
+		t.Fatalf("password after linking = %q, %v", u.PasswordHash, err)
+	}
+	identity := decode[struct {
+		Email string `json:"email"`
+	}](t, b.get("/api/v1/me/identity"))
+	if identity.Email != "local@example.org" {
+		t.Fatalf("identity email = %q", identity.Email)
+	}
+	// Signing in again finds it as any linked account.
+	if decode[meOut](t, e.browser().signInMe(t)).ID != local.ID {
+		t.Fatal("a second sign-in reached another account")
+	}
+
+	// A target with another identity, two accounts differing in case, or a
+	// disabled one: no link.
+	p.SetUser(idptest.User{Subject: "sub-other", SessionID: "s2", Email: "local@example.org", EmailVerified: &verified})
+	wantError(e.browser().signIn("/auth/login"), "email_in_use")
+	for _, email := range []string{"twin@example.org", "Twin@example.org"} {
+		if _, err := e.s.CreateUser(ctx, email, "h", "Twin"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p.SetUser(idptest.User{Subject: "sub-twin", SessionID: "s3", Email: "twin@example.org", EmailVerified: &verified})
+	wantError(e.browser().signIn("/auth/login"), "email_in_use")
+	banned, err := e.s.CreateUser(ctx, "banned@example.org", "h", "Banned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.SetUserDisabled(ctx, banned.ID, true, "spam", "admin@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	p.SetUser(idptest.User{Subject: "sub-banned", SessionID: "s4", Email: "banned@example.org", EmailVerified: &verified})
+	wantError(e.browser().signIn("/auth/login"), "account_disabled")
+
+	// An admin unlinks it; the next verified sign-in links it again.
+	if err := e.s.SetSetting(ctx, "registration_enabled", "true", "admin@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	p.SetUser(idptest.User{Subject: "sub-admin", SessionID: "s5", Email: "admin@example.org", EmailVerified: &verified})
+	admin := e.browser()
+	admin.signIn("/auth/login")
 	if err := e.s.SetUserAdmin(ctx, "admin@example.org", true); err != nil {
 		t.Fatal(err)
 	}
-	adminWrite := map[string]string{"X-CSRF-Token": adminMe.CSRFToken}
-	if w := admin.do(http.MethodPut, "/api/v1/admin/users/"+me.ID+"/password", `{"password":"temporary-pass-123"}`, adminWrite); w.Code != http.StatusConflict {
-		t.Fatalf("reset a linked account = %d", w.Code)
-	}
-	if w := admin.do(http.MethodDelete, "/api/v1/admin/users/"+adminMe.ID+"/identities", "", adminWrite); w.Code != http.StatusForbidden {
-		t.Fatalf("unlink own account = %d", w.Code)
-	}
-	if w := admin.do(http.MethodDelete, "/api/v1/admin/users/not-a-uuid/identities", "", adminWrite); w.Code != http.StatusNotFound {
-		t.Fatalf("unlink a malformed ID = %d", w.Code)
-	}
-	unlinked := admin.do(http.MethodDelete, "/api/v1/admin/users/"+me.ID+"/identities", "", adminWrite)
-	if unlinked.Code != http.StatusOK || strings.TrimSpace(unlinked.Body.String()) != `{"unlinked":1}` {
+	adminMe := decode[meOut](t, admin.get("/api/v1/me"))
+	unlinked := admin.do(http.MethodDelete, "/api/v1/admin/users/"+local.ID+"/identities", "", map[string]string{"X-CSRF-Token": adminMe.CSRFToken})
+	if unlinked.Code != http.StatusOK {
 		t.Fatalf("unlink = %d %s", unlinked.Code, unlinked.Body.String())
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusUnauthorized {
 		t.Fatalf("session after unlinking = %d", w.Code)
 	}
-	if w := admin.do(http.MethodPut, "/api/v1/admin/users/"+me.ID+"/password", `{"password":"temporary-pass-123"}`, adminWrite); w.Code != http.StatusNoContent {
-		t.Fatalf("reset after unlinking = %d %s", w.Code, w.Body.String())
+	p.SetUser(idptest.User{Subject: "sub-local", SessionID: "s6", Email: "local@example.org", EmailVerified: &verified})
+	if decode[meOut](t, e.browser().signInMe(t)).ID != local.ID {
+		t.Fatal("the unlinked account was not linked again")
 	}
-	login := e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"local@example.org","password":"temporary-pass-123"}`})
-	if login.Code != http.StatusOK || decode[meOut](t, login).IdentityLinkedAt != nil {
-		t.Fatalf("password after unlinking = %d %s", login.Code, login.Body.String())
-	}
+}
+
+// signInMe signs in with Kite Plus and returns GET /api/v1/me.
+func (b *browser) signInMe(t *testing.T) *httptest.ResponseRecorder {
+	t.Helper()
+	b.signIn("/auth/login")
+	return b.get("/api/v1/me")
 }
 
 func TestBackchannelLogout(t *testing.T) {

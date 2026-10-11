@@ -157,23 +157,31 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.POST("/submissions/preview", s.limit(s.previewLimit), s.previewSubmission)
 	v1.GET("/submissions/:id", s.limit(s.readLimit), s.submission)
 	v1.POST("/ping", s.limit(s.pingLimit), s.ping)
-	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
-	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
+	// With Kite Plus configured, Explore has no passwords of its own: the
+	// password routes do not exist, as the Kite Plus ones do not without
+	// it. See docs/design/accounts.md section 1.
+	passwords := !s.kitePlusOnly()
+	if passwords {
+		v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
+		v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
+	}
 	v1.GET("/auth/options", s.limit(s.readLimit), s.authOptions)
 	if s.OIDC != nil {
 		v1.POST("/auth/app/exchange", s.limit(s.loginLimit), s.appExchange)
 	}
 	v1.GET("/setup", s.limit(s.readLimit), s.setupState)
-	v1.POST("/setup", s.limit(s.loginLimit), s.completeSetup)
+	if passwords {
+		v1.POST("/setup", s.limit(s.loginLimit), s.completeSetup)
+	}
 	account := v1.Group("/", func(c *gin.Context) { c.Header("Cache-Control", "private, no-store"); c.Next() }, s.requireUser())
 	account.GET("/me", s.me)
 	account.PATCH("/me", s.updateMe)
 	account.DELETE("/me", s.deleteMe)
-	account.PUT("/me/password", s.limit(s.loginLimit), s.changePassword)
-	account.POST("/auth/logout", s.logout)
-	if s.OIDC != nil {
-		account.POST("/auth/link", s.limit(s.loginLimit), s.oidcLink)
+	if passwords {
+		account.PUT("/me/password", s.limit(s.loginLimit), s.changePassword)
 	}
+	account.POST("/auth/logout", s.logout)
+
 	account.GET("/me/identity", s.myIdentity)
 	account.GET("/me/subscriptions", s.subscriptions)
 	account.GET("/me/subscriptions.opml", s.exportSubscriptions)
@@ -196,7 +204,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	admin.GET("/users/:id", s.adminUser)
 	admin.PATCH("/users/:id", s.adminUpdateUser)
 	admin.DELETE("/users/:id", s.adminDeleteUser)
-	admin.PUT("/users/:id/password", s.adminResetPassword)
+	if passwords {
+		admin.PUT("/users/:id/password", s.adminResetPassword)
+	}
 	admin.DELETE("/users/:id/sessions", s.adminRevokeSessions)
 	admin.DELETE("/users/:id/identities", s.adminUnlinkIdentities)
 	admin.DELETE("/users/:id/blogs/:host", s.adminReleaseBlog)

@@ -25,8 +25,11 @@ const (
 var (
 	// ErrIdentityTaken refuses linking an identity another account has.
 	ErrIdentityTaken = errors.New("identity is linked to another account")
-	// ErrAlreadyLinked refuses linking a second identity of one issuer.
+	// ErrAlreadyLinked refuses linking a second identity to an account.
 	ErrAlreadyLinked = errors.New("account is linked to another identity")
+	// ErrEmailAmbiguous refuses matching an email that more than one account
+	// has, in different case.
+	ErrEmailAmbiguous = errors.New("more than one account has this email")
 	// ErrPasswordOff refuses a password for an account that signs in through
 	// its identity provider.
 	ErrPasswordOff = errors.New("account signs in through its identity provider")
@@ -106,59 +109,64 @@ func (s *Store) CreateIdentityUser(ctx context.Context, issuer, subject, email, 
 	return u, err
 }
 
-// LinkIdentity attaches the identity (issuer, subject), whose email is
-// email, to an account and turns off its password, which the identity
-// provider replaces. Like a password change, it ends every other session of
-// the account, keeping the one with the token hash keep. Linking the
-// identity the account already has changes nothing.
-func (s *Store) LinkIdentity(ctx context.Context, userID, issuer, subject, email string, keep [sha256.Size]byte) error {
-	if !validUUID(userID) {
-		return ErrNotFound
-	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		var disabled bool
-		err := tx.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&disabled)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
+// LinkIdentityByEmail attaches a new identity (issuer, subject) to the one
+// account whose email is email, when that account has no identity yet, and
+// returns the account. Explore has no passwords once Kite Plus is on, so a
+// provider-verified email is how an account made with a password comes
+// back; the caller checks the verification. Like a password reset, linking
+// clears the account's password and temporary-password mark and ends all
+// its sessions. No such account is ErrNotFound; more than one, differing
+// only in case, ErrEmailAmbiguous; one with an identity already,
+// ErrAlreadyLinked; a disabled one, ErrUserDisabled; an identity another
+// sign-in has just linked, ErrIdentityTaken.
+func (s *Store) LinkIdentityByEmail(ctx context.Context, issuer, subject, email string) (User, error) {
+	var u User
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id::text, disabled_at IS NOT NULL,
+				EXISTS (SELECT 1 FROM user_identities i WHERE i.user_id = users.id)
+			FROM users WHERE lower(email) = lower($1) FOR UPDATE`, email)
 		if err != nil {
 			return err
 		}
-		if disabled {
+		type match struct {
+			id               string
+			disabled, linked bool
+		}
+		matches, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (match, error) {
+			var m match
+			return m, row.Scan(&m.id, &m.disabled, &m.linked)
+		})
+		switch {
+		case err != nil:
+			return err
+		case len(matches) == 0:
+			return ErrNotFound
+		case len(matches) > 1:
+			return ErrEmailAmbiguous
+		case matches[0].linked:
+			return ErrAlreadyLinked
+		case matches[0].disabled:
 			return ErrUserDisabled
 		}
-		var owner string
-		err = tx.QueryRow(ctx, `SELECT user_id::text FROM user_identities WHERE issuer = $1 AND subject = $2`, issuer, subject).Scan(&owner)
-		switch {
-		case err == nil && owner == userID:
-			return nil
-		case err == nil:
-			return ErrIdentityTaken
-		case !errors.Is(err, pgx.ErrNoRows):
-			return err
-		}
-		var other bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND issuer = $2)`,
-			userID, issuer).Scan(&other); err != nil {
-			return err
-		}
-		if other {
-			return ErrAlreadyLinked
-		}
+		id := matches[0].id
 		if _, err := tx.Exec(ctx, `INSERT INTO user_identities (issuer, subject, user_id, email) VALUES ($1, $2, $3, $4)`,
-			issuer, subject, userID, email); err != nil {
+			issuer, subject, id, email); err != nil {
 			if isUniqueViolation(err) {
 				return ErrIdentityTaken
 			}
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = '', password_reset_at = NULL, password_reset_by = '' WHERE id = $1`,
-			userID); err != nil {
+			id); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2`, userID, keep[:])
+		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+			return err
+		}
+		u, err = scanUser(tx.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id))
 		return err
 	})
+	return u, err
 }
 
 // RecordIdentityEmail keeps the identity's email as the provider sent it at
@@ -193,8 +201,10 @@ func (s *Store) IdentityOf(ctx context.Context, userID string) (Identity, error)
 
 // UnlinkIdentities detaches every identity from an account and ends its
 // sessions, which those identities may have signed in. The account keeps
-// no password, so an admin then resets one for it. It returns how many
-// identities it detached.
+// no password: with Kite Plus on, it is reached again only through a Kite
+// Plus sign-in with its verified email (LinkIdentityByEmail); without, an
+// admin resets a password for it. It returns how many identities it
+// detached.
 func (s *Store) UnlinkIdentities(ctx context.Context, id string) (int64, error) {
 	if !validUUID(id) {
 		return 0, ErrNotFound

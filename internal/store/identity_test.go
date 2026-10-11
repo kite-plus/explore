@@ -50,23 +50,25 @@ func TestIdentityAccounts(t *testing.T) {
 		t.Fatalf("local account changed: %+v", got)
 	}
 
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-1", "kp@example.com", keep); !errors.Is(err, ErrIdentityTaken) {
-		t.Fatalf("link taken identity: %v", err)
+	// A password account takes a new identity with its email, in any case,
+	// losing its password, temporary mark and every session.
+	s.exec(t, `UPDATE users SET password_reset_at = now(), password_reset_by = 'admin@example.com' WHERE id = $1`, local.ID)
+	if _, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-1", "Local@Example.com"); !errors.Is(err, ErrIdentityTaken) {
+		t.Fatalf("link a taken identity: %v", err)
 	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2", "kp@example.com", keep); err != nil {
-		t.Fatal(err)
+	if _, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-x", "nobody@example.com"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("no account with the email: %v", err)
 	}
-	linked, err := s.UserByEmail(ctx, "local@example.com")
-	if err != nil || linked.PasswordHash != "" || linked.LinkedAt == nil {
+	linked, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-2", "Local@Example.com")
+	if err != nil || linked.ID != local.ID || linked.PasswordHash != "" || linked.LinkedAt == nil || linked.TemporaryPassword {
 		t.Fatalf("linked = %+v, %v", linked, err)
 	}
-	if _, err := s.UserBySession(ctx, keep); err != nil {
-		t.Fatalf("the linking session ended: %v", err)
+	for _, hash := range [][32]byte{keep, gone} {
+		if _, err := s.UserBySession(ctx, hash); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("a session survived linking: %v", err)
+		}
 	}
-	if _, err := s.UserBySession(ctx, gone); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("another session survived linking: %v", err)
-	}
-	if i, err := s.IdentityOf(ctx, local.ID); err != nil || i.Email != "kp@example.com" || i.Subject != "sub-2" {
+	if i, err := s.IdentityOf(ctx, local.ID); err != nil || i.Email != "Local@Example.com" || i.Subject != "sub-2" {
 		t.Fatalf("identity = %+v, %v", i, err)
 	}
 	if err := s.RecordIdentityEmail(ctx, testIssuer, "sub-2", "new-kp@example.com"); err != nil {
@@ -81,14 +83,17 @@ func TestIdentityAccounts(t *testing.T) {
 	if _, err := s.IdentityOf(ctx, "not-a-uuid"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("malformed ID: %v", err)
 	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2", "kp@example.com", keep); err != nil {
-		t.Fatalf("relinking the same identity: %v", err)
-	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-3", "kp@example.com", keep); !errors.Is(err, ErrAlreadyLinked) {
+	// An account with an identity already, or one shared in case, or a
+	// disabled one, takes none.
+	if _, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-3", "local@example.com"); !errors.Is(err, ErrAlreadyLinked) {
 		t.Fatalf("second identity: %v", err)
 	}
 	if err := s.ResetPassword(ctx, local.ID, "new-hash", "admin@example.com"); !errors.Is(err, ErrPasswordOff) {
 		t.Fatalf("reset a linked account's password: %v", err)
+	}
+	s.exec(t, `INSERT INTO users (email, password_hash, display_name) VALUES ('twin@example.com', 'h', 'Twin'), ('Twin@example.com', 'h', 'Twin')`)
+	if _, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-5", "twin@example.com"); !errors.Is(err, ErrEmailAmbiguous) {
+		t.Fatalf("ambiguous email: %v", err)
 	}
 	banned, err := s.CreateUser(ctx, "banned@example.com", "hash", "Banned")
 	if err != nil {
@@ -97,9 +102,17 @@ func TestIdentityAccounts(t *testing.T) {
 	if err := s.SetUserDisabled(ctx, banned.ID, true, "spam", "admin@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.LinkIdentity(ctx, banned.ID, testIssuer, "sub-4", "kp@example.com", keep); !errors.Is(err, ErrUserDisabled) {
+	if _, err := s.LinkIdentityByEmail(ctx, testIssuer, "sub-4", "banned@example.com"); !errors.Is(err, ErrUserDisabled) {
 		t.Fatalf("link a disabled account: %v", err)
 	}
+	if _, err := s.UserByIdentity(ctx, testIssuer, "sub-4"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("a refused link left an identity")
+	}
+	again := sha256.Sum256([]byte("after linking"))
+	if err := s.CreateSession(ctx, Session{UserID: local.ID, TokenHash: again, Expires: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	keep = again
 	detail, err := s.AdminUserDetail(ctx, local.ID)
 	if err != nil || len(detail.Identities) != 1 || detail.Identities[0].Subject != "sub-2" || detail.PasswordLogin {
 		t.Fatalf("detail = %+v, %v", detail, err)

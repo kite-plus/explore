@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/kite-plus/explore/internal/i18n"
 	"github.com/kite-plus/explore/internal/idp"
@@ -26,8 +25,9 @@ import (
 // there can mean waiting for a verification email.
 const flowLifetime = 30 * time.Minute
 
-// Flow modes: a sign-in on the site, linking an identity to the signed-in
-// account, and an app's sign-in.
+// Flow modes: a sign-in on the site, an app's sign-in, and linking an
+// identity from the account page, which only flows begun before passwords
+// went can still be.
 const (
 	modeWeb  = "web"
 	modeLink = "link"
@@ -44,8 +44,6 @@ const (
 	flowEmailInUse         = "email_in_use"
 	flowEmailUnverified    = "email_unverified"
 	flowRegistrationClosed = "registration_closed"
-	flowIdentityTaken      = "identity_taken"
-	flowAlreadyLinked      = "already_linked"
 )
 
 // authOptions tells clients how this server signs readers in.
@@ -59,8 +57,13 @@ func (s *Server) authOptions(c *gin.Context) {
 		oidc = gin.H{"name": name, "account_url": s.IdentityAccountURL}
 	}
 	c.Header("Vary", "Accept-Language")
-	cached(c, time.Minute, "application/json; charset=utf-8", encode(gin.H{"password": true, "oidc": oidc}))
+	cached(c, time.Minute, "application/json; charset=utf-8", encode(gin.H{"password": !s.kitePlusOnly(), "oidc": oidc}))
 }
+
+// kitePlusOnly reports whether readers sign in with Kite Plus alone: so it
+// is whenever the provider is configured, and Explore's own passwords are
+// gone (docs/design/accounts.md section 1).
+func (s *Server) kitePlusOnly() bool { return s.OIDC != nil }
 
 // safeReturn keeps where a sign-in returns to on this site: a path from its
 // root, never one a browser reads as another host ("//" or "/\"), nor the
@@ -177,43 +180,6 @@ func (s *Server) oidcLogin(c *gin.Context) {
 	s.startFlow(c, store.LoginFlow{Mode: modeWeb, ReturnPath: safeReturn(c.Query("return"), "/")}, false)
 }
 
-// oidcLink starts linking a Kite Plus account to the signed-in one:
-// POST /api/v1/auth/link {password, return}, with the session's CSRF
-// header. The password is asked again because a linked identity outlives
-// the session, so a stolen session must not be enough to attach one. It
-// answers with the provider's address for the page to go to, rather than a
-// redirect, which the site's CSP (form-action 'self') would stop.
-func (s *Server) oidcLink(c *gin.Context) {
-	var body struct {
-		Password string `json:"password"`
-		Return   string `json:"return"`
-	}
-	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") || c.ShouldBindJSON(&body) != nil {
-		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-		return
-	}
-	u := currentUser(c)
-	if u.LinkedAt != nil || u.PasswordHash == "" {
-		s.fail(c, http.StatusConflict, codeAlreadyLinked)
-		return
-	}
-	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.Password)) != nil {
-		s.fail(c, http.StatusForbidden, codeWrongPassword)
-		return
-	}
-	// The provider asks which account to link rather than taking whichever
-	// is signed in there.
-	target, err := s.prepareFlow(c, store.LoginFlow{Mode: modeLink, ReturnPath: safeReturn(body.Return, "/account"), UserID: u.ID}, true)
-	switch {
-	case errors.Is(err, idp.ErrUnavailable):
-		s.fail(c, http.StatusServiceUnavailable, codeIdentityUnavailable)
-	case err != nil:
-		s.storeError(c, err)
-	default:
-		writeJSON(c, http.StatusOK, gin.H{"url": target})
-	}
-}
-
 // oidcCallback is where the provider sends the browser back. It checks the
 // state against the browser that started the sign-in, then the ID Token,
 // and finishes the sign-in as its mode says.
@@ -261,7 +227,9 @@ func (s *Server) oidcCallback(c *gin.Context) {
 		return
 	}
 	if f.Mode == modeLink {
-		s.finishLink(c, f, id)
+		// Linking from the account page is gone; a link begun before the
+		// upgrade ends here rather than signing in whoever came back.
+		s.flowError(c, f, flowExpired)
 		return
 	}
 	u, code, err := s.identityUser(ctx, id)
@@ -298,10 +266,13 @@ func (s *Server) releaseBinding(c *gin.Context, binding [sha256.Size]byte) {
 	}
 }
 
-// identityUser finds the account linked to id or creates one from its
-// claims. Accounts are never matched by email: an email a local account
-// already uses stops the sign-in, and its owner links the identity from
-// the account page instead. code is why the reader cannot sign in.
+// identityUser finds the account linked to id, or links id to the account
+// with its verified email, or creates one from its claims. Explore has no
+// passwords once Kite Plus is on, so an account made with a password comes
+// back through a Kite Plus account the provider has verified its email for,
+// much as a reset by email would (docs/design/accounts.md section 1). An
+// email in use by an account that cannot take the identity stops the
+// sign-in. code is why the reader cannot sign in.
 func (s *Server) identityUser(ctx context.Context, id idp.Identity) (store.User, string, error) {
 	issuer := s.OIDC.Issuer()
 	email := validEmail(id.Email)
@@ -317,13 +288,6 @@ func (s *Server) identityUser(ctx context.Context, id idp.Identity) (store.User,
 	if !errors.Is(err, store.ErrNotFound) {
 		return store.User{}, "", err
 	}
-	open, err := s.Store.Setting(ctx, "registration_enabled")
-	if err != nil {
-		return store.User{}, "", err
-	}
-	if open != "true" {
-		return store.User{}, flowRegistrationClosed, nil
-	}
 	if email == "" {
 		s.Log.Warn("identity provider sent no usable email")
 		return store.User{}, flowFailed, nil
@@ -331,22 +295,52 @@ func (s *Server) identityUser(ctx context.Context, id idp.Identity) (store.User,
 	if id.EmailVerified != nil && !*id.EmailVerified {
 		return store.User{}, flowEmailUnverified, nil
 	}
-	u, err = s.Store.CreateIdentityUser(ctx, issuer, id.Subject, email, displayName(id, email))
-	if errors.Is(err, store.ErrEmailTaken) || errors.Is(err, store.ErrIdentityTaken) {
-		// Another sign-in of the same reader that ran alongside may have
-		// created the account; only then is the email someone else's.
-		if u, err := s.Store.UserByIdentity(ctx, issuer, id.Subject); err == nil {
+	if id.EmailVerified != nil && *id.EmailVerified {
+		u, err := s.Store.LinkIdentityByEmail(ctx, issuer, id.Subject, email)
+		switch {
+		case err == nil:
+			s.Log.Info("identity linked to an existing account by its verified email", "account", u.Number)
 			return signInAs(u)
-		} else if !errors.Is(err, store.ErrNotFound) {
+		case errors.Is(err, store.ErrUserDisabled):
+			return store.User{}, flowDisabled, nil
+		case errors.Is(err, store.ErrEmailAmbiguous), errors.Is(err, store.ErrAlreadyLinked):
+			return store.User{}, flowEmailInUse, nil
+		case errors.Is(err, store.ErrIdentityTaken):
+			return s.raceWinner(ctx, issuer, id.Subject)
+		case !errors.Is(err, store.ErrNotFound):
 			return store.User{}, "", err
 		}
-		return store.User{}, flowEmailInUse, nil
+	}
+	open, err := s.Store.Setting(ctx, "registration_enabled")
+	if err != nil {
+		return store.User{}, "", err
+	}
+	if open != "true" {
+		return store.User{}, flowRegistrationClosed, nil
+	}
+	u, err = s.Store.CreateIdentityUser(ctx, issuer, id.Subject, email, displayName(id, email))
+	if errors.Is(err, store.ErrEmailTaken) || errors.Is(err, store.ErrIdentityTaken) {
+		return s.raceWinner(ctx, issuer, id.Subject)
 	}
 	if err != nil {
 		return store.User{}, "", err
 	}
 	s.Log.Info("account created from an identity")
 	return u, "", nil
+}
+
+// raceWinner is the account another sign-in of the same reader, running
+// alongside, has just made or linked for the identity; with none, the email
+// belongs to an account that cannot take it.
+func (s *Server) raceWinner(ctx context.Context, issuer, subject string) (store.User, string, error) {
+	u, err := s.Store.UserByIdentity(ctx, issuer, subject)
+	if err == nil {
+		return signInAs(u)
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		return store.User{}, "", err
+	}
+	return store.User{}, flowEmailInUse, nil
 }
 
 func signInAs(u store.User) (store.User, string, error) {
@@ -374,36 +368,6 @@ func displayName(id idp.Identity, email string) string {
 		name = "Kite Plus"
 	}
 	return name
-}
-
-// finishLink attaches the identity to the account that started the link,
-// which the browser must still be signed in to. As after a password change,
-// the account's other sessions end; this one stays.
-func (s *Server) finishLink(c *gin.Context, f store.LoginFlow, id idp.Identity) {
-	u, token, _, err := s.sessionUser(c)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && u.ID != f.UserID) {
-		s.flowError(c, f, flowExpired)
-		return
-	}
-	if err != nil {
-		s.storeError(c, err)
-		return
-	}
-	err = s.Store.LinkIdentity(c.Request.Context(), f.UserID, s.OIDC.Issuer(), id.Subject, validEmail(id.Email),
-		sha256.Sum256([]byte(token)))
-	switch {
-	case errors.Is(err, store.ErrIdentityTaken):
-		s.flowError(c, f, flowIdentityTaken)
-	case errors.Is(err, store.ErrAlreadyLinked):
-		s.flowError(c, f, flowAlreadyLinked)
-	case errors.Is(err, store.ErrUserDisabled), errors.Is(err, store.ErrNotFound):
-		s.flowError(c, f, flowDisabled)
-	case err != nil:
-		s.storeError(c, err)
-	default:
-		s.Log.Info("identity linked to an account")
-		c.Redirect(http.StatusFound, withQuery(f.ReturnPath, "linked", "1"))
-	}
 }
 
 // myIdentity is the Kite Plus account linked to the signed-in one, for the

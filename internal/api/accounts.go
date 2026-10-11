@@ -280,18 +280,20 @@ func (s *Server) startSession(c *gin.Context, u store.User, client string) {
 	}
 	c.Header("Cache-Control", "no-store")
 	if client != store.ClientWeb {
-		writeJSON(c, http.StatusOK, appSessionJSON(u, token, expires))
+		writeJSON(c, http.StatusOK, s.appSessionJSON(u, token, expires))
 		return
 	}
 	s.setSessionCookie(c, token)
-	writeJSON(c, http.StatusOK, userJSON(u, token))
+	writeJSON(c, http.StatusOK, s.userJSON(u, token))
 }
 
-func appSessionJSON(u store.User, token string, expires time.Time) gin.H {
-	return gin.H{"token": token, "expires_at": expires.UTC().Truncate(time.Second), "user": userJSON(u, token)}
+func (s *Server) appSessionJSON(u store.User, token string, expires time.Time) gin.H {
+	return gin.H{"token": token, "expires_at": expires.UTC().Truncate(time.Second), "user": s.userJSON(u, token)}
 }
 
-func userJSON(u store.User, token string) gin.H {
+// userJSON is the account as GET /api/v1/me gives it. password_login is
+// false for every account once Kite Plus is on, as no password works then.
+func (s *Server) userJSON(u store.User, token string) gin.H {
 	var linked *time.Time
 	if u.LinkedAt != nil {
 		t := u.LinkedAt.UTC()
@@ -300,12 +302,12 @@ func userJSON(u store.User, token string) gin.H {
 	return gin.H{"id": u.ID, "number": u.Number, "created_at": u.CreatedAt.UTC(), "temporary_password": u.TemporaryPassword,
 		"email": u.Email, "display_name": u.DisplayName,
 		"is_admin": u.IsAdmin, "csrf_token": csrfToken(token),
-		"password_login": u.PasswordHash != "", "identity_linked_at": linked}
+		"password_login": u.PasswordHash != "" && !s.kitePlusOnly(), "identity_linked_at": linked}
 }
 
 func (s *Server) me(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
-	writeJSON(c, http.StatusOK, userJSON(currentUser(c), c.GetString("session_token")))
+	writeJSON(c, http.StatusOK, s.userJSON(currentUser(c), c.GetString("session_token")))
 }
 
 func (s *Server) logout(c *gin.Context) {
@@ -332,7 +334,7 @@ func (s *Server) updateMe(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	writeJSON(c, http.StatusOK, userJSON(u, c.GetString("session_token")))
+	writeJSON(c, http.StatusOK, s.userJSON(u, c.GetString("session_token")))
 }
 
 // changePassword sets a new password once the current one checks out, and

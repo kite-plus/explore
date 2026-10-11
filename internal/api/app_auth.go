@@ -132,7 +132,7 @@ func (s *Server) appExchange(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	writeJSON(c, http.StatusOK, appSessionJSON(u, token, expires))
+	writeJSON(c, http.StatusOK, s.appSessionJSON(u, token, expires))
 }
 
 // askAppConfirmation stops an app sign-in bound for the custom scheme in

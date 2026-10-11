@@ -47,7 +47,6 @@ const (
 	codeWrongPassword      = "wrong_password"
 	codePasswordDisabled   = "password_disabled"
 	codeInvalidGrant       = "invalid_grant"
-	codeAlreadyLinked      = "already_linked"
 	// The identity provider could not be reached.
 	codeIdentityUnavailable = "identity_unavailable"
 )
@@ -79,7 +78,6 @@ var messages = map[string]struct{ en, zh string }{
 	codeEmailTaken:          {"Another account already uses this email.", "这个邮箱已被其他账号使用。"},
 	codePasswordDisabled:    {"This account signs in with a Kite Plus account and has no password here.", "这个账号用 Kite Plus 账号登录，在本站没有密码。"},
 	codeInvalidGrant:        {"The sign-in code is not valid or has expired. Sign in again.", "登录授权码无效或已过期，请重新登录。"},
-	codeAlreadyLinked:       {"This account is already linked to a Kite Plus account.", "这个账号已经关联了 Kite Plus 账号。"},
 	codeIdentityUnavailable: {"Kite Plus accounts are unavailable right now. Please try again later.", "Kite Plus 账号暂时无法访问，请稍后再试。"},
 }
 
