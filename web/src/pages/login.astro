@@ -7,5 +7,5 @@ const state = await loadLogin(Astro, "zh");
 if (state instanceof Response) return state;
 ---
 <Base lang="zh" title="登录" description="登录 Explore" path="/login" noindex center>
-  <AuthForm client:load lang="zh" next={state.next} kitePlus={state.kitePlus} error={state.error} />
+  <AuthForm client:load lang="zh" next={state.next} kitePlus={state.kitePlus} passwords={state.passwords} error={state.error} />
 </Base>

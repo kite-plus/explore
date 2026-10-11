@@ -14,13 +14,19 @@ import { PasswordInput } from '@/admin/components/password-input'
 import { readerRequest, type ReaderUser } from '@/lib/reader-api'
 import { AuthLayout } from './auth-layout'
 
+/** Where Kite Plus brings the admin back to: the admin page asked for. */
+function kitePlusHref() {
+  return `/auth/login?return=${encodeURIComponent(window.location.pathname + window.location.search)}`
+}
+
 export function SignIn() {
-  const { error } = useAuth()
+  const { error, kitePlusOnly } = useAuth()
 
   useEffect(() => {
     if (error) toast.error(error)
   }, [error])
 
+  if (kitePlusOnly) return <KitePlusSignIn />
   return (
     <AuthLayout>
       <div className='flex flex-col space-y-2 text-start'>
@@ -149,5 +155,44 @@ function UserAuthForm() {
         登录
       </Button>
     </form>
+  )
+}
+
+// With Kite Plus the only way in, admins sign in there too; a reader signed
+// in without admin access is told so rather than sent round again.
+function KitePlusSignIn() {
+  const { reader, logout } = useAuth()
+  return (
+    <AuthLayout>
+      <div className='flex flex-col space-y-2 text-start'>
+        <h2 className='text-lg font-semibold tracking-tight'>登录</h2>
+        <p className='text-sm leading-relaxed text-muted-foreground'>
+          {reader ? (
+            <>
+              当前登录的账号 <span className='font-medium text-foreground'>{reader.email}</span> 没有后台权限。
+            </>
+          ) : (
+            '管理员用 Kite Plus 账号登录。'
+          )}
+        </p>
+      </div>
+      {reader ? (
+        <Button variant='outline' onClick={logout}>
+          退出这个账号
+        </Button>
+      ) : (
+        <Button asChild>
+          <a href={kitePlusHref()} data-kite-plus>
+            <LogIn /> 使用 Kite Plus 账号登录
+          </a>
+        </Button>
+      )}
+      <p className='px-8 text-center text-sm leading-relaxed text-muted-foreground'>
+        不是管理员？{' '}
+        <a href='/' className='text-nowrap font-medium text-foreground underline underline-offset-4 hover:text-primary'>
+          返回首页
+        </a>
+      </p>
+    </AuthLayout>
   )
 }

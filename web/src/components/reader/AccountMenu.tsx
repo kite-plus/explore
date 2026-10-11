@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 // The account corner of the header. The server draws it from the request's
 // session (src/middleware.ts); only a page drawn without asking, which a
 // cache may have kept from before the reader signed in, asks again here.
-export function AccountMenu({ lang, reader, checked }: { lang: "zh" | "en"; reader: Reader | null; checked: boolean }) {
+export function AccountMenu({ lang, reader, checked, signInHref }: { lang: "zh" | "en"; reader: Reader | null; checked: boolean; signInHref?: string }) {
   const [user, setUser] = useState<Reader | null>(reader);
   const [leaving, setLeaving] = useState(false);
   const zh = lang === "zh";
@@ -20,7 +20,7 @@ export function AccountMenu({ lang, reader, checked }: { lang: "zh" | "en"; read
 
   if (!user) {
     return (
-      <a href={`${prefix}/login`} className="whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+      <a href={signInHref ?? `${prefix}/login`} className="whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
         {zh ? "登录" : "Sign in"}
       </a>
     );

@@ -43,6 +43,36 @@ type Errors = Partial<Record<'name' | 'email' | 'password' | 'confirm', string>>
  * choose the site switches.
  */
 export function Setup() {
+  const { kitePlusOnly } = useAuth()
+  return kitePlusOnly ? <KitePlusSetup /> : <PasswordSetup />
+}
+
+// With Kite Plus the only way in, no admin is made by password: the first
+// admin signs in with Kite Plus once, and the server's operator promotes
+// that account (docs/design/accounts.md section 1).
+function KitePlusSetup() {
+  return (
+    <AuthLayout>
+      <div className='flex flex-col space-y-2 text-start'>
+        <h2 className='text-lg font-semibold tracking-tight'>还没有管理员</h2>
+        <p className='text-sm leading-relaxed text-muted-foreground'>
+          这台服务器用 Kite Plus 账号登录，不在这里创建管理员。请第一位管理员先用 Kite Plus 账号登录一次 Explore，再由服务器操作者运行：
+        </p>
+      </div>
+      <pre className='overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-sm'>explore users promote-admin EMAIL</pre>
+      <p className='text-sm leading-relaxed text-muted-foreground'>
+        EMAIL 是那个账号的邮箱。完成后刷新这个页面登录后台。
+      </p>
+      <Button asChild>
+        <a href={`/auth/login?return=${encodeURIComponent('/admin')}`} data-kite-plus>
+          使用 Kite Plus 账号登录
+        </a>
+      </Button>
+    </AuthLayout>
+  )
+}
+
+function PasswordSetup() {
   const { signedIn } = useAuth()
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')

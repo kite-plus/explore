@@ -112,7 +112,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
       <div><h1 className="text-2xl font-semibold">{zh ? "我的账号" : "My account"}</h1><p className="mt-1 text-sm text-muted-foreground">{user ? `${user.display_name} · ${user.email}` : zh ? "正在读取账号…" : "Loading account…"}</p>{user && <AccountID user={user} zh={zh} />}</div>
       <button type="button" onClick={logout} className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{zh ? "退出登录" : "Sign out"}</button>
     </header>
-    {user?.temporary_password && <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">{zh
+    {user?.temporary_password && user.password_login && <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">{zh
       ? <>你现在用的是管理员帮你重置的临时密码，请到下方<a href="#password" className="font-medium underline">改成只有你知道的密码</a>。</>
       : <>You are using a temporary password an admin set for you. <a href="#password" className="font-medium underline">Change it to one only you know</a>.</>}</p>}
     {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
@@ -146,7 +146,7 @@ export function AccountPanel({ lang }: { lang: "zh" | "en" }) {
         {challenge && <div className="mt-4 space-y-2 rounded-md bg-muted p-3 text-sm"><p>{zh ? "TXT 主机名" : "TXT name"}: <code className="break-all">{challenge.record}</code></p><p>{zh ? "TXT 内容" : "TXT value"}: <code className="break-all">{challenge.value}</code></p><button className="mt-2 rounded-md border bg-background px-3 py-2 text-sm" onClick={verifyClaim}>{zh ? "验证并认领" : "Verify and claim"}</button></div>}
       </div>
     </section>
-    {user && options?.oidc && <KitePlus user={user} zh={zh} prefix={prefix} accountURL={options.oidc.account_url} />}
+    {user && options?.oidc && <KitePlus user={user} zh={zh} accountURL={options.oidc.account_url} />}
     {user?.password_login && <ChangePassword user={user} zh={zh} onChanged={async () => setUser(await currentReader())} />}
     <section className="rounded-lg border border-destructive/30 p-4"><h2 className="text-lg font-semibold">{zh ? "删除账号" : "Delete account"}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{zh ? "账号、登录状态、订阅和认领的博客会被永久删除，无法恢复。你提交过的举报会保留，但不再关联到你的账号。" : "Your account, its sign-ins, follows and claimed blogs are deleted for good. Reports you filed stay, no longer linked to you."}</p>
@@ -227,75 +227,30 @@ function FollowingFeed({ user, zh }: { user: ReaderUser; zh: boolean }) {
   </div>;
 }
 
-// Why linking came back without linking; the API names them in ?error=
-// (internal/api/oidc.go).
-const linkErrors: Record<string, [string, string]> = {
-  identity_taken: ["这个 Kite Plus 账号已经关联了本站的另一个账号。", "This Kite Plus account is already linked to another account here."],
-  already_linked: ["这个账号已经关联了 Kite Plus 账号。", "This account is already linked to a Kite Plus account."],
-  login_expired: ["关联已过期，请重试。", "Linking expired. Please try again."],
-  access_denied: ["关联已取消。", "Linking was cancelled."],
-  unavailable: ["Kite Plus 账号暂时无法访问，请稍后再试。", "Kite Plus accounts are unavailable right now. Please try again later."],
-};
-
-/** The Kite Plus account linked to this one, or the way to link one. */
-function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: boolean; prefix: string; accountURL: string }) {
-  const [returned, setReturned] = useState<{ linked: boolean; error: string | null }>({ linked: false, error: null });
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState("");
+/**
+ * The Kite Plus account linked to this one. Explore has no passwords once
+ * Kite Plus is on, so an account without one links itself at its next Kite
+ * Plus sign-in with the same, verified email (docs/design/accounts.md
+ * section 1).
+ */
+function KitePlus({ user, zh, accountURL }: { user: ReaderUser; zh: boolean; accountURL: string }) {
   const [identityEmail, setIdentityEmail] = useState("");
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setReturned({ linked: params.get("linked") === "1", error: params.get("error") });
-  }, []);
   useEffect(() => {
     if (!user.identity_linked_at) return;
     readerRequest<{ email: string }>("me/identity").then(identity => setIdentityEmail(identity.email)).catch(() => {});
   }, [user.identity_linked_at]);
-  const error = returned.error ? linkErrors[returned.error] ?? ["没能关联 Kite Plus 账号，请重试。", "Linking the Kite Plus account did not work. Please try again."] : null;
   const linked = user.identity_linked_at
     ? new Date(user.identity_linked_at).toLocaleDateString(zh ? "zh-CN" : "en", { dateStyle: zh ? "long" : "medium" })
     : null;
-
-  // The API answers with the provider's address rather than redirecting: the
-  // page's CSP (form-action 'self') stops a form from leaving the site.
-  const link: NonNullable<ComponentProps<"form">["onSubmit"]> = async event => {
-    event.preventDefault();
-    if (busy) return;
-    if (!password) { setFailed(zh ? "请输入当前密码。" : "Enter your current password."); return; }
-    setBusy(true); setFailed("");
-    try {
-      const { url } = await readerRequest<{ url: string }>("auth/link", {
-        method: "POST",
-        headers: { "Accept-Language": zh ? "zh-CN" : "en" },
-        body: JSON.stringify({ password, return: `${prefix}/account` }),
-      }, user.csrf_token);
-      window.location.assign(url);
-    } catch (reason) {
-      setFailed(reason instanceof Error ? reason.message : String(reason));
-      setBusy(false);
-    }
-  };
-
   return <section id="kite-plus" className="scroll-mt-24"><h2 className="text-lg font-semibold">{zh ? "Kite Plus 账号" : "Kite Plus account"}</h2>
-    {returned.linked && linked && <p role="status" className="mt-2 text-sm text-success">{zh ? "已关联 Kite Plus 账号，以后用它登录。" : "Kite Plus account linked; sign in with it from now on."}</p>}
-    {error && <p role="alert" className="mt-2 text-sm text-destructive">{zh ? error[0] : error[1]}</p>}
     {linked ? <>
       <p className="mt-1 text-sm text-muted-foreground" data-kite-plus-linked>{zh
         ? <>已关联 Kite Plus 账号{identityEmail && <> <span className="font-medium text-foreground" data-kite-plus-email>{identityEmail}</span></>}，用它登录。{linked}关联。</>
         : <>Linked to the Kite Plus account{identityEmail && <> <span className="font-medium text-foreground" data-kite-plus-email>{identityEmail}</span></>}, which you sign in with. Linked {linked}.</>}</p>
       <a className="mt-3 inline-block rounded-md border px-3 py-2 text-sm hover:bg-accent" href={accountURL} target="_blank" rel="noopener">{zh ? "管理 Kite Plus 账号" : "Manage Kite Plus account"}</a>
-    </> : <>
-      <p className="mt-1 text-sm text-muted-foreground">{zh
-        ? "关联后用 Kite Plus 账号登录，本站密码随即停用，其他设备上的登录会退出；订阅和认领的博客都会保留。Kite Plus 会让你选择要关联的账号。一个 Kite Plus 账号只能关联本站的一个账号。"
-        : "Once linked, you sign in with your Kite Plus account, your password here stops working and other devices are signed out; your follows and blogs stay. Kite Plus asks which of its accounts to link. A Kite Plus account links to one account here."}</p>
-      <form className="mt-3 flex max-w-md flex-wrap items-end gap-2" onSubmit={link} noValidate data-kite-plus-link>
-        <label className="grid min-w-0 flex-1 gap-1.5 text-sm">{zh ? "当前密码" : "Current password"}
-          <input className="w-full rounded-md border bg-background px-3 py-2 text-sm" type="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></label>
-        <button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={busy}>{busy ? (zh ? "正在跳转…" : "Opening…") : (zh ? "关联 Kite Plus 账号" : "Link a Kite Plus account")}</button>
-      </form>
-      {failed && <p role="alert" className="mt-2 text-sm text-destructive">{failed}</p>}
-    </>}
+    </> : <p className="mt-1 text-sm text-muted-foreground" data-kite-plus-unlinked>{zh
+      ? `还没有关联 Kite Plus 账号。退出后用邮箱为 ${user.email} 的 Kite Plus 账号登录，就会关联到这个账号，订阅和认领的博客都会保留。`
+      : `Not linked to a Kite Plus account yet. Sign out, then sign in with the Kite Plus account of ${user.email}: it links to this account, follows and blogs included.`}</p>}
   </section>;
 }
 

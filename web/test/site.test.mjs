@@ -809,11 +809,11 @@ describe("reader accounts", () => {
     const anonymous = await get("/");
     assert.equal(anonymous.headers.get("cache-control"), "public, max-age=60");
     assert.match(anonymous.headers.get("vary") ?? "", /Cookie/);
-    assert.match(await anonymous.text(), /href="\/login"[^>]*>登录<\/a>/);
+    assert.match(await anonymous.text(), /href="\/login\?next=%2F"[^>]*>登录<\/a>/, "sign in comes back to the page");
 
     const stale = await get("/", { headers: { Cookie: "explore_session=stale" } });
     assert.equal(stale.headers.get("cache-control"), "public, max-age=60");
-    assert.match(await stale.text(), /href="\/login"[^>]*>登录<\/a>/);
+    assert.match(await stale.text(), /href="\/login\?next=%2F"[^>]*>登录<\/a>/);
   });
 
   test("the theme toggle sits in the header, the language switch in the footer", async () => {
@@ -886,25 +886,6 @@ describe("sign-in with a Kite Plus account", () => {
     assert.doesNotMatch(html, /使用 Kite Plus 账号登录/);
   });
 
-  test("the sign-in page leads with it and keeps the password form", async () => {
-    stub.state.kitePlus = true;
-    try {
-      const { res, html } = await page("/login?next=%2Fblogs");
-      assert.equal(res.status, 200);
-      assert.equal(res.headers.get("cache-control"), "private, no-store");
-      assert.match(html, /<a[^>]*href="\/auth\/login\?return=%2Fblogs"[^>]*data-kite-plus/);
-      assert.match(html, /使用 Kite Plus 账号登录/);
-      assert.match(html, /name="password"/, "accounts made here before still sign in with a password");
-      assert.doesNotMatch(html, /创建账号/, "new accounts come from Kite Plus");
-      const en = await page("/en/login?error=email_in_use");
-      assert.match(en.html, /Sign in with a Kite Plus account/);
-      assert.match(en.html, /This email already has an account here/);
-      assert.match(en.html, /href="\/auth\/login\?return=%2Fen%2Ffollowing"/);
-    } finally {
-      stub.state.kitePlus = false;
-    }
-  });
-
   test("sign-in paths reach the API as they are", async () => {
     const start = await get("/auth/login?return=%2Ffollowing", { headers: { "X-Forwarded-For": "203.0.113.9" } });
     assert.equal(start.status, 302);
@@ -940,5 +921,87 @@ describe("sign-in with a Kite Plus account", () => {
     assert.deepEqual(await aasa.json(), { applinks: { details: [] } });
     const links = await get("/.well-known/assetlinks.json");
     assert.equal(links.status, 200);
+  });
+});
+
+// A server with Kite Plus has no passwords; it runs as its own site so the
+// sign-in options the header keeps for a minute are Kite Plus from the start.
+describe("Kite Plus only", () => {
+  let kp;
+  let kpSite;
+  let kpBase;
+  before(async () => {
+    kp = await startStub();
+    kp.state.kitePlus = true;
+    const port = await freePort();
+    kpBase = `http://127.0.0.1:${port}`;
+    kpSite = spawn(process.execPath, ["dist/server/entry.mjs"], {
+      env: { ...process.env, HOST: "127.0.0.1", PORT: String(port), EXPLORE_API_URL: kp.url, EXPLORE_PUBLIC_URL: PUBLIC },
+      stdio: "ignore",
+    });
+    for (let i = 0; i < 100; i++) {
+      try {
+        await fetch(`${kpBase}/robots.txt`);
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    throw new Error("the Kite Plus site did not start");
+  });
+  after(() => {
+    kpSite?.kill();
+    kp?.server.close();
+  });
+  const kget = (path, init) => fetch(kpBase + path, { redirect: "manual", ...init });
+
+  test("the sign-in page goes straight to Kite Plus, keeping where to return", async () => {
+    for (const [path, location] of [
+      ["/login?next=%2Fblogs", "/auth/login?return=%2Fblogs"],
+      ["/login", "/auth/login?return=%2Ffollowing"],
+      ["/en/login?next=%2Fen%2Fblogs", "/auth/login?return=%2Fen%2Fblogs"],
+      ["/en/login", "/auth/login?return=%2Fen%2Ffollowing"],
+      ["/login?next=%2F%2Fevil.example", "/auth/login?return=%2Ffollowing"],
+    ]) {
+      const res = await kget(path);
+      assert.equal(res.status, 302, path);
+      assert.equal(res.headers.get("location"), location, path);
+      assert.equal(res.headers.get("cache-control"), "private, no-store", path);
+    }
+  });
+
+  test("the header's sign-in link goes straight to Kite Plus", async () => {
+    const zh = await (await kget("/blogs?lang=zh")).text();
+    assert.match(zh, /href="\/auth\/login\?return=%2Fblogs%3Flang%3Dzh"[^>]*>登录<\/a>/);
+    const en = await (await kget("/en/")).text();
+    assert.match(en, /href="\/auth\/login\?return=%2Fen%2F"[^>]*>Sign in<\/a>/);
+  });
+
+  test("a sign-in that came back with an error says so, with no password form", async () => {
+    const res = await kget("/en/login?next=%2Fen%2Fblogs&error=email_in_use");
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /Another account here already uses this email/);
+    assert.match(html, /<a[^>]*href="\/auth\/login\?return=%2Fen%2Fblogs"[^>]*data-kite-plus/);
+    assert.doesNotMatch(html, /name="password"/);
+    assert.doesNotMatch(html, /Create an account/);
+    const zh = await (await kget("/login?error=unavailable")).text();
+    assert.match(zh, /Kite Plus 账号暂时无法访问/);
+    assert.match(zh, /使用 Kite Plus 账号登录/);
+    assert.doesNotMatch(zh, /name="password"/);
+  });
+
+  test("without the sign-in options there is a retry, not a password form", async () => {
+    kp.state.down = true;
+    try {
+      const res = await kget("/login?next=%2Fblogs");
+      assert.equal(res.status, 503);
+      const html = await res.text();
+      assert.match(html, /暂时无法登录/);
+      assert.match(html, /href="\/login\?next=%2Fblogs"[^>]*data-kite-plus/);
+      assert.doesNotMatch(html, /name="password"/);
+    } finally {
+      kp.state.down = false;
+    }
   });
 });

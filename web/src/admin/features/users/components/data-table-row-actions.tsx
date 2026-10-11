@@ -8,12 +8,15 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/admin/components/ui/dropdown-menu'
+import { useAuth } from '@/admin/context/auth-provider'
 import type { AdminUserRow } from '@/lib/admin-types'
 import { useIsSelf, useUsers } from './users-provider'
 
 /** The account's actions, shared by the table rows and the detail drawer. */
 export function UserActionsMenu({ user, children }: { user: AdminUserRow; children: React.ReactNode }) {
   const { act, showDetail, detailId } = useUsers()
+  // With Kite Plus the only way in there are no passwords to reset.
+  const { kitePlusOnly } = useAuth()
   const self = useIsSelf()(user)
   const disabled = Boolean(user.disabled_at)
 
@@ -37,12 +40,14 @@ export function UserActionsMenu({ user, children }: { user: AdminUserRow; childr
         </DropdownMenuItem>
         {!self && (
           <>
-            <DropdownMenuItem disabled={!user.password_login} onClick={() => act('reset-password', [user])}>
-              重置密码
-              <DropdownMenuShortcut>
-                <KeyRound size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {!kitePlusOnly && (
+              <DropdownMenuItem disabled={!user.password_login} onClick={() => act('reset-password', [user])}>
+                重置密码
+                <DropdownMenuShortcut>
+                  <KeyRound size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem disabled={disabled} onClick={() => act('admin', [user])}>
               {user.is_admin ? '取消后台权限' : '授予后台权限'}
               <DropdownMenuShortcut>

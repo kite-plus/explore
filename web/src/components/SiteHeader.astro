@@ -5,6 +5,8 @@ import Logo from "@/components/Logo.astro";
 import { AccountMenu } from "@/components/reader/AccountMenu";
 
 import { dict, localePath, type Lang } from "@/i18n";
+import { forwardedFor } from "@/lib/forwarded";
+import { signInHref, signInOptions } from "@/lib/sign-in";
 
 interface Props {
   lang: Lang;
@@ -17,6 +19,10 @@ interface Props {
 // anchors clear of it. Narrow screens fold the links into a menu.
 const { lang, path, wide = false } = Astro.props;
 const t = dict(lang);
+// Sign in comes back to this page; with Kite Plus the only way in, the link
+// goes straight to it.
+const options = Astro.locals.reader ? undefined : await signInOptions({ lang, forwardedFor: forwardedFor(Astro.request, Astro.clientAddress) });
+const signIn = signInHref(options, localePath(lang, "/login"), Astro.url.pathname + Astro.url.search);
 // The three post streams are tabs on their pages (StreamTabs), so one item
 // stands for all of them.
 const links = [
@@ -66,7 +72,7 @@ const links = [
         <Moon data-theme-icon="dark" className="size-[1.125rem]" aria-hidden="true" />
         <Sun data-theme-icon="light" className="size-[1.125rem]" aria-hidden="true" />
       </button>
-      <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} />
+      <AccountMenu client:load lang={lang} reader={Astro.locals.reader ?? null} checked={Astro.locals.readerChecked ?? false} signInHref={signIn} />
       <details data-menu class="group relative sm:hidden">
         <summary
           aria-label={t.nav.menu}

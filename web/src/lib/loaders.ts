@@ -111,20 +111,41 @@ export async function loadFollowing(ctx: AstroGlobal, lang: Lang): Promise<Loade
  * loadLogin sends a reader who is signed in already, as src/middleware.ts
  * found, on to where they were going.
  */
+/**
+ * loadLogin sends a reader who is signed in already on to where they were
+ * going, and one on a server where Kite Plus is the only way in straight to
+ * it, so no password form shows (docs/design/accounts.md section 1). A
+ * sign-in that came back with an error stays here to say so and retry.
+ */
 export async function loadLogin(ctx: AstroGlobal, lang: Lang): Promise<LoginPage | Response> {
   cacheControl(ctx, "private, no-store");
   const next = safeNext(param(ctx, "next"), localePath(lang, "/following"));
   if (ctx.locals.reader) return ctx.redirect(next, 302);
-  // Without the options the page still offers the password form.
+  const error = param(ctx, "error") ?? null;
   const options = await api.authOptions(caller(ctx, lang));
-  return { next, kitePlus: options.kind === "ok" ? options.data.oidc?.name ?? null : null, error: param(ctx, "error") ?? null };
+  if (options.kind !== "ok") {
+    // Without the options it is unknown how to sign in; no form is offered.
+    ctx.response.status = 503;
+    ctx.response.headers.set("Retry-After", "60");
+    return { next, kitePlus: null, passwords: false, error: "unavailable" };
+  }
+  const { oidc, password } = options.data;
+  if (oidc && !password && !error) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: `/auth/login?return=${encodeURIComponent(next)}`, "Cache-Control": "private, no-store" },
+    });
+  }
+  return { next, kitePlus: oidc?.name ?? null, passwords: password, error };
 }
 
 export interface LoginPage {
   next: string;
   /** The name of the Kite Plus sign-in, or null when the server has none. */
   kitePlus: string | null;
-  /** Why a sign-in with Kite Plus came back without signing in. */
+  /** Whether the server takes passwords. */
+  passwords: boolean;
+  /** Why a sign-in came back without signing in. */
   error: string | null;
 }
 

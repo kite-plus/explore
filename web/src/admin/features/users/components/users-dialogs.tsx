@@ -9,6 +9,7 @@ import { useUserActions } from '../api'
 import { adminCopy } from '../data/data'
 import { DisableDialog } from './disable-dialog'
 import { EditDialog } from './edit-dialog'
+import { useAuth } from '@/admin/context/auth-provider'
 import { ResetPasswordDialog } from './reset-password-dialog'
 import { UserDetailDrawer } from './user-detail-drawer'
 import { useUsers } from './users-provider'
@@ -24,6 +25,7 @@ function who(users: AdminUserRow[]) {
 
 export function UsersDialogs() {
   const { open, targets, host, close, done, detailId, showDetail } = useUsers()
+  const { kitePlusOnly } = useAuth()
   const actions = useUserActions()
   const [busy, setBusy] = useState(false)
   const [confirmation, setConfirmation] = useState('')
@@ -111,7 +113,11 @@ export function UsersDialogs() {
           })}
           {confirm('unlink', {
             title: '解除 Kite Plus 关联',
-            desc: <>{who(targets)} 将不再关联现在的 Kite Plus 账号，它的所有登录会话随之退出。<br />账号没有密码，之后请为它重置一个临时密码交给读者；读者也可以再关联一个 Kite Plus 账号。</>,
+            desc: kitePlusOnly ? (
+              <>{who(targets)} 将不再关联现在的 Kite Plus 账号，它的所有登录会话随之退出。<br />之后只有用邮箱与这个账号相同、并且已验证的 Kite Plus 账号登录，才会重新关联到它。</>
+            ) : (
+              <>{who(targets)} 将不再关联现在的 Kite Plus 账号，它的所有登录会话随之退出。<br />账号没有密码，之后请为它重置一个临时密码交给读者；读者也可以再关联一个 Kite Plus 账号。</>
+            ),
             confirmText: '解除关联',
             destructive: true,
             action: () => actions.unlink(user),

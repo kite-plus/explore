@@ -22,23 +22,77 @@ const kitePlusErrors: Record<string, [string, string]> = {
   access_denied: ["Kite Plus 账号登录已取消。", "Signing in with Kite Plus was cancelled."],
   unavailable: ["Kite Plus 账号暂时无法访问，请稍后再试。", "Kite Plus accounts are unavailable right now. Please try again later."],
   account_disabled: ["这个账号已停用。", "This account is disabled."],
-  email_in_use: ["这个邮箱已经有本站账号。请先用密码登录，再到「我的账号」关联 Kite Plus 账号。", "This email already has an account here. Sign in with its password, then link Kite Plus from My account."],
+  email_in_use: ["本站另一个账号已在使用这个邮箱，无法自动关联到它。请联系站点。", "Another account here already uses this email and cannot be linked to it automatically. Contact the site."],
   email_unverified: ["请先在 Kite Plus 账号里验证邮箱。", "Verify your email in your Kite Plus account first."],
   registration_closed: ["目前暂未开放注册。", "Registration is currently closed."],
 };
 
-// Laid out like the admin sign-in (src/admin/features/auth/sign-in.tsx), so
-// both read as one site. With Kite Plus on the server, its button comes
-// first and new accounts come from it; the password form stays for
-// accounts made here before (docs/design/accounts.md section 1).
-export function AuthForm({ lang, next, kitePlus = null, error: returned = null }: {
+interface Props {
   lang: "zh" | "en";
   next: string;
+  /** The name of the Kite Plus sign-in, or null when the server has none. */
   kitePlus?: string | null;
+  /** Whether the server takes passwords; with Kite Plus it never does. */
+  passwords?: boolean;
   error?: string | null;
-}) {
+}
+
+// The sign-in page. With Kite Plus on the server there are no passwords and
+// the page only shows when a sign-in came back with an error, to say so and
+// try again (docs/design/accounts.md section 1); otherwise it is the email
+// and password form.
+export function AuthForm(props: Props) {
+  return props.passwords === false ? <KitePlusSignIn {...props} /> : <PasswordForm {...props} />;
+}
+
+function KitePlusSignIn({ lang, next, kitePlus = null, error: returned = null }: Props) {
+  const zh = lang === "zh";
+  const target = safeNext(next, zh ? "/following" : "/en/following");
+  const error = kitePlus === null
+    ? ["暂时无法登录，请稍后再试。", "Signing in is unavailable right now. Please try again later."]
+    : returned ? kitePlusErrors[returned] ?? kitePlusErrors.login_failed : null;
+  const retry = kitePlus === null
+    ? `${zh ? "" : "/en"}/login?next=${encodeURIComponent(target)}`
+    : `/auth/login?return=${encodeURIComponent(target)}`;
+  return (
+    <section aria-labelledby="auth-title" className="mx-auto flex w-full max-w-sm flex-col gap-6 sm:pb-16">
+      <div className="flex flex-col gap-2">
+        <h1 id="auth-title" className="text-lg font-semibold tracking-tight">{zh ? "登录" : "Sign in"}</h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {zh ? "Explore 用 Kite Plus 账号登录。" : "Explore signs you in with a Kite Plus account."}
+        </p>
+      </div>
+      {error && (
+        <Alert variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription>{zh ? error[0] : error[1]}</AlertDescription>
+        </Alert>
+      )}
+      <ButtonLink href={retry} data-kite-plus>
+        <KeyRound aria-hidden="true" />
+        {kitePlus === null ? (zh ? "重试" : "Try again") : (zh ? "使用 Kite Plus 账号登录" : "Sign in with a Kite Plus account")}
+      </ButtonLink>
+      <div className="flex flex-col gap-3 px-8 text-center text-sm leading-relaxed text-muted-foreground">
+        <p>
+          {zh
+            ? "以前在本站用邮箱注册过？用同一个邮箱的 Kite Plus 账号登录，就会回到原来的账号，订阅都还在。"
+            : "Made an account here with an email before? Sign in with a Kite Plus account of the same email to get back to it, follows and all."}
+        </p>
+        <p>
+          {zh ? "不登录也能阅读，" : "Reading needs no account. "}
+          <a href={zh ? "/" : "/en/"} className="text-nowrap underline underline-offset-4 hover:text-primary">{zh ? "返回首页" : "Start reading"}</a>
+          {zh ? "。" : "."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// Laid out like the admin sign-in (src/admin/features/auth/sign-in.tsx), so
+// both read as one site.
+function PasswordForm({ lang, next }: Props) {
   const [register, setRegister] = useState(false);
-  const [registrationEnabled, setRegistrationEnabled] = useState(kitePlus === null);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +106,6 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
   const errors = submitted ? validate() : {};
 
   useEffect(() => {
-    if (kitePlus !== null) return;
     const controller = new AbortController();
 
     void fetch("/api/v1/site-config", { signal: controller.signal })
@@ -66,7 +119,7 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
       .catch(() => {});
 
     return () => controller.abort();
-  }, [kitePlus]);
+  }, []);
 
   function validate(): Errors {
     const found: Errors = {};
@@ -113,8 +166,6 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
     setError("");
   }
 
-  const kitePlusError = returned ? kitePlusErrors[returned] ?? kitePlusErrors.login_failed : null;
-
   return (
     <section aria-labelledby="auth-title" className="mx-auto flex w-full max-w-sm flex-col gap-6 sm:pb-16">
       <div className="flex flex-col gap-2">
@@ -124,29 +175,9 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
         <p className="text-sm leading-relaxed text-muted-foreground">
           {register
             ? zh ? "订阅喜欢的博客，拥有自己的阅读流。" : "Follow your favorite blogs in your own reading feed."
-            : kitePlus !== null
-              ? zh ? "用 Kite Plus 账号登录或注册，订阅喜欢的博客。" : "Sign in or sign up with a Kite Plus account to follow your favorite blogs."
-              : zh ? "输入你的邮箱和密码。" : "Enter your email and password."}
+            : zh ? "输入你的邮箱和密码。" : "Enter your email and password."}
         </p>
       </div>
-
-      {kitePlus !== null && (
-        <div className="flex flex-col gap-3">
-          {kitePlusError && (
-            <Alert variant="destructive">
-              <CircleAlert aria-hidden="true" />
-              <AlertDescription>{zh ? kitePlusError[0] : kitePlusError[1]}</AlertDescription>
-            </Alert>
-          )}
-          <ButtonLink href={`/auth/login?return=${encodeURIComponent(safeNext(next, zh ? "/following" : "/en/following"))}`} data-kite-plus>
-            <KeyRound aria-hidden="true" />
-            {zh ? "使用 Kite Plus 账号登录" : "Sign in with a Kite Plus account"}
-          </ButtonLink>
-          <p className="pt-3 text-sm leading-relaxed text-muted-foreground">
-            {zh ? "以前在本站注册的账号，可以继续用邮箱和密码登录，登录后在「我的账号」里关联 Kite Plus 账号。" : "An account made here before still signs in with its email and password; link it to Kite Plus from My account afterwards."}
-          </p>
-        </div>
-      )}
 
       <form onSubmit={submit} noValidate aria-labelledby="auth-title" aria-busy={busy}>
         <FieldGroup className="gap-3">
@@ -237,7 +268,7 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
       </form>
 
       <div className="flex flex-col gap-3 px-8 text-center text-sm leading-relaxed text-muted-foreground">
-        {kitePlus === null && <p>
+        <p>
           {registrationEnabled ? (
             <>
               {register ? zh ? "已有账号？" : "Already have an account?" : zh ? "还没有账号？" : "New to Explore?"}{" "}
@@ -251,7 +282,7 @@ export function AuthForm({ lang, next, kitePlus = null, error: returned = null }
               </button>
             </>
           ) : zh ? "目前暂未开放注册。" : "Registration is currently closed."}
-        </p>}
+        </p>
         <p>
           {zh ? "不登录也能阅读，" : "Reading needs no account. "}
           <a href={home} className="text-nowrap underline underline-offset-4 hover:text-primary">

@@ -62,14 +62,16 @@ const passwordSchema = z
 type PasswordForm = z.infer<typeof passwordSchema>
 
 export function Profile() {
+  // With Kite Plus the only way in there is no password to change here.
+  const { kitePlusOnly } = useAuth()
   return (
     <>
       <AppHeader />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <PageTitle title='个人资料' description='你的名称和登录密码。' />
+        <PageTitle title='个人资料' description={kitePlusOnly ? '你的名称；用 Kite Plus 账号登录。' : '你的名称和登录密码。'} />
         <div className='grid gap-4 sm:gap-6 xl:grid-cols-2 xl:items-start'>
           <AccountCard />
-          <PasswordCard />
+          {!kitePlusOnly && <PasswordCard />}
         </div>
       </Main>
     </>

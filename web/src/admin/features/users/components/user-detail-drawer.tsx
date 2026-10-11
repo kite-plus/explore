@@ -25,6 +25,7 @@ import type { AdminUserBlog, AdminUserDetail } from '@/lib/admin-types'
 import { useUserDetail } from '../api'
 import { disabledBy, disabledReason, reportStatuses, userRole, userStatus } from '../data/data'
 import { UserActionsMenu } from './data-table-row-actions'
+import { useAuth } from '@/admin/context/auth-provider'
 import { useIsSelf, useUsers } from './users-provider'
 
 const linkClass = 'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline'
@@ -81,6 +82,7 @@ function sessionClients(sessions: AdminUserDetail['sessions']) {
 
 function Overview({ user }: { user: AdminUserDetail }) {
   const { act } = useUsers()
+  const { kitePlusOnly } = useAuth()
   const self = useIsSelf()(user)
   const status = userStatus(user)
   const role = userRole(user)
@@ -163,7 +165,11 @@ function Overview({ user }: { user: AdminUserDetail }) {
             )}
           </span>
         ) : (
-          '本站密码'
+          kitePlusOnly ? (
+            <span className='text-muted-foreground'>未关联；下次用同一邮箱的 Kite Plus 账号登录时关联</span>
+          ) : (
+            '本站密码'
+          )
         )}
       </dd>
       <dt className='text-muted-foreground'>登录会话</dt>
@@ -185,6 +191,7 @@ function Overview({ user }: { user: AdminUserDetail }) {
 
 function Details({ user }: { user: AdminUserDetail }) {
   const { act } = useUsers()
+  const { kitePlusOnly } = useAuth()
   const self = useIsSelf()(user)
 
   return (
@@ -294,7 +301,13 @@ function Details({ user }: { user: AdminUserDetail }) {
           </Link>
         )}
       </Section>
-      {self && <Empty>这是你自己的账号：停用、权限、强制下线和重置密码不能在这里操作，密码请在个人资料页修改。</Empty>}
+      {self && (
+        <Empty>
+          {kitePlusOnly
+            ? '这是你自己的账号：停用、权限和强制下线不能在这里操作。'
+            : '这是你自己的账号：停用、权限、强制下线和重置密码不能在这里操作，密码请在个人资料页修改。'}
+        </Empty>
+      )}
     </>
   )
 }
