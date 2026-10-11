@@ -8,6 +8,10 @@
 
 ## [未发布]
 
+## [0.1.21] - 2026-10-11
+
+配置了 Kite Plus 之后，Explore 只用 Kite Plus 登录：本站不再有自己的密码，点「登录」直接去 Kite Plus。用密码注册的账号，用同一个已验证邮箱的 Kite Plus 账号登录就能回来。这次升级没有数据库迁移，`.env`、`docker-compose.yaml` 和 `Caddyfile` 都不用改。
+
 ### 变更
 
 - 配置了 Kite Plus 的 Explore 不再保留本站密码：登录页和页头的「登录」都直接跳到 Kite Plus，网站、后台和应用里都没有密码表单、注册、修改密码和后台重置密码。只有登录带着错误回来时才显示登录页，说明原因并可以重试，连不上 Kite Plus 时也一样。账号页的「关联 Kite Plus 账号」去掉了。后台登录是一个 Kite Plus 按钮；还没有管理员的服务器不再显示安装表单，而是说明请那个人先用 Kite Plus 账号登录一次，再运行 `explore users promote-admin EMAIL`。没有配置 Kite Plus 时一切照旧。
