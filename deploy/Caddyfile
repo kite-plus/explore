@@ -1,6 +1,6 @@
-# Caddy in front of Explore: HTTPS for EXPLORE_PUBLIC_URL, the API and feed
-# paths to serve and everything else to web. There is no log directive, so
-# readers' addresses stay out of access logs.
+# Caddy in front of Explore: HTTPS for EXPLORE_PUBLIC_URL, the API, feed and
+# sign-in paths to serve and everything else to web. There is no log
+# directive, so readers' addresses stay out of access logs.
 {
 	servers {
 		# Only a CDN in EXPLORE_CDN_RANGES may name the reader, read right to
@@ -14,8 +14,10 @@
 {$EXPLORE_PUBLIC_URL} {
 	encode zstd gzip
 
-	# serve and web get the reader's address alone, as found above.
-	@api path /api/* /feed.xml /blogs.opml /f/* /healthz /readyz
+	# serve and web get the reader's address alone, as found above. Sign-in
+	# with Kite Plus, its hooks and the apps' callback and app link files
+	# are serve's too; see docs/design/accounts.md section 7.
+	@api path /api/* /feed.xml /blogs.opml /f/* /healthz /readyz /auth/* /hooks/* /app/auth/done /.well-known/apple-app-site-association /.well-known/assetlinks.json
 	handle @api {
 		reverse_proxy serve:8080 {
 			header_up X-Forwarded-For {client_ip}
