@@ -200,6 +200,7 @@ import SubmitForm from "@/components/submit-form";
 
 - **读取列表时只在服务端调用 API**：页面在服务端渲染时调用 Gin。提交表单先提交给前端服务，由它转发（§6）；读者主动检测文章时，浏览器请求同源 `/api/v1/entries/{id}/check`，开发环境由 Astro 转发，部署环境由反向代理转发 Gin。
 - API 地址来自环境变量 `EXPLORE_API_URL`，部署时指向内网的 `serve`。
+- serve 在 `/api` 之外还提供 Kite Plus 登录的几个地址（`/auth/*`、`/hooks/*`、`/app/auth/done` 和两个 `.well-known` 应用认领文件，[accounts.md §7](accounts.md#7-部署与待定)）。部署时反向代理直接交给 serve；web 也把它们原样转过去（`src/lib/server-proxy.ts`），供 `astro dev` 和前面没有 Caddy 的部署使用。身份服务从自己的服务器调用的 `/auth/backchannel-logout` 和 `/hooks/*` 没有 `Origin`，不做表单来源检查，由 serve 校验 logout token 和签名。
 - 接口类型目前手写，与 api.md 保持一致；OpenAPI 写好后改为生成（§1）。
 - 游标原样透传：`/?cursor=X` 对应 `GET /api/v1/entries?cursor=X`。
 - 首页与博客页在服务端读取 `GET /api/v1/tags`，按界面语言显示标签名；标签表在前端服务进程内缓存一小时。标签表暂时取不到时，页面仍显示文章，但不显示没有对应名称的标签。

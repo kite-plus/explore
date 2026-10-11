@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Readers can sign in with a Kite Plus account, the shared sign-in of Kite Plus services. It stays off until a deployment sets `EXPLORE_OIDC_ISSUER` and its client in `.env`. Then the sign-in page leads with "Sign in with a Kite Plus account", new accounts come from Kite Plus and password registration closes. Accounts made with a password keep signing in with it, and can link a Kite Plus account from the account page after entering the current password; from then on they sign in with Kite Plus and the password stops working. Accounts are never matched by email: a Kite Plus account whose email an account here already uses is asked to link instead.
+- Signing out at Kite Plus ends the sessions it started on Explore. Deleting, deactivating or locking a Kite Plus account deletes or disables its account here, and restoring it at Kite Plus restores it here; Explore checks each pushed event with Kite Plus before acting, and the worker catches missed ones every hour. The only active admin is disabled rather than deleted, and deleted once another admin exists.
+- The Kite apps can sign in through the server: the system browser opens `/auth/app/start`, Kite Plus sends it back with a one-time code for the app, and the app exchanges the code at `/api/v1/auth/app/exchange` for a session token. `/api/v1/auth/options` tells an app which sign-ins a server offers. Apps can send their token as `Authorization: Bearer` on every signed-in endpoint, without a CSRF header, and password sign-in returns the token to an app that names itself; the files that let the apps claim the callback address are served when `EXPLORE_APPLE_APP_IDS` or `EXPLORE_ANDROID_CERT_SHA256` is set.
+- The account page offers deleting the Kite Plus account beside deleting the Explore one, and the admin's user details show the linked Kite Plus account, where each session comes from, and why Kite Plus disabled an account.
+
+### Changed
+
+- With Kite Plus on an https site, the session cookie is named `__Host-explore_session`, so readers sign in once more. Without Kite Plus nothing changes.
+- The upgrade runs one migration, which adds the sign-in tables and two columns to `sessions`, and needs this version's `Caddyfile`, which sends `/auth/`, `/hooks/`, `/app/auth/done` and the two app link files to serve. `.env.example` lists the new variables, all optional.
+
 ## [0.1.19] - 2026-10-10
 
 A fix release: most of the newest posts no longer show "Awaiting check". The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.

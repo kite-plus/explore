@@ -1,25 +1,35 @@
 # 统一身份、订阅与标签
 
-> 状态：本站账号、订阅流及其公开地址、OPML 导入导出、推荐评分和域名认领已实现；OIDC 和应用登录（§1.1）待接入 · 最近更新：2026-10-10
+> 状态：本站账号、订阅流及其公开地址、OPML 导入导出、推荐评分和域名认领已实现；Kite Plus 账号登录（OIDC）、关联、退出与删号同步和应用登录（§1.1）已实现，已用本地身份服务实测，生产尚未启用 · 最近更新：2026-10-10
 > 跨站身份和评论的架构见 [identity-and-comments.md](identity-and-comments.md)。
 
 ## 0. 边界
 
-现阶段 Explore 提供邮箱和密码登录，密码使用 bcrypt 哈希保存，30 天服务端会话只存令牌哈希。后续统一身份服务接入 OIDC 时，通过 `user_identities` 将 `(issuer, subject)` 关联到现有 `users.id`；不按邮箱自动合并账号，因此订阅和博客归属不需要迁移。评论服务仍独立保存评论及审核状态。
+配置了统一身份服务（§7）时，Explore 用 Kite Plus 账号登录，通过 `user_identities` 将 `(issuer, subject)` 关联到 `users.id`；不按邮箱自动合并账号，因此订阅和博客归属不需要迁移。过渡期内已有的本站账号仍可用邮箱和密码登录，密码使用 bcrypt 哈希保存。没有配置时只有邮箱和密码登录，行为和接入前完全一样。30 天服务端会话只存令牌哈希。评论服务仍独立保存评论及审核状态。
 
 读者不登录也能看全部公开内容，匿名访问零 Cookie。Explore 不记录浏览、点击和阅读行为，不根据个人行为推荐。
 
 ## 1. 登录与会话
 
-- OIDC 尚未接入。接入时使用 Authorization Code + PKCE，并校验 `state`、`nonce`、ID Token 签名、`iss`、`aud` 和有效期。
-- 统一身份键是 `(issuer, subject)`；邮箱、昵称、头像只用于展示。不同客户端的 `sub` 若因 pairwise 配置而不同，须在身份服务中配置一致的关联标识，不能按邮箱推断同一用户。
-- 过渡阶段 Explore 接收本站密码；最少 12 字符，bcrypt 哈希存储。暂未提供邮箱验证或自助找回密码，部署时应说明这个限制；忘记密码的读者联系站点，由管理员在后台重置为临时密码，读者登录后在账号页改掉（[admin-operations.md](admin-operations.md#数据与权限边界)）。接入统一身份后，新注册只用 Kite Plus 账号；已有的本站账号保留密码登录，读者用密码登录一次、关联 Kite Plus 账号之后才关掉。账号不按邮箱自动关联，所以不能提前关掉密码登录，否则没关联的账号就再也登不进来。过渡期何时结束、到期仍未关联的账号怎么处理 `[待定]`。
-- OIDC 成功后 Explore 建立自己的服务端会话；Cookie 限本站域名，设 `HttpOnly`、`Secure`、`SameSite=Lax`。接入 OIDC 时 Cookie 改名为 `__Host-explore_session`，防止 `kite.plus` 下的兄弟子域覆盖它（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）；本地 http 开发环境设不了这个前缀，沿用旧名。数据库只存会话令牌哈希，并记下 ID Token 里的 `sid`。退出 Explore 删除本站会话；读者在身份服务退出时，身份服务发来 back-channel logout，Explore 删除同一 `sid` 的会话。
+- **开关**：`EXPLORE_OIDC_ISSUER` 为空时，本节的 Kite Plus 部分都不存在：`/auth/*`、`/hooks/idp`、`/app/auth/done` 和应用兑换接口返回 `404`，`GET /api/v1/auth/options` 的 `oidc` 为 `null`，注册、登录和 Cookie 名都和接入前一样。
+- **网页登录**：`GET /auth/login?return=<站内相对路径>` 使用 Authorization Code + PKCE（S256），`state`、`nonce` 都是 32 字节随机数。登录交易存在 `login_flows` 里，30 分钟有效（在身份服务注册可能要等验证邮件），`state` 只存哈希；交易用一个只在登录流程里用的 Cookie 绑在发起它的浏览器上：`__Host-explore_login`（http 开发环境为 `explore_login`），`HttpOnly`、`SameSite=Lax`、30 分钟，库里同样只存哈希。同一浏览器同时发起的几次登录共用一个绑定值，都能完成。`/auth/callback` 先按 `state` 和绑定值取出交易（只能用一次，取出即删除，Cookie 随之清除），再兑换授权码，校验 ID Token 的签名（discovery 给出的 JWKS）、`iss`、`aud`、`exp` 和 `nonce`；`aud` 里还有身份服务的项目 ID，所以 `azp` 存在时必须是 Explore 的客户端 ID。实现用 `coreos/go-oidc` 和 `golang.org/x/oauth2`（`internal/idp`）。
+- **找账号**：按 `(iss, sub)` 找 `user_identities`。没有就用声明建一个没有密码的账号：邮箱取 `email`（`email_verified` 为 `false` 时拒绝），名称依次取 `name`、`preferred_username`、邮箱 `@` 前的部分，截到 80 个字符；之后由读者在 Explore 自己改。不按邮箱合并：邮箱已被本站账号占用时拒绝登录，提示读者先用密码登录，再在账号页关联。后台关闭「开放注册」时也不为新身份建账号，已关联的照常登录。
+- **回到哪里**：只跳回站内相对路径；不以 `/` 开头、以 `//` 或 `/\` 开头、含空白或控制字符的，以及 `/auth/`、`/app/` 和登录页本身，一律退回 `/`。失败时跳到登录页 `/login?error=<原因>&next=<原路径>`（原路径是英文页面时用 `/en/login`），原因有 `login_expired`（交易过期、不存在或不是这个浏览器发起的）、`login_failed`（身份服务拒绝或令牌校验失败）、`access_denied`（读者在身份服务取消）、`unavailable`（身份服务连不上）、`account_disabled`、`email_in_use`、`email_unverified`、`registration_closed`，登录页按页面语言显示对应的说明。
+- **过渡**：配置 OIDC 后，`POST /api/v1/auth/register` 返回 `403 feature_disabled`，登录页以「使用 Kite Plus 账号登录」为主，保留邮箱密码表单给已有的本站账号，不再有注册入口；已有账号照常用密码登录。读者用密码登录后，在账号页「Kite Plus 账号」输入当前密码，点「关联 Kite Plus 账号」：`POST /api/v1/auth/link {password, return}`（要 CSRF 头，与登录共用限流）记下一个 `link` 模式的交易，返回身份服务的地址，页面跳过去。不用表单直接提交再重定向，是因为页面 CSP 的 `form-action 'self'` 连表单之后的重定向也拦（本地实测 Chrome 如此）。要当前密码，是因为关联上的身份比会话长久：偷到会话的人不能借此挂上自己的 Kite Plus 账号，和修改密码要当前密码是同一个道理。回调时浏览器必须仍登录在发起关联的账号上，否则按 `login_expired` 处理；这个身份已关联到别的账号时是 `identity_taken`，账号已经关联过时是 `already_linked`，都跳回账号页的 `?error=`。关联成功后跳回 `?linked=1`，密码随即清空，密码登录关闭：`PUT /api/v1/me/password` 和后台重置密码都返回 `409 password_disabled`。账号不按邮箱自动关联，所以不能提前关掉密码登录，否则没关联的账号就再也登不进来。过渡期何时结束、到期仍未关联的账号怎么处理 `[待定]`。密码账号还没有邮箱验证或自助找回密码；忘记密码的读者联系站点，由管理员在后台重置为临时密码，读者登录后在账号页改掉（[admin-operations.md](admin-operations.md#数据与权限边界)）。
+- **会话**：登录成功后 Explore 建立自己的服务端会话，记下 ID Token 里的 `sid` 和来源 `client`（`web`、`ios`、`android`）。配置了 OIDC 且 `EXPLORE_PUBLIC_URL` 是 https 时，会话 Cookie 名为 `__Host-explore_session`，旧名 `explore_session` 不再接受（登录和退出时顺带清掉旧 Cookie），防止 `kite.plus` 下的兄弟子域写一个 Cookie 把读者登录成别人（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）；本地 http 开发环境设不了这个前缀，没有配置 OIDC 时也不改名，都沿用旧名。Cookie 设 `HttpOnly`、`SameSite=Lax`，https 时 `Secure`。数据库只存会话令牌哈希。退出 Explore 只删除本站会话，不退出身份服务。
+- **back-channel logout**：读者在身份服务退出（或身份服务管理员结束会话）时，身份服务向 `POST /auth/backchannel-logout` 发送 `logout_token`。Explore 校验签名、`iss`、`aud`、`exp`、`iat`（不早于 10 分钟前、不晚于 5 分钟后）、`events` 里的 back-channel logout 事件、没有 `nonce`、有 `sub` 或 `sid`；`jti` 记在 `idp_receipts` 里，重放的令牌和任何一步不对的一样返回 `400`。有 `sid` 时删除这次身份服务会话签发的会话（同时有 `sub` 时只限这个身份的账号），网页和应用的都在内；只有 `sub` 时删除这个账号的全部会话。会话自然过期时身份服务不发通知，早先签发的本站会话照常有效，直到自己过期或读者退出。
 - 登录回调只建立会话，不直接做订阅等数据变更。登录后跳回本站相对路径，再由读者确认订阅。
 - 管理员是具有 `is_admin` 的本站账号。第一个管理员由安装向导创建（[project-layout.md §10](project-layout.md#10-部署)），之后由已有管理员在后台授予，或由服务器操作者运行 `explore users promote-admin EMAIL`。普通账号不能访问管理接口。
-- 删除 Explore 资料会删除本站订阅和会话。删除统一身份账号后，身份服务推送用户删除事件，Explore 删除对应的本站账号；账号被停用或锁定时，Explore 撤销它的会话、暂停登录，重新启用后恢复。推送可能丢失，Explore 另外定时对账（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）。
+- **删除与停用**：删除 Explore 资料会删除本站订阅和会话（`DELETE /api/v1/me`）。身份服务的用户事件（`user.removed`、`user.deactivated`、`user.reactivated`、`user.locked`、`user.unlocked`）推送到 `POST /hooks/idp`：Explore 用 `EXPLORE_IDP_WEBHOOK_SECRET` 校验 `ZITADEL-Signature`（时间相差 5 分钟以上的拒绝），按 `(aggregateID, sequence)` 去重 7 天。推送只当作提示：每个服务的同步令牌都读得到所有推送的签名密钥，所以 Explore 先用 `EXPLORE_IDP_API_TOKEN` 向身份服务读这个用户现在的状态，再按状态处理：
+  - **已删除**（查不到）且确有删除事件：像 `DELETE /api/v1/me` 一样删除本站账号，会话、订阅和认领随之删除，举报保留但去掉举报人。唯一可用的管理员例外：删了它，库里就没有管理员，安装向导会对任何人打开，所以先停用（原因 `removed`）并撤销会话，等有了另一位可用的管理员（后台授权，或 `explore users promote-admin`），下一次对账时再删除。查不到用户却没有删除事件时什么也不做，以免查询出错时误删账号。
+  - **停用或锁定**：停用本站账号，`disabled_by` 记为 `idp`，`disabled_reason` 记为 `deactivated` 或 `locked`，撤销它的全部会话，登录返回 `account_disabled`。管理员停用的账号保持原样。
+  - **正常**：只恢复身份服务停用的账号，管理员的停用不会被撤销。
 
-### 1.1 应用登录 `[设计中]`
+  推送只发一次、不重试，身份服务读不到时 `/hooks/idp` 返回 `503`。worker 每小时对账一次：用同一令牌按游标读用户事件（`idp_cursors`；查询的 `from` 不含边界，每次往前多读 5 分钟，防止身份服务提交顺序略有先后），对其中出现、在本站有账号的用户逐个读状态，照上面处理，再完成等待中的删除。没有配置令牌时 webhook 和对账都关闭（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据)）。
+
+<a id="11-应用登录-设计中"></a>
+
+### 1.1 应用登录
 
 Kite 应用（iOS、Android）接入统一身份时，不在身份服务里登记自己的客户端，由 Explore 服务端代办登录（[identity-and-comments.md §3](identity-and-comments.md#3-协议与数据) 第 6 条）。身份服务只认识 Explore 这一个机密客户端，退出和删号事件都在服务端处理；应用拿到的仍是 Explore 的会话令牌，不持有身份服务的任何令牌。
 
@@ -35,16 +45,16 @@ App → E  POST /api/v1/auth/app/exchange {code, verifier} → 会话令牌
 B 是系统登录页，E 是 Explore 服务端，I 是 `id.kite.plus`。
 
 1. **系统登录页**：iOS 用 `ASWebAuthenticationSession`，Android 用 Custom Tabs，不用应用内的 WebView：读者看得到真实地址，Passkey 和密码管理器照常可用，应用也拿不到密码。不开 `prefersEphemeralWebBrowserSession`：系统登录页和 Safari（Android 上是 Chrome）共用 Cookie，读者在浏览器里登录过 `id.kite.plus`，应用里点「登录」就直接完成。iOS 打开前会弹出「“Kite”想要使用“kite.plus”登录」的系统提示，这是系统行为，无法去掉。
-2. **回调用应用认领的 https 地址**：`https://explore.kite.plus/app/auth/done`。iOS 用 Associated Domains 加 `ASWebAuthenticationSession.Callback.https`（iOS 17.4 起，应用最低 iOS 26），Android 用 App Links（`autoVerify`）；Explore 为此发布 `/.well-known/apple-app-site-association` 和 `/.well-known/assetlinks.json`，前者要 Apple 开发者账号的 Team ID，后者要 Android 发布证书的 SHA-256 指纹。不用 `explore://`：任何应用都能注册同一个 scheme，再自己发起一次登录、用自己的 verifier 兑换，读者以为在登录 Kite，会话却给了它（[RFC 8252](https://www.rfc-editor.org/rfc/rfc8252) §7.2、§8.6）。应用没装或认领没生效时，浏览器会真的打开这个地址，页面只提示「请在 Kite 应用中完成登录」，不显示也不使用授权码，授权码到期作废。
-3. **建交易**：`GET /auth/app/start?challenge=…`，challenge 是 43 个字符的 base64url。Explore 建交易（模式 `app`，30 分钟有效，注册可能要等验证邮件），和网页登录一样用一个只在登录流程里用的 Cookie 把交易绑在发起它的浏览器上，然后跳到身份服务。读者在应用里选「换一个账号」时带上 `switch=1`，Explore 向身份服务请求 `prompt=select_account`（两种实现是否都支持，I0 核对）。
-4. **回调**：和网页登录共用 `/auth/callback`，按交易模式分开。`app` 模式校验通过后不设 Cookie 会话，而是生成授权码（32 字节随机数，只存哈希，2 分钟有效，只能用一次），跳到第 2 条的回调地址。
-5. **兑换**：`POST /api/v1/auth/app/exchange {code, verifier}`。`SHA-256(verifier)` 必须等于交易的 challenge，授权码未过期、未用过；在一个事务里把授权码标为已用并签发会话，返回 `{token, expires_at, user}`。任何一项不对都返回同一个 `400 invalid_grant`，与登录共用限流。授权码出现在地址里，可能留在系统日志里，没有 verifier 就换不出会话；攻击者把自己账号的授权码塞给读者的应用（登录 CSRF）也不成，因为应用手里的 verifier 对不上。应用只在自己发起了登录、手里有 verifier 时才处理回调。
-6. **会话**：和网页同一张 `sessions` 表，时长相同，记下 `sid` 和来源（`web`、`ios`、`android`）。应用请求改用 `Authorization: Bearer <令牌>`，不再手写 `explore_session` Cookie：接入 OIDC 时网页的 Cookie 改名为 `__Host-explore_session`，旧名不能再接受，否则兄弟子域写一个旧名的 Cookie 就能把读者登录成别人。浏览器不会自动带 `Authorization` 头，所以 Bearer 请求不需要 CSRF 头。应用先发一版改用 Bearer，再切换登录方式。
-7. **退出**：应用里「退出」删除 Explore 会话和钥匙串里的令牌，不退出 `id.kite.plus`，所以再点「登录」会直接回到同一个账号，要换账号用第 3 条的「换一个账号」。读者在浏览器里退出 `id.kite.plus` 时，身份服务的 back-channel logout 按 `sid` 删除会话，应用里这次登录也一并结束，规则和网页一致（§1）。
-8. **删除账号**：App Store 要求支持注册的应用能在应用内删除账号，必须删掉整个账号，不能只是停用；需要到网站完成时，给出直达删除页面的链接（审核指南 5.1.1(v) 和 Apple 的删号说明，2026-10 核实）。所以「我」页面保留现有的删除 Explore 资料（§1），另加「删除 Kite Plus 账号」，直接打开 `id.kite.plus` 的删号页面；删号事件再回到 Explore，删除本站账号。
+2. **回调用应用认领的 https 地址**：`https://explore.kite.plus/app/auth/done`（`EXPLORE_PUBLIC_URL` 加 `/app/auth/done`）。iOS 用 Associated Domains 加 `ASWebAuthenticationSession.Callback.https`（iOS 17.4 起，应用最低 iOS 26），Android 用 App Links（`autoVerify`）；Explore 为此发布 `/.well-known/apple-app-site-association` 和 `/.well-known/assetlinks.json`，前者要 Apple 开发者账号的 Team ID（`EXPLORE_APPLE_APP_IDS`，如 `TEAMID.plus.kite.explore`），后者要 Android 发布证书的 SHA-256 指纹（`EXPLORE_ANDROID_CERT_SHA256`，包名 `EXPLORE_ANDROID_PACKAGE` 默认 `plus.kite.explore`），没配置的那个文件不提供。`apple-app-site-association` 里 `applinks` 认领 `/app/auth/done`，`webcredentials` 列同样的应用：`Callback.https` 要求回调域名以 `webcredentials` 登记在应用的 Associated Domains 里（iOS 实现时核对），应用两种都登记。不用 `explore://`：任何应用都能注册同一个 scheme，再自己发起一次登录、用自己的 verifier 兑换，读者以为在登录 Kite，会话却给了它（[RFC 8252](https://www.rfc-editor.org/rfc/rfc8252) §7.2、§8.6）。应用没装或认领没生效时，浏览器会真的打开这个地址，页面只提示「请在 Kite 应用中完成登录」，不显示也不使用授权码，授权码到期作废。
+3. **建交易**：`GET /auth/app/start?challenge=…&client=ios|android`，challenge 是 43 个字符的 base64url，`client` 必填，记作会话的来源。Explore 建交易（模式 `app`，30 分钟有效，注册可能要等验证邮件），和网页登录一样用一个只在登录流程里用的 Cookie 把交易绑在发起它的浏览器上，然后跳到身份服务。读者在应用里选「换一个账号」时带上 `switch=1`，Explore 向身份服务请求 `prompt=select_account`，ZITADEL 的登录页会列出账号让读者选（本地实测）。要用自定义 scheme 回调时带上 `callback=scheme`（第 10 条）。参数不对返回 `400 invalid_request`。
+4. **回调**：和网页登录共用 `/auth/callback`，按交易模式分开。`app` 模式校验通过后不设 Cookie 会话，而是生成授权码（32 字节随机数，base64url 43 个字符，只存哈希，2 分钟有效，只能用一次），跳到第 2 条的回调地址 `…/app/auth/done?code=…`。找账号的规则和网页登录相同（§1）；不成功时跳到同一个回调地址，带 `?error=<原因>`，原因与网页登录相同（§1）。交易本身已过期或不是这个浏览器发起的，就不知道是应用登录，浏览器落在网页登录页上。
+5. **兑换**：`POST /api/v1/auth/app/exchange {code, verifier}`，verifier 按 RFC 7636 是 43 到 128 个字符。`base64url(SHA-256(verifier))` 必须等于交易的 challenge，授权码未过期、未用过，账号没有停用；在一个事务里把授权码标为已用并签发会话，返回 `{token, expires_at, user}`，`user` 与 `GET /api/v1/me` 相同。任何一项不对都返回同一个 `400 invalid_grant`，与登录共用限流。授权码试过一次就作废，verifier 不对也一样；用过的授权码再拿来兑换，还会删除它第一次换出的会话（RFC 6749 §4.1.2）。授权码出现在地址里，可能留在系统日志里，没有 verifier 就换不出会话；攻击者把自己账号的授权码塞给读者的应用（登录 CSRF）也不成，因为应用手里的 verifier 对不上。应用只在自己发起了登录、手里有 verifier 时才处理回调。
+6. **会话**：和网页同一张 `sessions` 表，时长相同（30 天），记下 `sid` 和来源（`web`、`ios`、`android`）。应用请求改用 `Authorization: Bearer <令牌>`，不再手写 `explore_session` Cookie：接入 OIDC 时网页的 Cookie 改名为 `__Host-explore_session`，旧名不能再接受，否则兄弟子域写一个旧名的 Cookie 就能把读者登录成别人。所有要登录的接口（包括管理接口）都接受 Bearer；请求带了 `Authorization` 头就只看它，不再看 Cookie。浏览器不会自动带 `Authorization` 头，所以 Bearer 请求不需要 CSRF 头。应用先发一版改用 Bearer，再切换登录方式：这一版的密码登录用 `POST /api/v1/auth/login {email, password, client}`，`client` 为 `ios` 或 `android` 时不设 Cookie，返回和兑换相同的 `{token, expires_at, user}`。Bearer 不依赖 OIDC 配置，现在就能用。
+7. **退出**：应用里「退出」用 Bearer 调 `POST /api/v1/auth/logout` 删除 Explore 会话，再删掉钥匙串里的令牌，不退出 `id.kite.plus`，所以再点「登录」会直接回到同一个账号，要换账号用第 3 条的「换一个账号」。读者在浏览器里退出 `id.kite.plus` 时，身份服务的 back-channel logout 按 `sid` 删除会话，应用里这次登录也一并结束，规则和网页一致（§1）。
+8. **删除账号**：App Store 要求支持注册的应用能在应用内删除账号，必须删掉整个账号，不能只是停用；需要到网站完成时，给出直达删除页面的链接（审核指南 5.1.1(v) 和 Apple 的删号说明，2026-10 核实）。所以「我」页面保留现有的删除 Explore 资料（§1），另加「删除 Kite Plus 账号」，直接打开 `id.kite.plus` 的删号页面；删号事件再回到 Explore，删除本站账号。页面地址由第 10 条的 `account_url` 给出，默认是身份服务的 `/ui/console/users/me`，普通用户在那里能看到 Delete Account（本地实测），`EXPLORE_OIDC_ACCOUNT_URL` 可以改。网页账号页已经关联的账号也有同样的入口。
 9. **Apple 登录**：身份服务的登录页提供 GitHub 登录，按审核指南 4.8，应用必须同时提供一种只收集姓名和邮箱、允许隐藏邮箱、不做广告追踪的登录方式，所以应用切换之前，身份服务要先上线 Apple 登录（[identity architecture.md §2](https://github.com/kite-plus/identity/blob/main/docs/design/architecture.md#2-登录方式)）。
-10. **按服务器提供的方式登录**：应用可以连自己部署的 Explore。`GET /api/v1/auth/options` 返回 `{"password": true, "oidc": {"name": "Kite Plus 账号"}}`（没有配置 OIDC 时 `oidc` 为 `null`），应用据此显示密码登录、统一登录或两者都有。应用的 Associated Domains 只登记了 `explore.kite.plus`，所以连其他服务器时回调退回 `explore://app/auth/done`；第 2 条说的冒充风险只在读者手动填了别的服务器时存在。
-11. **过渡**：Cookie 改名之后，还在手写 `explore_session` 的老版本应用会掉线，所以改用 Bearer 的那一版要在 identity 的 I3 之前发出。已有本站账号的读者按 §1 的过渡期在网页账号页关联 Kite Plus 账号，应用里不做关联；过渡期内应用保留密码登录（第 10 条的 `password` 为 `true`）。
+10. **按服务器提供的方式登录**：应用可以连自己部署的 Explore。`GET /api/v1/auth/options` 返回 `{"password": true, "oidc": {"name": "Kite Plus 账号", "account_url": "https://id.kite.plus/ui/console/users/me"}}`（没有配置 OIDC 时 `oidc` 为 `null`；`name` 按 `Accept-Language`，英文是 `Kite Plus account`），应用据此显示密码登录、统一登录或两者都有。应用的 Associated Domains 只登记了 `explore.kite.plus`，所以连其他服务器时回调退回 `explore://app/auth/done`：发起时带 `callback=scheme`。发布了应用认领文件（`EXPLORE_APPLE_APP_IDS` 或 `EXPLORE_ANDROID_CERT_SHA256` 有值）的服务器拒绝 `callback=scheme`，所以第 2 条说的冒充风险只在读者手动填了别的服务器时存在，官方服务器上不存在。
+11. **过渡**：Cookie 改名之后，还在手写 `explore_session` 的老版本应用会掉线，所以改用 Bearer 的那一版要在 identity 的 I3 之前发出。改名只在配置了 OIDC 的 https 服务器上发生，没有配置之前老版本照常工作。已有本站账号的读者按 §1 的过渡期在网页账号页关联 Kite Plus 账号，应用里不做关联；过渡期内应用保留密码登录（第 10 条的 `password` 为 `true`）。
 
 ## 2. 订阅
 
@@ -116,19 +126,28 @@ users (id, number unique, email, password_hash, display_name, is_admin,
 user_identities (issuer, subject, user_id, linked_at,
                  primary key (issuer, subject))
 sessions (token_hash primary key, user_id -> users on delete cascade,
-          created_at, expires_at)
+          created_at, expires_at, sid, client)
 subscriptions (user_id -> users on delete cascade,
                blog_id -> blogs on delete cascade, created_at,
                primary key (user_id, blog_id))
 blog_owners (blog_id primary key, user_id -> users on delete cascade, verified_at)
 blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
+login_flows (state_hash primary key, browser_hash, mode, nonce, verifier,
+             return_path, user_id -> users on delete cascade, challenge,
+             client, app_redirect, expires_at)
+app_codes (code_hash primary key, user_id -> users on delete cascade, sid,
+           challenge, client, expires_at, used_at, session_hash)
+idp_receipts (kind, id, expires_at, primary key (kind, id))
+idp_cursors (issuer primary key, read_until, updated_at)
 ```
 
 用户看到的 ID 是 `number`：按注册顺序递增的数字，账号页显示为「ID 12 · 2026年9月5日加入」，后台列表和详情也叫 ID，`/api/v1/me` 返回 `number` 和 `created_at`。`id` 列是 UUID，只在内部使用：其他表和统一身份服务都按它关联账号，接口路径里的账号也用它，后台详情里标为 UUID。`number` 由数据库序列生成（`GENERATED ALWAYS AS IDENTITY`），不能修改，可用于以后按注册先后安排的活动。注册时先确认邮箱没被占用再插入，重复注册不会消耗 ID；空号只来自删除的账号，以及两个人同时用同一邮箱注册这种极少见的情况。迁移 `00018_user_number.sql` 按注册时间给已有账号回填 1、2、3…，新账号从最大值之后继续。
 
 `feed_token` 是订阅流公开地址里的随机值（32 字节，base64url），没有发布时为空，由迁移 `00022_feed_token.sql` 加入。它按原样保存而不是只存哈希：读者要在账号页再次看到地址，而它能透露的订阅本来就存在同一个库里。
 
-不建 `login_codes` 或 GitHub 凭据表。清空 `entries` 不丢订阅；订阅流用 `subscriptions` 过滤文章并复用游标分页。博客认领要求用户在 `_explore-claim.<host>` 发布随机值对应的 DNS TXT 记录，验证值有效期 30 分钟；一个博客只能有一个已验证归属。
+迁移 `00023_oidc.sql` 加入 Kite Plus 登录用到的部分（§1、§1.1）。`sessions.sid` 是签发会话时 ID Token 里的身份服务会话，back-channel logout 按它删除，密码登录的会话为空；`client` 是 `web`、`ios` 或 `android`。`login_flows` 是等身份服务回跳的登录交易：`state` 和浏览器绑定值只存哈希，`nonce` 和给身份服务的 PKCE verifier 按原样保存（回调时要用，交易 30 分钟后作废）；`mode` 为 `web`、`link`（`user_id` 是要关联的账号）或 `app`（`challenge`、`client`、`app_redirect` 描述应用登录）。`app_codes` 是给应用的一次性授权码，只存哈希，`session_hash` 是它换出的会话，授权码被重复使用时据此删除。`idp_receipts` 记下最近收到的 logout token 的 `jti` 和推送事件的 ID，用来拒绝重放和重复投递。`idp_cursors` 是对账读到的事件位置。这些都不是新的读者信息：过期的交易、授权码和回执由 worker 的每日维护删除。身份服务停用的账号，`users.disabled_by` 为 `idp`，`disabled_reason` 为 `deactivated`、`locked` 或 `removed`（§1）。
+
+不建 GitHub 凭据表，Explore 不持有身份服务的任何令牌。清空 `entries` 不丢订阅；订阅流用 `subscriptions` 过滤文章并复用游标分页。博客认领要求用户在 `_explore-claim.<host>` 发布随机值对应的 DNS TXT 记录，验证值有效期 30 分钟；一个博客只能有一个已验证归属。
 
 ## 6. 接口与前端
 
@@ -137,9 +156,16 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | POST | `/api/v1/auth/register` | 创建本站账号并建立会话 |
 | POST | `/api/v1/auth/login` | 邮箱密码登录 |
 | POST | `/api/v1/auth/logout` | 删除 Explore 会话 |
-| GET | `/api/v1/auth/options` | 服务器提供哪些登录方式（§1.1）`[设计中]` |
-| GET | `/auth/app/start` | 应用登录：建交易并跳到身份服务（§1.1）`[设计中]` |
-| POST | `/api/v1/auth/app/exchange` | 应用登录：用授权码和 verifier 换会话令牌（§1.1）`[设计中]` |
+| GET | `/api/v1/auth/options` | 服务器提供哪些登录方式（§1.1） |
+| GET | `/auth/login?return=…` | 用 Kite Plus 账号登录：建交易并跳到身份服务（§1） |
+| GET | `/auth/callback` | 身份服务回跳：网页登录、关联和应用登录共用（§1、§1.1） |
+| POST | `/api/v1/auth/link` | 已登录的密码账号关联 Kite Plus 账号，要当前密码，返回身份服务地址（§1） |
+| POST | `/auth/backchannel-logout` | 身份服务的 back-channel logout（§1） |
+| POST | `/hooks/idp` | 身份服务推送的用户事件（§1） |
+| GET | `/auth/app/start` | 应用登录：建交易并跳到身份服务（§1.1） |
+| GET | `/app/auth/done` | 应用登录的回调地址；在浏览器里打开时提示回到应用（§1.1） |
+| POST | `/api/v1/auth/app/exchange` | 应用登录：用授权码和 verifier 换会话令牌（§1.1） |
+| GET | `/.well-known/apple-app-site-association`、`/.well-known/assetlinks.json` | 让应用认领回调地址，配置了才提供（§1.1） |
 | GET、PATCH、DELETE | `/api/v1/me` | 本站资料、昵称、删除账号（唯一可用的管理员除外） |
 | PUT | `/api/v1/me/password` | 验证当前密码后修改密码，撤销其他会话，清除管理员重置留下的临时标记；账号页「修改密码」使用 |
 | GET | `/api/v1/me/entries` | 订阅流 |
@@ -153,11 +179,21 @@ blog_claim_challenges (blog_id, user_id, token_hash, expires_at)
 | POST | `/api/v1/me/blog-claims/{host}` | 生成 DNS TXT 验证记录 |
 | POST | `/api/v1/me/blog-claims/{host}/verify` | 验证并认领博客 |
 
-`/login` 是本站账号登录与注册页；`/following`、`/account` 均有英文页面。页头的登录状态由服务端按请求带的会话画出，画了读者名称的页面 `private, no-store`，匿名页面照常公开缓存（[frontend.md §5](frontend.md#5-数据获取)）；个人页面一律 `private, no-store`；已登录的读者打开 `/login` 直接跳到原本要去的页面。所有已登录写操作要求会话对应的 CSRF 请求头。
+`/login` 是登录页：配置了 Kite Plus 时以「使用 Kite Plus 账号登录」为主，保留邮箱密码表单，没有注册入口；没有配置时是本站账号登录与注册页。账号页有「Kite Plus 账号」一节：已关联的显示关联时间和去身份服务管理账号的链接，没关联的输入当前密码后关联；没有密码的账号不显示「修改密码」；已关联的账号在「删除账号」旁边另有「删除 Kite Plus 账号」。后台用户详情显示关联的身份、各会话的来源和身份服务停用的原因。`/following`、`/account` 均有英文页面。页头的登录状态由服务端按请求带的会话画出，画了读者名称的页面 `private, no-store`，匿名页面照常公开缓存（[frontend.md §5](frontend.md#5-数据获取)）；个人页面一律 `private, no-store`；已登录的读者打开 `/login` 直接跳到原本要去的页面。Cookie 会话的所有已登录写操作要求会话对应的 CSRF 请求头；`Authorization: Bearer` 请求不需要（§1.1 第 6 条）。
 
 ## 7. 部署与待定
 
-统一身份服务单独部署，提供稳定的 HTTPS issuer。Explore 配置 `EXPLORE_OIDC_ISSUER`、`EXPLORE_OIDC_CLIENT_ID`、`EXPLORE_OIDC_CLIENT_SECRET`；密钥只放服务端。应用登录另需在 `explore.kite.plus` 发布 `apple-app-site-association` 和 `assetlinks.json`（§1.1），现在的 Caddyfile 只把 `/api/*` 等地址交给 serve，其余都给 web；`/auth/*`、`/app/auth/done` 和这两个文件由谁提供，接入时定，Caddyfile 随之修改。每个环境使用独立客户端和准确的回调白名单。生产身份服务需要数据库备份、邮件渠道、TLS 和管理员初始化。
+统一身份服务单独部署，提供稳定的 HTTPS issuer。Explore 的配置都可选，issuer 为空就不接入（[project-layout.md §4](project-layout.md#4-配置)）：
+
+| 变量 | 用途 |
+|---|---|
+| `EXPLORE_OIDC_ISSUER`、`EXPLORE_OIDC_CLIENT_ID`、`EXPLORE_OIDC_CLIENT_SECRET` | 身份服务和 Explore 的机密客户端（`client_secret_basic`）；有 issuer 时后两个必填，密钥只放服务端 |
+| `EXPLORE_OIDC_ACCOUNT_URL` | 读者管理和删除 Kite Plus 账号的页面，默认 issuer 下的 `/ui/console/users/me` |
+| `EXPLORE_IDP_WEBHOOK_SECRET` | 推送用户事件的签名密钥；需要同时配置下一项 |
+| `EXPLORE_IDP_API_TOKEN` | 身份服务同步用机器用户的令牌，读用户状态和事件，用于确认推送和每小时对账 |
+| `EXPLORE_APPLE_APP_IDS`、`EXPLORE_ANDROID_PACKAGE`、`EXPLORE_ANDROID_CERT_SHA256` | 应用认领回调地址用的两个 `.well-known` 文件（§1.1） |
+
+身份服务里给每个环境登记独立的客户端，地址都由 `EXPLORE_PUBLIC_URL` 加路径组成：回调 `/auth/callback`（本地开发两个都登记：`http://localhost:4321/auth/callback` 和 `http://localhost:8080/auth/callback`），back-channel logout `/auth/backchannel-logout`，用户事件 `/hooks/idp`（本地开发时身份服务在 Docker 里，经 `http://host.docker.internal:8080` 直接找到 serve）。`/auth/*`、`/hooks/*`、`/app/auth/done` 和两个 `.well-known` 文件都由 serve 提供：Caddyfile 把它们和 `/api/*` 一起交给 serve；web 也把这些路径原样转给 serve，供 `astro dev` 和前面没有 Caddy 的部署使用。生产身份服务需要数据库备份、邮件渠道、TLS 和管理员初始化。
 
 第一条端到端链路是身份服务 → Explore 登录与订阅；第二条是身份服务 → 统一评论服务 → 通用博客嵌入组件。二者使用同一身份服务，数据与 Cookie 分开。外部博客只有主动嵌入组件或接入兼容适配器，才有统一评论登录体验。
 

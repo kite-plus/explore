@@ -1,6 +1,6 @@
 # 工程结构
 
-> 状态：设计中 · 最近更新：2026-09-23
+> 状态：设计中 · 最近更新：2026-10-10
 > E0、E1 开工时的代码骨架约定。与 Kite 一致的地方（Go 版本、命令行、lint、Makefile、import 守护）直接沿用 Kite 的做法。
 
 ---
@@ -23,6 +23,7 @@ explore/
 │   ├── worker/         scheduling, snapshot sync, tagging, daily maintenance
 │   ├── tagger/         file posts under the tag list with a Claude model
 │   ├── publicfeed/     /feed.xml, /blogs.opml and readers' /f/ feeds
+│   ├── idp/            Kite Plus sign-in (OIDC), logout tokens, account events
 │   └── api/            Gin router, handlers, middleware
 ├── migrations/         goose SQL migrations, embedded into the binary
 ├── testdata/
@@ -59,7 +60,8 @@ explore/
 | `store` | 数据库访问、事务、迁移入口；子包 `storetest` 给每个集成测试一个独立的 schema | `policy`、`model`、`migrations` |
 | `worker` | 调度、同步、打标签的循环、每日维护 | `policy`、`model`、`feed`、`normalize`、`fetch`、`store` |
 | `tagger` | 用 Claude 模型给文章打标签，项目里唯一调用模型的包（[worker.md §11](worker.md#11-打标签internaltagger)） | `model` |
-| `api` | Gin 路由与处理函数 | `policy`、`model`、`i18n`、`check`、`store`、`publicfeed` |
+| `idp` | 与 Kite Plus 身份服务通信：OIDC 登录（Authorization Code + PKCE）、校验 logout token、推送事件的签名、读账号状态和事件（[accounts.md §1](accounts.md#1-登录与会话)）；子包 `idptest` 是测试用的身份服务 | `model` |
+| `api` | Gin 路由与处理函数 | `policy`、`model`、`i18n`、`check`、`store`、`publicfeed`、`idp` |
 | `config` | 读取环境变量 | 无 |
 | `cli` | 命令入口，负责组装 | 全部 |
 
@@ -69,7 +71,7 @@ explore/
 
 1. **纯逻辑包**（`policy`、`model`、`i18n`、`feed`、`normalize`、`publicfeed`）不依赖 `fetch`、`check`、`store`、`worker`、`api`、`cli`、`config`，也不依赖 Gin 和 pgx。它们没有 I/O，全部用夹具做黄金文件测试。
 2. **只有 `api` 可以依赖 Gin**：Web 框架留在最外层，换框架只动一个包。
-3. **只有 `store`（及其子包）可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。**只有 `tagger` 可以依赖 Anthropic 的 SDK**：调用模型的地方只有一个，换模型或换服务商只动一个包；worker 通过接口使用它，由 `cli` 接起来。
+3. **只有 `store`（及其子包）可以依赖 pgx**：SQL 都在一个包里，schema 守护和 review 都只看这一处。**只有 `tagger` 可以依赖 Anthropic 的 SDK**：调用模型的地方只有一个，换模型或换服务商只动一个包；worker 通过接口使用它，由 `cli` 接起来。**只有 `idp` 可以依赖 `go-oidc` 和 `oauth2`**：协议细节留在一个包里；worker 的对账同样通过接口使用它。
 4. **`check` 不依赖 `store`**：`explore check` 不需要数据库也能运行，作者和 E0 都要用。
 5. **`api` 和 `worker` 互不依赖**，只通过数据库协作，所以可以分开部署、分开重启。
 
@@ -106,6 +108,14 @@ explore/
 | `EXPLORE_TAGGER_EFFORT` | 空 | 可选。`anthropic` 作为 `effort` 发送，取 `low`、`medium`、`high`、`xhigh`、`max`，Claude Haiku 4.5 不支持，留空；`openai` 原样作为 `reasoning_effort` 发送，只给支持它的推理模型填 |
 | `EXPLORE_TAGGER_EXTRA_BODY` | 空 | 可选的 JSON 对象，其中的顶层字段加进每个请求，同名时覆盖 Explore 自己的字段，用于服务商特有的开关。例如 DeepSeek 默认开着思考模式，打标签用不上，而且默认温度下同一篇两次打分常常不同，填 `{"thinking":{"type":"disabled"},"temperature":0}` 关掉思考、让打分稳定 |
 | `EXPLORE_ALLOW_PRIVATE_NETWORKS` | `false` | 放行内网地址和非标准端口，并放宽提交和读取接口的限流（开发机上所有请求都来自同一个地址），只用于测试和本地开发。开发机上的代理开着 fake-IP 模式时也需要打开（[worker.md §3.3](worker.md#33-ssrf-防护)） |
+| `EXPLORE_OIDC_ISSUER` | 空 | Kite Plus 身份服务的 issuer；为空时不接入，只有本站密码登录（[accounts.md §7](accounts.md#7-部署与待定)） |
+| `EXPLORE_OIDC_CLIENT_ID`、`EXPLORE_OIDC_CLIENT_SECRET` | 空 | Explore 在身份服务的机密客户端；有 issuer 时必填 |
+| `EXPLORE_OIDC_ACCOUNT_URL` | issuer 下的 `/ui/console/users/me` | 读者管理和删除 Kite Plus 账号的页面 |
+| `EXPLORE_IDP_WEBHOOK_SECRET` | 空 | 身份服务推送用户事件的签名密钥；为空时 `/hooks/idp` 不存在，有值时必须同时配置下一项 |
+| `EXPLORE_IDP_API_TOKEN` | 空 | 身份服务同步用机器用户的令牌，用来确认推送、每小时对账；为空时不对账 |
+| `EXPLORE_APPLE_APP_IDS` | 空 | 逗号分隔的 `TEAMID.bundle.id`，有值时提供 `/.well-known/apple-app-site-association` |
+| `EXPLORE_ANDROID_PACKAGE` | `plus.kite.explore` | 写进 `assetlinks.json` 的包名 |
+| `EXPLORE_ANDROID_CERT_SHA256` | 空 | 逗号分隔的发布证书 SHA-256 指纹（`AB:CD:…`），有值时提供 `/.well-known/assetlinks.json` |
 | `EXPLORE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error` |
 
 **抓取与展示规则的阈值不做成配置**。它们是产品规则，写在 architecture.md §6，代码里定义在 `internal/policy`，改动走文档和 code review，而不是改一个环境变量。
@@ -204,7 +214,7 @@ EXPLORE_ALLOW_PRIVATE_NETWORKS=true go run ./cmd/explore check http://127.0.0.1:
 
 | 服务 | 镜像与命令 | 说明 |
 |---|---|---|
-| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz` 转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
+| `caddy` | `caddy:2-alpine` | 按 `EXPLORE_PUBLIC_URL` 自动申请 HTTPS 证书；`/api/`、`/feed.xml`、`/blogs.opml`、`/f/`、`/healthz`、`/readyz`，以及 Kite Plus 登录用的 `/auth/`、`/hooks/`、`/app/auth/done` 和 `/.well-known/` 下的两个应用认领文件转给 `serve`，其余转给 `web`。不写访问日志，所以不记录读者的 IP。转给后面的请求只带一个 `X-Forwarded-For`：读者的地址，见下文“前面有 CDN 时” |
 | `postgres` | `postgres:16-alpine` | 数据卷持久化；备份时排除 `entries` 的数据（[data-model.md §5](data-model.md#5-数据保留)） |
 | `migrate` | `ghcr.io/kite-plus/explore`，`explore migrate up` | 每次 `up` 先跑一次，跑完退出 |
 | `serve` | 同一镜像，`explore serve` | API；可以多实例 |
