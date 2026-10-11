@@ -176,8 +176,7 @@ func (s *Server) register(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	// New accounts come from Kite Plus once it is configured.
-	if enabled != "true" || s.OIDC != nil {
+	if enabled != "true" {
 		s.fail(c, http.StatusForbidden, codeFeatureDisabled)
 		return
 	}
