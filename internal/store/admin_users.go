@@ -25,17 +25,20 @@ type AdminUser struct {
 	PasswordResetBy   string     `json:"password_reset_by"`
 	SubscriptionCount int64      `json:"subscription_count"`
 	OwnedBlogCount    int64      `json:"owned_blog_count"`
+	// PasswordLogin is false for an account that signs in with Kite Plus.
+	PasswordLogin bool `json:"password_login"`
 }
 
 const adminUserColumns = `u.id::text, u.number, u.email, u.display_name, u.is_admin, u.disabled_at, u.disabled_reason, u.disabled_by,
 	u.created_at, u.last_seen_at, u.password_reset_at, u.password_reset_by,
 	(SELECT count(*) FROM subscriptions WHERE user_id = u.id) AS subscription_count,
-	(SELECT count(*) FROM blog_owners WHERE user_id = u.id) AS owned_blog_count`
+	(SELECT count(*) FROM blog_owners WHERE user_id = u.id) AS owned_blog_count,
+	u.password_hash <> ''`
 
 func scanAdminUser(row pgx.Row) (AdminUser, error) {
 	var u AdminUser
 	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.DisplayName, &u.IsAdmin, &u.DisabledAt, &u.DisabledReason, &u.DisabledBy,
-		&u.CreatedAt, &u.LastSeenAt, &u.PasswordResetAt, &u.PasswordResetBy, &u.SubscriptionCount, &u.OwnedBlogCount)
+		&u.CreatedAt, &u.LastSeenAt, &u.PasswordResetAt, &u.PasswordResetBy, &u.SubscriptionCount, &u.OwnedBlogCount, &u.PasswordLogin)
 	return u, err
 }
 
@@ -122,6 +125,14 @@ func (s *Store) AdminUsers(ctx context.Context, q AdminUserQuery) ([]AdminUser, 
 type AdminUserSession struct {
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	Client    string    `json:"client"`
+}
+
+// AdminUserIdentity is a Kite Plus account linked to an account.
+type AdminUserIdentity struct {
+	Issuer   string    `json:"issuer"`
+	Subject  string    `json:"subject"`
+	LinkedAt time.Time `json:"linked_at"`
 }
 
 // AdminUserBlog is a blog an account follows or owns; Since is when it
@@ -152,11 +163,12 @@ type AdminUserReport struct {
 // reports are capped at the newest DetailListLimit; the counts are not.
 type AdminUserDetail struct {
 	AdminUser
-	Sessions      []AdminUserSession `json:"sessions"`
-	Subscriptions []AdminUserBlog    `json:"subscriptions"`
-	OwnedBlogs    []AdminUserBlog    `json:"owned_blogs"`
-	PendingClaims []AdminUserClaim   `json:"pending_claims"`
-	Reports       []AdminUserReport  `json:"reports"`
+	Identities    []AdminUserIdentity `json:"identities"`
+	Sessions      []AdminUserSession  `json:"sessions"`
+	Subscriptions []AdminUserBlog     `json:"subscriptions"`
+	OwnedBlogs    []AdminUserBlog     `json:"owned_blogs"`
+	PendingClaims []AdminUserClaim    `json:"pending_claims"`
+	Reports       []AdminUserReport   `json:"reports"`
 }
 
 const DetailListLimit = 200
@@ -172,11 +184,19 @@ func (s *Store) AdminUserDetail(ctx context.Context, id string) (AdminUserDetail
 			return err
 		}
 		d.AdminUser = u
-		if d.Sessions, err = collectByID(ctx, tx, `SELECT created_at, expires_at FROM sessions
+		if d.Identities, err = collectByID(ctx, tx, `SELECT issuer, subject, linked_at FROM user_identities
+			WHERE user_id = $1 ORDER BY linked_at`, u.ID,
+			func(row pgx.CollectableRow) (AdminUserIdentity, error) {
+				var v AdminUserIdentity
+				return v, row.Scan(&v.Issuer, &v.Subject, &v.LinkedAt)
+			}); err != nil {
+			return err
+		}
+		if d.Sessions, err = collectByID(ctx, tx, `SELECT created_at, expires_at, client FROM sessions
 			WHERE user_id = $1 AND expires_at > now() ORDER BY created_at DESC`, u.ID,
 			func(row pgx.CollectableRow) (AdminUserSession, error) {
 				var v AdminUserSession
-				return v, row.Scan(&v.CreatedAt, &v.ExpiresAt)
+				return v, row.Scan(&v.CreatedAt, &v.ExpiresAt, &v.Client)
 			}); err != nil {
 			return err
 		}
@@ -326,8 +346,16 @@ func (s *Store) UpdateUserProfile(ctx context.Context, id string, displayName, e
 
 // ResetPassword gives an account a password an admin chose, marks it as
 // temporary until the owner changes it, and signs the account out everywhere.
+// An account linked to Kite Plus has no password to reset: ErrPasswordOff.
 func (s *Store) ResetPassword(ctx context.Context, id, passwordHash, by string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var linked bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id::text = $1)`, id).Scan(&linked); err != nil {
+			return err
+		}
+		if linked {
+			return ErrPasswordOff
+		}
 		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, password_reset_at = now(), password_reset_by = $3
 			WHERE id::text = $1`, id, passwordHash, by)
 		if err != nil {

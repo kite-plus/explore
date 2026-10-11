@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -21,7 +22,14 @@ import (
 	"github.com/kite-plus/explore/internal/store"
 )
 
-const sessionCookie = "explore_session"
+// Cookie names before the __Host- prefix that hostCookies adds.
+const (
+	sessionCookie = "explore_session"
+	loginCookie   = "explore_login"
+)
+
+// sessionLifetime is how long a session lasts, on the web and in the apps.
+const sessionLifetime = 30 * 24 * time.Hour
 
 var unusedPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("unused-password-value"), bcrypt.DefaultCost)
 
@@ -38,18 +46,80 @@ func csrfToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (s *Server) sessionUser(c *gin.Context) (store.User, string, error) {
-	value, err := c.Cookie(sessionCookie)
-	if err != nil || len(value) != 43 {
-		return store.User{}, "", store.ErrNotFound
+func (s *Server) secure() bool { return strings.HasPrefix(s.PublicURL, "https://") }
+
+// hostCookies reports whether cookie names take the __Host- prefix, which
+// keeps a sibling subdomain of the site from planting one. It comes with
+// sign-in through the identity provider, and needs https; see
+// docs/design/accounts.md section 1.
+func (s *Server) hostCookies() bool { return s.OIDC != nil && s.secure() }
+
+func (s *Server) cookieName(name string) string {
+	if s.hostCookies() {
+		return "__Host-" + name
 	}
-	u, err := s.Store.UserBySession(c.Request.Context(), sha256.Sum256([]byte(value)))
-	return u, value, err
+	return name
+}
+
+// setCookie sets or, with maxAge -1, clears a cookie of this site.
+func (s *Server) setCookie(c *gin.Context, name, value string, maxAge int) {
+	http.SetCookie(c.Writer, &http.Cookie{Name: s.cookieName(name), Value: value, Path: "/", MaxAge: maxAge,
+		HttpOnly: true, Secure: s.secure(), SameSite: http.SameSiteLaxMode})
+}
+
+// setSessionCookie sets the session cookie, or clears it for "". Under the
+// __Host- name it also clears one left under the old name.
+func (s *Server) setSessionCookie(c *gin.Context, token string) {
+	maxAge := int(sessionLifetime / time.Second)
+	if token == "" {
+		maxAge = -1
+	}
+	s.setCookie(c, sessionCookie, token, maxAge)
+	if s.hostCookies() {
+		http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: true,
+			SameSite: http.SameSiteLaxMode})
+	}
+}
+
+// sessionToken reads the session token from an Authorization: Bearer
+// header, as the apps send it, or else from the session cookie. bearer
+// reports a request with an Authorization header; it never falls back to
+// the cookie.
+func (s *Server) sessionToken(c *gin.Context) (token string, bearer bool) {
+	if h := c.GetHeader("Authorization"); h != "" {
+		scheme, value, _ := strings.Cut(h, " ")
+		if !strings.EqualFold(scheme, "Bearer") {
+			return "", true
+		}
+		return strings.TrimSpace(value), true
+	}
+	value, _ := c.Cookie(s.cookieName(sessionCookie))
+	return value, false
+}
+
+// sessionUser is the account behind the request's session.
+func (s *Server) sessionUser(c *gin.Context) (u store.User, token string, bearer bool, err error) {
+	token, bearer = s.sessionToken(c)
+	if len(token) != 43 {
+		return store.User{}, "", bearer, store.ErrNotFound
+	}
+	u, err = s.Store.UserBySession(c.Request.Context(), sha256.Sum256([]byte(token)))
+	return u, token, bearer, err
+}
+
+// csrfOK checks the CSRF header that cookie sessions need for writes. A
+// browser never adds an Authorization header on its own, so a Bearer
+// request needs none.
+func csrfOK(c *gin.Context, token string, bearer bool) bool {
+	if bearer || c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
+		return true
+	}
+	return subtle.ConstantTimeCompare([]byte(c.GetHeader("X-CSRF-Token")), []byte(csrfToken(token))) == 1
 }
 
 func (s *Server) requireUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		u, token, err := s.sessionUser(c)
+		u, token, bearer, err := s.sessionUser(c)
 		if errors.Is(err, store.ErrNotFound) {
 			s.fail(c, http.StatusUnauthorized, codeUnauthorized)
 			return
@@ -58,11 +128,9 @@ func (s *Server) requireUser() gin.HandlerFunc {
 			s.storeError(c, err)
 			return
 		}
-		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
-			if subtle.ConstantTimeCompare([]byte(c.GetHeader("X-CSRF-Token")), []byte(csrfToken(token))) != 1 {
-				s.fail(c, http.StatusForbidden, codeInvalidRequest)
-				return
-			}
+		if !csrfOK(c, token, bearer) {
+			s.fail(c, http.StatusForbidden, codeInvalidRequest)
+			return
 		}
 		c.Set("user", u)
 		c.Set("session_token", token)
@@ -108,7 +176,8 @@ func (s *Server) register(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	if enabled != "true" {
+	// New accounts come from Kite Plus once it is configured.
+	if enabled != "true" || s.OIDC != nil {
 		s.fail(c, http.StatusForbidden, codeFeatureDisabled)
 		return
 	}
@@ -144,9 +213,12 @@ func (s *Server) register(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	s.startSession(c, u)
+	s.startSession(c, u, store.ClientWeb)
 }
 
+// login signs in with a password. An app names itself in client ("ios" or
+// "android") and gets the token in the response, as the app code exchange
+// gives it, instead of a cookie.
 func (s *Server) login(c *gin.Context) {
 	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
 		s.fail(c, http.StatusUnsupportedMediaType, codeInvalidRequest)
@@ -155,47 +227,80 @@ func (s *Server) login(c *gin.Context) {
 	var body struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Client   string `json:"client"`
 	}
 	if c.ShouldBindJSON(&body) != nil {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	u, err := s.Store.UserByEmail(c.Request.Context(), validEmail(body.Email))
-	if errors.Is(err, store.ErrNotFound) {
-		_ = bcrypt.CompareHashAndPassword(unusedPasswordHash, []byte(body.Password))
+	client := cmp.Or(body.Client, store.ClientWeb)
+	if client != store.ClientWeb && client != store.ClientIOS && client != store.ClientAndroid {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
+		return
 	}
-	if errors.Is(err, store.ErrNotFound) || (err == nil && (u.Disabled || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.Password)) != nil)) {
+	u, err := s.Store.UserByEmail(c.Request.Context(), validEmail(body.Email))
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.storeError(c, err)
+		return
+	}
+	// With no account, or one that signs in with Kite Plus and has no
+	// password, a password is compared all the same, so the answer takes as
+	// long as for a wrong one.
+	hash := []byte(u.PasswordHash)
+	if err != nil || u.PasswordHash == "" {
+		hash = unusedPasswordHash
+	}
+	if bcrypt.CompareHashAndPassword(hash, []byte(body.Password)) != nil || err != nil || u.PasswordHash == "" || u.Disabled {
 		s.fail(c, http.StatusUnauthorized, codeBadCredentials)
 		return
 	}
-	if err != nil {
-		s.storeError(c, err)
-		return
-	}
-	s.startSession(c, u)
+	s.startSession(c, u, client)
 }
 
-func (s *Server) startSession(c *gin.Context, u store.User) {
+// newSession creates a session for u and returns its token. sid is the
+// identity provider's session it came from, if any.
+func (s *Server) newSession(ctx context.Context, u store.User, sid, client string) (string, time.Time, error) {
 	token, err := randomToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	expires := s.Now().Add(sessionLifetime)
+	err = s.Store.CreateSession(ctx, store.Session{UserID: u.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: expires,
+		SID: sid, Client: client})
+	return token, expires, err
+}
+
+// startSession signs u in after a password: a cookie and the account for
+// the web, the token for an app.
+func (s *Server) startSession(c *gin.Context, u store.User, client string) {
+	token, expires, err := s.newSession(c.Request.Context(), u, "", client)
 	if err != nil {
 		s.storeError(c, err)
 		return
 	}
-	if err := s.Store.CreateSession(c.Request.Context(), u.ID, sha256.Sum256([]byte(token)), s.Now().Add(30*24*time.Hour)); err != nil {
-		s.storeError(c, err)
+	c.Header("Cache-Control", "no-store")
+	if client != store.ClientWeb {
+		writeJSON(c, http.StatusOK, appSessionJSON(u, token, expires))
 		return
 	}
-	secure := strings.HasPrefix(s.PublicURL, "https://")
-	http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 60 * 60,
-		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode})
-	c.Header("Cache-Control", "no-store")
+	s.setSessionCookie(c, token)
 	writeJSON(c, http.StatusOK, userJSON(u, token))
 }
 
+func appSessionJSON(u store.User, token string, expires time.Time) gin.H {
+	return gin.H{"token": token, "expires_at": expires.UTC().Truncate(time.Second), "user": userJSON(u, token)}
+}
+
 func userJSON(u store.User, token string) gin.H {
+	var linked *time.Time
+	if u.LinkedAt != nil {
+		t := u.LinkedAt.UTC()
+		linked = &t
+	}
 	return gin.H{"id": u.ID, "number": u.Number, "created_at": u.CreatedAt.UTC(), "temporary_password": u.TemporaryPassword,
 		"email": u.Email, "display_name": u.DisplayName,
-		"is_admin": u.IsAdmin, "csrf_token": csrfToken(token)}
+		"is_admin": u.IsAdmin, "csrf_token": csrfToken(token),
+		"password_login": u.PasswordHash != "", "identity_linked_at": linked}
 }
 
 func (s *Server) me(c *gin.Context) {
@@ -209,8 +314,7 @@ func (s *Server) logout(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true,
-		Secure: strings.HasPrefix(s.PublicURL, "https://"), SameSite: http.SameSiteLaxMode})
+	s.setSessionCookie(c, "")
 	c.Status(http.StatusNoContent)
 }
 
@@ -247,6 +351,10 @@ func (s *Server) changePassword(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
+	if u.PasswordHash == "" {
+		s.fail(c, http.StatusConflict, codePasswordDisabled)
+		return
+	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.CurrentPassword)) != nil {
 		s.fail(c, http.StatusForbidden, codeWrongPassword)
 		return
@@ -272,8 +380,7 @@ func (s *Server) deleteMe(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, HttpOnly: true,
-		Secure: strings.HasPrefix(s.PublicURL, "https://"), SameSite: http.SameSiteLaxMode})
+	s.setSessionCookie(c, "")
 	c.Status(http.StatusNoContent)
 }
 

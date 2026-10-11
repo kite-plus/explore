@@ -95,7 +95,7 @@ func (e *env) session(email string, admin bool) (cookie, csrf string) {
 		e.t.Fatal(err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw[:])
-	if err := e.s.CreateSession(ctx, u.ID, sha256.Sum256([]byte(token)), time.Now().Add(time.Hour)); err != nil {
+	if err := e.s.CreateSession(ctx, store.Session{UserID: u.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: time.Now().Add(time.Hour)}); err != nil {
 		e.t.Fatal(err)
 	}
 	cookie = "explore_session=" + token

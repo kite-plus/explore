@@ -51,7 +51,7 @@ func TestDisabledUserLosesSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := sha256.Sum256([]byte("test-session"))
-	if err := s.CreateSession(ctx, user.ID, token, time.Now().Add(time.Hour)); err != nil {
+	if err := s.CreateSession(ctx, Session{UserID: user.ID, TokenHash: token, Expires: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetUserDisabled(ctx, user.ID, true, "spam", "operator"); err != nil {
@@ -146,7 +146,7 @@ func TestDeleteUserKeepsReportsAndTheLastAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := sha256.Sum256([]byte("leaver-session"))
-	if err := s.CreateSession(ctx, reader.ID, token, time.Now().Add(time.Hour)); err != nil {
+	if err := s.CreateSession(ctx, Session{UserID: reader.ID, TokenHash: token, Expires: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AddSubscription(ctx, reader.ID, blog.Host); err != nil {

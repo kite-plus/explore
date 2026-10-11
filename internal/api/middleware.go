@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -52,13 +51,12 @@ func (s *Server) limit(l *limiter) gin.HandlerFunc {
 // also need the session's CSRF token.
 func (s *Server) requireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		u, session, err := s.sessionUser(c)
+		u, session, bearer, err := s.sessionUser(c)
 		if err != nil || !u.IsAdmin {
 			s.fail(c, http.StatusUnauthorized, codeUnauthorized)
 			return
 		}
-		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead &&
-			subtle.ConstantTimeCompare([]byte(c.GetHeader("X-CSRF-Token")), []byte(csrfToken(session))) != 1 {
+		if !csrfOK(c, session, bearer) {
 			s.fail(c, http.StatusForbidden, codeInvalidRequest)
 			return
 		}

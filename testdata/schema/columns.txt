@@ -1,3 +1,11 @@
+app_codes.challenge text
+app_codes.client text
+app_codes.code_hash bytea
+app_codes.expires_at timestamp with time zone
+app_codes.session_hash bytea
+app_codes.sid text
+app_codes.used_at timestamp with time zone
+app_codes.user_id uuid
 blog_claim_challenges.blog_id bigint
 blog_claim_challenges.expires_at timestamp with time zone
 blog_claim_challenges.token_hash bytea
@@ -66,6 +74,23 @@ fetch_attempts.http_status integer
 fetch_attempts.id bigint
 fetch_attempts.outcome text
 fetch_attempts.started_at timestamp with time zone
+idp_cursors.issuer text
+idp_cursors.read_until timestamp with time zone
+idp_cursors.updated_at timestamp with time zone
+idp_receipts.expires_at timestamp with time zone
+idp_receipts.id text
+idp_receipts.kind text
+login_flows.app_redirect text
+login_flows.browser_hash bytea
+login_flows.challenge text
+login_flows.client text
+login_flows.expires_at timestamp with time zone
+login_flows.mode text
+login_flows.nonce text
+login_flows.return_path text
+login_flows.state_hash bytea
+login_flows.user_id uuid
+login_flows.verifier text
 notices.audience text
 notices.body text
 notices.created_at timestamp with time zone
@@ -81,8 +106,10 @@ notices.title text
 notices.updated_at timestamp with time zone
 notices.updated_by text
 notices.url text
+sessions.client text
 sessions.created_at timestamp with time zone
 sessions.expires_at timestamp with time zone
+sessions.sid text
 sessions.token_hash bytea
 sessions.user_id uuid
 sitemap_urls.blog_id bigint
@@ -126,6 +153,7 @@ takedown_requests.reviewed_at timestamp with time zone
 takedown_requests.reviewed_by text
 takedown_requests.status text
 takedown_requests.target_type text
+user_identities.event_at timestamp with time zone
 user_identities.issuer text
 user_identities.linked_at timestamp with time zone
 user_identities.subject text

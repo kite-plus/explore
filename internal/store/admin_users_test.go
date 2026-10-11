@@ -84,7 +84,7 @@ func TestAdminUserDetailAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := sha256.Sum256([]byte("owner-session"))
-	if err := s.CreateSession(ctx, u.ID, token, time.Now().Add(time.Hour)); err != nil {
+	if err := s.CreateSession(ctx, Session{UserID: u.ID, TokenHash: token, Expires: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AddSubscription(ctx, u.ID, followed.Host); err != nil {
@@ -169,7 +169,7 @@ func TestSessionsMarkTheAccountSeen(t *testing.T) {
 		return *at
 	}
 	token := sha256.Sum256([]byte("seen-session"))
-	if err := s.CreateSession(ctx, u.ID, token, time.Now().Add(time.Hour)); err != nil {
+	if err := s.CreateSession(ctx, Session{UserID: u.ID, TokenHash: token, Expires: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	seen()
@@ -272,7 +272,7 @@ func TestProfileEditAndPasswordReset(t *testing.T) {
 	}
 
 	token := sha256.Sum256([]byte("forgot-session"))
-	if err := s.CreateSession(ctx, u.ID, token, time.Now().Add(time.Hour)); err != nil {
+	if err := s.CreateSession(ctx, Session{UserID: u.ID, TokenHash: token, Expires: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ResetPassword(ctx, u.ID, "temporary-hash", "admin@example.com"); err != nil {

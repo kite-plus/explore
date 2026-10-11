@@ -30,15 +30,19 @@ type User struct {
 	CreatedAt    time.Time
 	// TemporaryPassword is set while an admin-reset password is unchanged.
 	TemporaryPassword bool
+	// LinkedAt is when a Kite Plus account was linked, or nil. A linked
+	// account has no password (PasswordHash is empty).
+	LinkedAt *time.Time
 }
 
-// userColumns are what scanUser reads, in order.
+// userColumns are what scanUser reads, in order, from a users row.
 const userColumns = `id::text, number, email, password_hash, display_name, is_admin, disabled_at IS NOT NULL, created_at,
-	password_reset_at IS NOT NULL`
+	password_reset_at IS NOT NULL, (SELECT min(i.linked_at) FROM user_identities i WHERE i.user_id = users.id)`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled, &u.CreatedAt, &u.TemporaryPassword)
+	err := row.Scan(&u.ID, &u.Number, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin, &u.Disabled, &u.CreatedAt,
+		&u.TemporaryPassword, &u.LinkedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -65,20 +69,16 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
 // minutes, so most requests write nothing.
 func (s *Store) UserBySession(ctx context.Context, tokenHash [sha256.Size]byte) (User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `WITH found AS (
-			SELECT u.id, u.number, u.email, u.password_hash, u.display_name, u.is_admin, u.created_at, u.last_seen_at, u.password_reset_at
+			SELECT u.id, u.number, u.email, u.password_hash, u.display_name, u.is_admin, u.created_at, u.last_seen_at, u.password_reset_at,
+				(SELECT min(i.linked_at) FROM user_identities i WHERE i.user_id = u.id) AS linked_at
 			FROM sessions s JOIN users u ON u.id = s.user_id
 			WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL
 		), seen AS (
 			UPDATE users SET last_seen_at = now() FROM found
 			WHERE users.id = found.id AND (found.last_seen_at IS NULL OR found.last_seen_at < now() - interval '5 minutes')
 		)
-		SELECT id::text, number, email, password_hash, display_name, is_admin, false, created_at, password_reset_at IS NOT NULL FROM found`, tokenHash[:]))
-}
-
-func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash [sha256.Size]byte, expires time.Time) error {
-	_, err := s.pool.Exec(ctx, `WITH created AS (INSERT INTO sessions(token_hash, user_id, expires_at) VALUES ($1, $2, $3))
-		UPDATE users SET last_seen_at = now() WHERE id = $2`, tokenHash[:], userID, expires)
-	return err
+		SELECT id::text, number, email, password_hash, display_name, is_admin, false, created_at, password_reset_at IS NOT NULL, linked_at
+		FROM found`, tokenHash[:]))
 }
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash [sha256.Size]byte) error {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/kite-plus/explore/internal/check"
 	"github.com/kite-plus/explore/internal/fetch"
+	"github.com/kite-plus/explore/internal/idp"
 	"github.com/kite-plus/explore/internal/store"
 )
 
@@ -34,6 +35,22 @@ type Server struct {
 	Log          *slog.Logger
 	Now          func() time.Time
 
+	// OIDC signs readers in with the Kite Plus identity provider; nil leaves
+	// it off. See docs/design/accounts.md section 1.
+	OIDC *idp.Client
+	// IdentityAccountURL is the provider's page where readers manage and
+	// delete their account.
+	IdentityAccountURL string
+	// IdentityWebhookSecret checks the user events the provider pushes;
+	// empty turns the webhook off.
+	IdentityWebhookSecret string
+	// AppleAppIDs, AndroidPackage and AndroidCertSHA256 publish the files
+	// that let the apps claim the sign-in callback; each is served only when
+	// set. See docs/design/accounts.md section 1.1.
+	AppleAppIDs       []string
+	AndroidPackage    string
+	AndroidCertSHA256 []string
+
 	readLimit     *limiter
 	submitLimit   *limiter
 	previewLimit  *limiter
@@ -45,6 +62,7 @@ type Server struct {
 	pingLimit     *limiter
 	importLimit   *limiter
 	feedLimit     *limiter
+
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage

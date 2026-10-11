@@ -73,5 +73,5 @@ func (s *Server) completeSetup(c *gin.Context) {
 		return
 	}
 	s.Log.Info("setup complete")
-	s.startSession(c, u)
+	s.startSession(c, u, store.ClientWeb)
 }
