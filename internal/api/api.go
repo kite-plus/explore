@@ -62,7 +62,7 @@ type Server struct {
 	pingLimit     *limiter
 	importLimit   *limiter
 	feedLimit     *limiter
-
+	flowLimit     *limiter
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage
@@ -95,6 +95,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	// Per token: a blogroll reads its feed from a server or at build time, not
 	// from every visitor's browser.
 	s.feedLimit = newLimiter(600, time.Hour, s.Now)
+	// Each sign-in started stores a row until it expires.
+	s.flowLimit = newLimiter(30, time.Minute, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -112,6 +114,25 @@ func (s *Server) Handler() (http.Handler, error) {
 	r.GET("/feed.xml", s.limit(s.readLimit), s.feedXML)
 	r.GET("/blogs.opml", s.limit(s.readLimit), s.blogsOPML)
 	r.GET("/f/:file", s.limit(s.readLimit), s.followingFeed)
+	if len(s.AppleAppIDs) > 0 {
+		r.GET("/.well-known/apple-app-site-association", s.appleAppSiteAssociation)
+	}
+	if len(s.AndroidCertSHA256) > 0 {
+		r.GET("/.well-known/assetlinks.json", s.assetLinks)
+	}
+	// Sign-in with the identity provider exists only once it is configured;
+	// see docs/design/accounts.md section 1.
+	if s.OIDC != nil {
+		r.GET("/auth/login", s.limit(s.flowLimit), s.oidcLogin)
+		r.POST("/auth/link", s.limit(s.flowLimit), s.oidcLink)
+		r.GET("/auth/callback", s.limit(s.flowLimit), s.oidcCallback)
+		r.GET("/auth/app/start", s.limit(s.flowLimit), s.appStart)
+		r.GET("/app/auth/done", s.limit(s.readLimit), s.appDone)
+		r.POST("/auth/backchannel-logout", s.backchannelLogout)
+		if s.IdentityWebhookSecret != "" {
+			r.POST("/hooks/idp", s.identityHook)
+		}
+	}
 
 	v1 := r.Group("/api/v1")
 	v1.GET("/entries", s.limit(s.readLimit), s.entries)
@@ -132,6 +153,10 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.POST("/ping", s.limit(s.pingLimit), s.ping)
 	v1.POST("/auth/register", s.limit(s.registerLimit), s.register)
 	v1.POST("/auth/login", s.limit(s.loginLimit), s.login)
+	v1.GET("/auth/options", s.limit(s.readLimit), s.authOptions)
+	if s.OIDC != nil {
+		v1.POST("/auth/app/exchange", s.limit(s.loginLimit), s.appExchange)
+	}
 	v1.GET("/setup", s.limit(s.readLimit), s.setupState)
 	v1.POST("/setup", s.limit(s.loginLimit), s.completeSetup)
 	account := v1.Group("/", func(c *gin.Context) { c.Header("Cache-Control", "private, no-store"); c.Next() }, s.requireUser())
