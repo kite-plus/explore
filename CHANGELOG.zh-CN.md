@@ -10,15 +10,15 @@
 
 ### 新增
 
-- 读者可以用 Kite Plus 账号登录，它是 Kite Plus 各个服务共用的登录。部署时在 `.env` 里设置 `EXPLORE_OIDC_ISSUER` 和客户端之后才打开。打开后登录页以「使用 Kite Plus 账号登录」为主，新账号都来自 Kite Plus，不再能用密码注册。以前用密码注册的账号照常用密码登录，也可以在账号页输入当前密码后关联 Kite Plus 账号，之后改用 Kite Plus 登录，本站密码随即失效。账号不按邮箱合并：Kite Plus 账号的邮箱已有本站账号时，会提示先用密码登录再关联。
-- 在 Kite Plus 退出时，它在 Explore 登录的会话一并结束。删除、停用或锁定 Kite Plus 账号时，Explore 删除或停用对应的账号，在 Kite Plus 恢复后这里也恢复；每个推送都先向 Kite Plus 核实再处理，漏掉的由 worker 每小时对账补上。唯一可用的管理员不会被直接删除，而是先停用，等有了另一位管理员再删除。
-- Kite 应用可以经 Explore 服务端登录：系统登录页打开 `/auth/app/start`，Kite Plus 登录完成后带着一次性授权码回到应用，应用用它在 `/api/v1/auth/app/exchange` 换到会话令牌。`/api/v1/auth/options` 告诉应用这台服务器提供哪些登录方式。应用可以在所有要登录的接口上用 `Authorization: Bearer` 带令牌，不需要 CSRF 头；密码登录时说明自己是应用，就直接拿到令牌。设置了 `EXPLORE_APPLE_APP_IDS` 或 `EXPLORE_ANDROID_CERT_SHA256` 后，提供让应用认领回调地址的文件。
+- 读者可以用 Kite Plus 账号登录，它是 Kite Plus 各个服务共用的登录。部署时在 `.env` 里设置 `EXPLORE_OIDC_ISSUER` 和客户端之后才打开。打开后登录页以「使用 Kite Plus 账号登录」为主，新账号都来自 Kite Plus，不再能用密码注册。以前用密码注册的账号照常用密码登录，也可以在账号页输入当前密码、在 Kite Plus 选好账号后关联，之后改用 Kite Plus 登录，本站密码随即失效，其他设备上的登录退出，账号页显示关联的是哪个 Kite Plus 账号。管理员可以在用户详情里解除 Kite Plus 关联，之后又能重置密码。账号不按邮箱合并：Kite Plus 账号的邮箱已有本站账号时，会提示先用密码登录再关联。
+- 在 Kite Plus 退出时，它在 Explore 登录的会话一并结束。删除或停用 Kite Plus 账号时，Explore 删除或停用对应的账号，重新启用后这里也恢复；在 Kite Plus 被锁定不影响这里，因为知道读者邮箱的人就能让它锁定。每个推送都先向 Kite Plus 核实再处理，Kite Plus 记录了删除才删除账号，漏掉的由 worker 每小时对账补上。唯一可用的管理员不会被直接删除，而是先停用，等有了另一位管理员再删除。
+- Kite 应用可以经 Explore 服务端登录：系统登录页打开 `/auth/app/start`，Kite Plus 登录完成后带着一次性授权码回到应用，应用用它在 `/api/v1/auth/app/exchange` 换到会话令牌。在应用认领不了地址的服务器上，授权码要交给 `explore://` scheme，浏览器会先请读者确认以自己的账号登录 Kite 应用，网页因此没法把会话交给别的应用。`/api/v1/auth/options` 告诉应用这台服务器提供哪些登录方式。应用可以在所有要登录的接口上用 `Authorization: Bearer` 带令牌，不需要 CSRF 头；密码登录时说明自己是应用，就直接拿到令牌。设置了 `EXPLORE_APPLE_APP_IDS` 或 `EXPLORE_ANDROID_CERT_SHA256` 后，提供让应用认领回调地址的文件。
 - 账号页在「删除账号」旁边另有「删除 Kite Plus 账号」；后台的用户详情显示关联的 Kite Plus 账号、各个会话来自哪里，以及 Kite Plus 停用账号的原因。
 
 ### 变更
 
 - 打开 Kite Plus 登录的 https 站点上，会话 Cookie 改名为 `__Host-explore_session`，读者要重新登录一次。没有打开时一切照旧。
-- 这次升级有一个数据库迁移，新增登录用的几张表和 `sessions` 的两列；还要换上这个版本的 `Caddyfile`，它把 `/auth/`、`/hooks/`、`/app/auth/done` 和两个应用认领文件转给 serve。新的环境变量都是可选的，见 `.env.example`。
+- 这次升级有两个数据库迁移，新增登录用的几张表、`sessions` 的两列和 `user_identities` 的一列；还要换上这个版本的 `Caddyfile`，它把 `/auth/`、`/hooks/`、`/app/auth/done` 和两个应用认领文件转给 serve。新的环境变量都是可选的，见 `.env.example`。
 
 ## [0.1.19] - 2026-10-10
 
