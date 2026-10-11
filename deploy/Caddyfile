@@ -29,3 +29,8 @@
 		}
 	}
 }
+
+# Sites of other services on this server, one file each, dropped into
+# ./sites (docs/design/project-layout.md section 10). With none there, Caddy
+# only logs a warning.
+import /etc/caddy/sites/*.caddy

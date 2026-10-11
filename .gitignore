@@ -12,5 +12,8 @@
 
 # Secrets for deploy/docker-compose.yaml.
 /deploy/.env
+# Server-local: other services' sites and the kite-edge override.
+/deploy/sites/
+/deploy/docker-compose.override.yaml
 
 /.claude/

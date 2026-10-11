@@ -1,0 +1,17 @@
+# For a server where other services share this Caddy, such as the Kite Plus
+# identity and comment services: copy to docker-compose.override.yaml next
+# to docker-compose.yaml, which docker compose then reads by itself. Caddy
+# joins the kite-edge network those services' front containers sit on, and
+# their site files in ./sites name them as upstreams. Only Caddy joins: the
+# worker fetches arbitrary URLs and stays off it. Create the network once:
+#   docker network create --subnet 172.30.10.0/24 kite-edge
+# See docs/design/project-layout.md section 10.
+services:
+  caddy:
+    networks:
+      default:
+      kite-edge:
+
+networks:
+  kite-edge:
+    external: true

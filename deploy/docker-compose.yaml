@@ -27,6 +27,8 @@ services:
       EXPLORE_CDN_RANGES: ${EXPLORE_CDN_RANGES:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Other services' sites, imported by the Caddyfile; usually empty.
+      - ./sites:/etc/caddy/sites:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

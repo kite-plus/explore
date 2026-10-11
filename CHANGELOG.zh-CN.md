@@ -14,6 +14,7 @@
 - 在 Kite Plus 退出时，它在 Explore 登录的会话一并结束。删除或停用 Kite Plus 账号时，Explore 删除或停用对应的账号，重新启用后这里也恢复；在 Kite Plus 被锁定不影响这里，因为知道读者邮箱的人就能让它锁定。每个推送都先向 Kite Plus 核实再处理，Kite Plus 记录了删除才删除账号，漏掉的由 worker 每小时对账补上。唯一可用的管理员不会被直接删除，而是先停用，等有了另一位管理员再删除。
 - Kite 应用可以经 Explore 服务端登录：系统登录页打开 `/auth/app/start`，Kite Plus 登录完成后带着一次性授权码回到应用，应用用它在 `/api/v1/auth/app/exchange` 换到会话令牌。在应用认领不了地址的服务器上，授权码要交给 `explore://` scheme，浏览器会先请读者确认以自己的账号登录 Kite 应用，网页因此没法把会话交给别的应用。`/api/v1/auth/options` 告诉应用这台服务器提供哪些登录方式。应用可以在所有要登录的接口上用 `Authorization: Bearer` 带令牌，不需要 CSRF 头；密码登录时说明自己是应用，就直接拿到令牌。设置了 `EXPLORE_APPLE_APP_IDS` 或 `EXPLORE_ANDROID_CERT_SHA256` 后，提供让应用认领回调地址的文件。
 - 账号页在「删除账号」旁边另有「删除 Kite Plus 账号」；后台的用户详情显示关联的 Kite Plus 账号、各个会话来自哪里，以及 Kite Plus 停用账号的原因。
+- Caddy 可以做同一台服务器上其他服务的入口：`Caddyfile` 读入 `docker-compose.yaml` 旁边 `sites` 目录里的每个 `*.caddy` 文件，compose 把这个目录挂进 Caddy；`deploy/docker-compose.edge.example.yaml` 示范 Caddy 怎么接上那些服务共用的 Docker 网络。目录里没有文件时，Caddy 只记一条警告，别的都不变。步骤在 `docs/design/project-layout.md` 第 10 节，包括给旧版 `Caddyfile` 和 `docker-compose.yaml` 要加的两行。
 
 ### 变更
 
