@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -24,6 +25,90 @@ type Config struct {
 	AllowPrivateNetworks bool
 	LogLevel             slog.Level
 	Tagger               Tagger
+	OIDC                 OIDC
+	AppLinks             AppLinks
+}
+
+// OIDC configures sign-in with the Kite Plus identity provider. It is off
+// until the deployment names an issuer; see docs/design/accounts.md
+// section 7.
+type OIDC struct {
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	// AccountURL is the provider's page where readers manage and delete their
+	// account; it defaults to ZITADEL's under the issuer.
+	AccountURL string
+	// WebhookSecret signs the user events the provider pushes; empty turns
+	// the webhook off.
+	WebhookSecret string
+	// APIToken reads the provider's user events for the hourly
+	// reconciliation; empty turns it off.
+	APIToken string
+}
+
+// Enabled reports whether readers can sign in with the provider.
+func (o OIDC) Enabled() bool { return o.Issuer != "" }
+
+func (o *OIDC) validate() error {
+	if o.Issuer == "" {
+		if o.ClientID != "" || o.ClientSecret != "" || o.AccountURL != "" || o.WebhookSecret != "" || o.APIToken != "" {
+			return errors.New("EXPLORE_OIDC_ISSUER is not set: name the issuer to sign in with it, or leave the other OIDC and IdP settings empty")
+		}
+		return nil
+	}
+	if !httpURL(o.Issuer) {
+		return fmt.Errorf("EXPLORE_OIDC_ISSUER: %q is not an http or https URL", o.Issuer)
+	}
+	if o.ClientID == "" || o.ClientSecret == "" {
+		return errors.New("EXPLORE_OIDC_CLIENT_ID and EXPLORE_OIDC_CLIENT_SECRET are required with EXPLORE_OIDC_ISSUER")
+	}
+	if o.AccountURL == "" {
+		o.AccountURL = strings.TrimRight(o.Issuer, "/") + "/ui/console/users/me"
+	} else if !httpURL(o.AccountURL) {
+		return fmt.Errorf("EXPLORE_OIDC_ACCOUNT_URL: %q is not an http or https URL", o.AccountURL)
+	}
+	return nil
+}
+
+// AppLinks are what the apps need to claim this site's addresses for the
+// sign-in callback; each file is served only when its values are set. See
+// docs/design/accounts.md section 1.1.
+type AppLinks struct {
+	// AppleAppIDs are "TEAMID.bundle.id" values for apple-app-site-association.
+	AppleAppIDs []string
+	// AndroidPackage and AndroidCertSHA256 go into assetlinks.json.
+	AndroidPackage    string
+	AndroidCertSHA256 []string
+}
+
+var (
+	appleAppID  = regexp.MustCompile(`^[A-Z0-9]{10}\.[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$`)
+	androidPkg  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$`)
+	fingerprint = regexp.MustCompile(`^([0-9A-F]{2}:){31}[0-9A-F]{2}$`)
+)
+
+func (a *AppLinks) validate() error {
+	for _, id := range a.AppleAppIDs {
+		if !appleAppID.MatchString(id) {
+			return fmt.Errorf("EXPLORE_APPLE_APP_IDS: %q is not TEAMID.bundle.id", id)
+		}
+	}
+	if !androidPkg.MatchString(a.AndroidPackage) {
+		return fmt.Errorf("EXPLORE_ANDROID_PACKAGE: %q is not an Android package name", a.AndroidPackage)
+	}
+	for i, f := range a.AndroidCertSHA256 {
+		a.AndroidCertSHA256[i] = strings.ToUpper(f)
+		if !fingerprint.MatchString(a.AndroidCertSHA256[i]) {
+			return fmt.Errorf("EXPLORE_ANDROID_CERT_SHA256: %q is not a SHA-256 fingerprint such as AB:CD:...", f)
+		}
+	}
+	return nil
+}
+
+func httpURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // Tagger configures the model that tags entries. Tagging is off until the
@@ -86,7 +171,7 @@ func Load(getenv func(string) string) (Config, error) {
 		LogLevel:          slog.LevelInfo,
 	}
 
-	if u, err := url.Parse(c.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if !httpURL(c.PublicURL) {
 		return Config{}, fmt.Errorf("EXPLORE_PUBLIC_URL: %q is not an http or https URL", c.PublicURL)
 	}
 	if v := strings.TrimSpace(getenv("EXPLORE_WORKER_CONCURRENCY")); v != "" {
@@ -123,6 +208,26 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 	if err := c.Tagger.validate(); err != nil {
+		return Config{}, err
+	}
+	// Secrets are not echoed in errors.
+	c.OIDC = OIDC{
+		Issuer:        strings.TrimSpace(getenv("EXPLORE_OIDC_ISSUER")),
+		ClientID:      strings.TrimSpace(getenv("EXPLORE_OIDC_CLIENT_ID")),
+		ClientSecret:  strings.TrimSpace(getenv("EXPLORE_OIDC_CLIENT_SECRET")),
+		AccountURL:    strings.TrimSpace(getenv("EXPLORE_OIDC_ACCOUNT_URL")),
+		WebhookSecret: strings.TrimSpace(getenv("EXPLORE_IDP_WEBHOOK_SECRET")),
+		APIToken:      strings.TrimSpace(getenv("EXPLORE_IDP_API_TOKEN")),
+	}
+	if err := c.OIDC.validate(); err != nil {
+		return Config{}, err
+	}
+	c.AppLinks = AppLinks{
+		AppleAppIDs:       list(getenv("EXPLORE_APPLE_APP_IDS")),
+		AndroidPackage:    or(getenv("EXPLORE_ANDROID_PACKAGE"), "plus.kite.explore"),
+		AndroidCertSHA256: list(getenv("EXPLORE_ANDROID_CERT_SHA256")),
+	}
+	if err := c.AppLinks.validate(); err != nil {
 		return Config{}, err
 	}
 	return c, nil

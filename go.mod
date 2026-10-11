@@ -6,7 +6,9 @@ toolchain go1.26.8
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.75.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jimsmart/grobotstxt v1.0.3
 	github.com/mmcdole/gofeed v1.4.2
@@ -14,6 +16,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/text v0.42.0
 )
 

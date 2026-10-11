@@ -118,3 +118,48 @@ func TestTagger(t *testing.T) {
 		}
 	}
 }
+
+func TestOIDC(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.OIDC.Enabled() || len(c.AppLinks.AppleAppIDs) != 0 || len(c.AppLinks.AndroidCertSHA256) != 0 || c.AppLinks.AndroidPackage != "plus.kite.explore" {
+		t.Errorf("default = %+v %+v", c.OIDC, c.AppLinks)
+	}
+	fp := strings.TrimSuffix(strings.Repeat("ab:", 32), ":")
+	c, err = Load(env(map[string]string{
+		"EXPLORE_OIDC_ISSUER":         "http://localhost:8090",
+		"EXPLORE_OIDC_CLIENT_ID":      "client",
+		"EXPLORE_OIDC_CLIENT_SECRET":  "secret",
+		"EXPLORE_IDP_WEBHOOK_SECRET":  "hook",
+		"EXPLORE_IDP_API_TOKEN":       "pat",
+		"EXPLORE_APPLE_APP_IDS":       "ABCDE12345.plus.kite.explore, ABCDE12345.plus.kite.explore.dev",
+		"EXPLORE_ANDROID_CERT_SHA256": fp,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.OIDC.Enabled() || c.OIDC.AccountURL != "http://localhost:8090/ui/console/users/me" || c.OIDC.WebhookSecret != "hook" ||
+		c.OIDC.APIToken != "pat" || len(c.AppLinks.AppleAppIDs) != 2 || c.AppLinks.AndroidCertSHA256[0] != strings.ToUpper(fp) {
+		t.Errorf("config = %+v %+v", c.OIDC, c.AppLinks)
+	}
+	bad := []map[string]string{
+		{"EXPLORE_OIDC_CLIENT_ID": "client"},
+		{"EXPLORE_IDP_WEBHOOK_SECRET": "hook"},
+		{"EXPLORE_OIDC_ISSUER": "localhost:8090", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s"},
+		{"EXPLORE_OIDC_ISSUER": "https://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c"},
+		{"EXPLORE_OIDC_ISSUER": "https://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s", "EXPLORE_OIDC_ACCOUNT_URL": "account"},
+		{"EXPLORE_APPLE_APP_IDS": "plus.kite.explore"},
+		{"EXPLORE_ANDROID_CERT_SHA256": "AB:CD"},
+		{"EXPLORE_ANDROID_PACKAGE": "explore"},
+	}
+	for _, m := range bad {
+		if _, err := Load(env(m)); err == nil {
+			t.Errorf("%v accepted", m)
+		}
+	}
+	if _, err := Load(env(map[string]string{"EXPLORE_OIDC_CLIENT_SECRET": "very-secret"})); err == nil || strings.Contains(err.Error(), "very-secret") {
+		t.Errorf("err = %v", err)
+	}
+}
