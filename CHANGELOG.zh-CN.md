@@ -8,6 +8,10 @@
 
 ## [未发布]
 
+## [0.1.20] - 2026-10-11
+
+一个 Kite Plus 账号的版本：读者可以用 Kite Plus 各服务共用的账号登录（已在 id.kite.plus 上线），Kite 应用也可以经服务器登录。`.env` 设了 `EXPLORE_OIDC_ISSUER` 和客户端之后才会打开。这次升级有两个数据库迁移，并且要用这个版本的 `Caddyfile` 和 `docker-compose.yaml`：按 README 第一步重新下载这两个文件，或者照 `docs/design/project-layout.md` 第 10 节加上那几行。新的环境变量都列在 `.env.example` 里，全部可选。
+
 ### 新增
 
 - 读者可以用 Kite Plus 账号登录，它是 Kite Plus 各个服务共用的登录。部署时在 `.env` 里设置 `EXPLORE_OIDC_ISSUER` 和客户端之后才打开。打开后登录页以「使用 Kite Plus 账号登录」为主，新账号都来自 Kite Plus，不再能用密码注册。以前用密码注册的账号照常用密码登录，也可以在账号页输入当前密码、在 Kite Plus 选好账号后关联，之后改用 Kite Plus 登录，本站密码随即失效，其他设备上的登录退出，账号页显示关联的是哪个 Kite Plus 账号。管理员可以在用户详情里解除 Kite Plus 关联，之后又能重置密码。账号不按邮箱合并：Kite Plus 账号的邮箱已有本站账号时，会提示先用密码登录再关联。

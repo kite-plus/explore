@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-10-11
+
+A release for the Kite Plus account: readers can sign in with the account shared by Kite Plus services, now live at id.kite.plus, and the Kite apps can sign in through the server. It stays off until `.env` sets `EXPLORE_OIDC_ISSUER` and its client. The upgrade runs two migrations and needs this version's `Caddyfile` and `docker-compose.yaml`: fetch both again as in the README's first step, or add the lines `docs/design/project-layout.md` section 10 lists. `.env.example` lists the new variables, all optional.
+
 ### Added
 
 - Readers can sign in with a Kite Plus account, the shared sign-in of Kite Plus services. It stays off until a deployment sets `EXPLORE_OIDC_ISSUER` and its client in `.env`. Then the sign-in page leads with "Sign in with a Kite Plus account", new accounts come from Kite Plus and password registration closes. Accounts made with a password keep signing in with it, and can link a Kite Plus account from the account page after entering the current password and picking the account at Kite Plus; from then on they sign in with Kite Plus, the password stops working, other devices are signed out, and the account page shows which Kite Plus account is linked. An admin can detach a linked Kite Plus account from the user's details, after which a password reset works again. Accounts are never matched by email: a Kite Plus account whose email an account here already uses is asked to link instead.
