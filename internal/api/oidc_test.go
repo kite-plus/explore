@@ -267,6 +267,22 @@ func TestNoPasswordsWithKitePlus(t *testing.T) {
 	if w := e.get("/api/v1/setup"); w.Code != http.StatusOK {
 		t.Fatalf("setup state = %d", w.Code)
 	}
+	// A session from before the switch, of an account with a temporary
+	// password, is offered no password to change.
+	local, err := e.s.UserByEmail(ctx, "local@example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.ResetPassword(ctx, local.ID, mustHash(t, "temporary-pass-123"), "admin@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.CreateSession(ctx, store.Session{UserID: local.ID, TokenHash: sha256.Sum256([]byte(strings.Repeat("q", 43))), Expires: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	old := e.do(req{method: http.MethodGet, path: "/api/v1/me", header: map[string]string{"Cookie": "__Host-explore_session=" + strings.Repeat("q", 43)}})
+	if !strings.Contains(old.Body.String(), `"temporary_password":false`) || !strings.Contains(old.Body.String(), `"password_login":false`) {
+		t.Fatalf("me of an old session = %s", old.Body.String())
+	}
 }
 
 func TestParallelSignIns(t *testing.T) {

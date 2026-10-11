@@ -291,18 +291,21 @@ func (s *Server) appSessionJSON(u store.User, token string, expires time.Time) g
 	return gin.H{"token": token, "expires_at": expires.UTC().Truncate(time.Second), "user": s.userJSON(u, token)}
 }
 
-// userJSON is the account as GET /api/v1/me gives it. password_login is
-// false for every account once Kite Plus is on, as no password works then.
+// userJSON is the account as GET /api/v1/me gives it. password_login and
+// temporary_password are false for every account once Kite Plus is on, as
+// no password works then; a session from before the switch must not offer
+// to change one.
 func (s *Server) userJSON(u store.User, token string) gin.H {
 	var linked *time.Time
 	if u.LinkedAt != nil {
 		t := u.LinkedAt.UTC()
 		linked = &t
 	}
-	return gin.H{"id": u.ID, "number": u.Number, "created_at": u.CreatedAt.UTC(), "temporary_password": u.TemporaryPassword,
+	passwords := !s.kitePlusOnly()
+	return gin.H{"id": u.ID, "number": u.Number, "created_at": u.CreatedAt.UTC(), "temporary_password": u.TemporaryPassword && passwords,
 		"email": u.Email, "display_name": u.DisplayName,
 		"is_admin": u.IsAdmin, "csrf_token": csrfToken(token),
-		"password_login": u.PasswordHash != "" && !s.kitePlusOnly(), "identity_linked_at": linked}
+		"password_login": u.PasswordHash != "" && passwords, "identity_linked_at": linked}
 }
 
 func (s *Server) me(c *gin.Context) {
