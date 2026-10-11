@@ -243,10 +243,15 @@ function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: bool
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState("");
+  const [identityEmail, setIdentityEmail] = useState("");
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setReturned({ linked: params.get("linked") === "1", error: params.get("error") });
   }, []);
+  useEffect(() => {
+    if (!user.identity_linked_at) return;
+    readerRequest<{ email: string }>("me/identity").then(identity => setIdentityEmail(identity.email)).catch(() => {});
+  }, [user.identity_linked_at]);
   const error = returned.error ? linkErrors[returned.error] ?? ["没能关联 Kite Plus 账号，请重试。", "Linking the Kite Plus account did not work. Please try again."] : null;
   const linked = user.identity_linked_at
     ? new Date(user.identity_linked_at).toLocaleDateString(zh ? "zh-CN" : "en", { dateStyle: zh ? "long" : "medium" })
@@ -276,12 +281,14 @@ function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: bool
     {returned.linked && linked && <p role="status" className="mt-2 text-sm text-success">{zh ? "已关联 Kite Plus 账号，以后用它登录。" : "Kite Plus account linked; sign in with it from now on."}</p>}
     {error && <p role="alert" className="mt-2 text-sm text-destructive">{zh ? error[0] : error[1]}</p>}
     {linked ? <>
-      <p className="mt-1 text-sm text-muted-foreground" data-kite-plus-linked>{zh ? `已关联 Kite Plus 账号，用它登录。${linked}关联。` : `Linked to a Kite Plus account, which you sign in with. Linked ${linked}.`}</p>
+      <p className="mt-1 text-sm text-muted-foreground" data-kite-plus-linked>{zh
+        ? <>已关联 Kite Plus 账号{identityEmail && <> <span className="font-medium text-foreground" data-kite-plus-email>{identityEmail}</span></>}，用它登录。{linked}关联。</>
+        : <>Linked to the Kite Plus account{identityEmail && <> <span className="font-medium text-foreground" data-kite-plus-email>{identityEmail}</span></>}, which you sign in with. Linked {linked}.</>}</p>
       <a className="mt-3 inline-block rounded-md border px-3 py-2 text-sm hover:bg-accent" href={accountURL} target="_blank" rel="noopener">{zh ? "管理 Kite Plus 账号" : "Manage Kite Plus account"}</a>
     </> : <>
       <p className="mt-1 text-sm text-muted-foreground">{zh
-        ? "关联后用 Kite Plus 账号登录，本站密码随即停用；订阅和认领的博客都会保留。一个 Kite Plus 账号只能关联本站的一个账号。"
-        : "Once linked, you sign in with your Kite Plus account and your password here stops working; your follows and blogs stay. A Kite Plus account links to one account here."}</p>
+        ? "关联后用 Kite Plus 账号登录，本站密码随即停用，其他设备上的登录会退出；订阅和认领的博客都会保留。Kite Plus 会让你选择要关联的账号。一个 Kite Plus 账号只能关联本站的一个账号。"
+        : "Once linked, you sign in with your Kite Plus account, your password here stops working and other devices are signed out; your follows and blogs stay. Kite Plus asks which of its accounts to link. A Kite Plus account links to one account here."}</p>
       <form className="mt-3 flex max-w-md flex-wrap items-end gap-2" onSubmit={link} noValidate data-kite-plus-link>
         <label className="grid min-w-0 flex-1 gap-1.5 text-sm">{zh ? "当前密码" : "Current password"}
           <input className="w-full rounded-md border bg-background px-3 py-2 text-sm" type="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></label>

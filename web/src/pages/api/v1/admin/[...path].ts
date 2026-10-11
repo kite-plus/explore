@@ -4,7 +4,9 @@ import { apiURL } from "@/lib/config";
 
 /**
  * Forwards /api/v1/admin/* to the Gin API with the query string, the admin's
- * session cookie and its CSRF token, for every method.
+ * session cookie and its CSRF token, for every method. Authorization stays
+ * behind: a token left by the old token-based admin would take precedence
+ * over the cookie at the API. Apps call the API itself.
  */
 export const ALL: APIRoute = async ({ request, params }) => {
   const path = params.path ?? "";

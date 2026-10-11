@@ -80,6 +80,8 @@ function sessionClients(sessions: AdminUserDetail['sessions']) {
 }
 
 function Overview({ user }: { user: AdminUserDetail }) {
+  const { act } = useUsers()
+  const self = useIsSelf()(user)
   const status = userStatus(user)
   const role = userRole(user)
   const lastSignIn = user.sessions[0]?.created_at
@@ -135,15 +137,31 @@ function Overview({ user }: { user: AdminUserDetail }) {
       <dt className='text-muted-foreground'>登录方式</dt>
       <dd>
         {user.identities.length ? (
-          user.identities.map((identity) => (
-            <span key={identity.issuer + identity.subject} className='block'>
-              Kite Plus 账号
-              <span className='block text-xs text-muted-foreground'>
-                {formatDateTime(identity.linked_at)} 关联 ·{' '}
-                <span className='font-mono'>{identity.subject}</span>
-              </span>
+          <span className='flex items-start justify-between gap-2'>
+            <span className='min-w-0'>
+              {user.identities.map((identity) => (
+                <span key={identity.issuer + identity.subject} className='block'>
+                  Kite Plus 账号{identity.email && <span className='text-muted-foreground'> · {identity.email}</span>}
+                  <span className='block text-xs text-muted-foreground'>
+                    {formatDateTime(identity.linked_at)} 关联 ·{' '}
+                    <span className='font-mono'>{identity.subject}</span>
+                  </span>
+                </span>
+              ))}
             </span>
-          ))
+            {!self && (
+              <Button
+                variant='ghost'
+                size='icon'
+                className='size-7 shrink-0 text-muted-foreground hover:text-destructive'
+                aria-label='解除 Kite Plus 关联'
+                title='解除 Kite Plus 关联'
+                onClick={() => act('unlink', [user])}
+              >
+                <Unlink className='size-4' />
+              </Button>
+            )}
+          </span>
         ) : (
           '本站密码'
         )}

@@ -12,6 +12,7 @@ export type UsersDialogType =
   | 'sign-out'
   | 'delete'
   | 'release'
+  | 'unlink'
 
 type UsersContextType = {
   open: UsersDialogType | null

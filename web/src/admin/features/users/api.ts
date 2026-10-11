@@ -47,6 +47,8 @@ export function useUserActions() {
     release: (user: AdminUserRow, host: string) =>
       run([user], (path) => ({ path: `${path}/blogs/${encodeURIComponent(host)}`, method: 'DELETE' }),
         `已解除 ${host} 的认领`),
+    unlink: (user: AdminUserRow) =>
+      run([user], (path) => ({ path: `${path}/identities`, method: 'DELETE' }), '已解除 Kite Plus 关联'),
     remove: (user: AdminUserRow) => run([user], (path) => ({ path, method: 'DELETE' }), '已删除'),
   }
 }

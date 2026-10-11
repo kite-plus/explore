@@ -109,6 +109,13 @@ export function UsersDialogs() {
             destructive: true,
             action: () => actions.release(user, host),
           })}
+          {confirm('unlink', {
+            title: '解除 Kite Plus 关联',
+            desc: <>{who(targets)} 将不再关联现在的 Kite Plus 账号，它的所有登录会话随之退出。<br />账号没有密码，之后请为它重置一个临时密码交给读者；读者也可以再关联一个 Kite Plus 账号。</>,
+            confirmText: '解除关联',
+            destructive: true,
+            action: () => actions.unlink(user),
+          })}
           {confirm('delete', {
             title: (
               <span className='text-destructive'>

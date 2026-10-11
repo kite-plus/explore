@@ -187,7 +187,7 @@ export interface AdminUserBlog {
 /** Matches store.AdminUserDetail; the lists hold at most 200 items. */
 export interface AdminUserDetail extends AdminUserRow {
   /** Kite Plus accounts linked to this one. */
-  identities: { issuer: string; subject: string; linked_at: string }[];
+  identities: { issuer: string; subject: string; email: string; linked_at: string }[];
   sessions: { created_at: string; expires_at: string; client: "web" | "ios" | "android" }[];
   subscriptions: AdminUserBlog[];
   owned_blogs: AdminUserBlog[];
