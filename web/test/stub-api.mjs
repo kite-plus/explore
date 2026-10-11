@@ -77,7 +77,7 @@ export function startStub() {
         return res.end();
       }
       if (url.pathname === "/app/auth/done") {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store" });
         return res.end("<!doctype html><title>Finish signing in in the Kite app</title>");
       }
       if (url.pathname === "/.well-known/apple-app-site-association") return send(200, { applinks: { details: [] } });

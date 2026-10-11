@@ -932,6 +932,7 @@ describe("sign-in with a Kite Plus account", () => {
     assert.equal(done.status, 200);
     assert.equal(done.headers.get("content-security-policy"), "default-src 'none'");
     assert.equal(done.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(done.headers.get("x-frame-options"), "DENY");
     assert.match(await done.text(), /Kite app/);
 
     const aasa = await get("/.well-known/apple-app-site-association");

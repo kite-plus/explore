@@ -169,6 +169,10 @@ func (s *Server) askAppConfirmation(c *gin.Context, f store.LoginFlow, u store.U
 	page := appConfirmPage{Lang: text.Lang, Title: text.Title, Question: fmt.Sprintf(text.Question, who),
 		Detail: fmt.Sprintf(text.Detail, host), Continue: text.Continue, Cancel: text.Cancel, Token: token,
 		CancelURL: template.URL(withQuery(schemeCallback, "error", flowDenied))}
+	// The form posts to this site, and under no-referrer browsers send
+	// "Origin: null" even then, which the site's form check refuses; the
+	// page holds nothing a same-origin referrer could give away.
+	c.Header("Referrer-Policy", "same-origin")
 	s.writePage(c, appConfirmTemplate, page, "form-action 'self' explore:")
 }
 
@@ -177,7 +181,7 @@ func (s *Server) askAppConfirmation(c *gin.Context, f store.LoginFlow, u store.U
 // browser that started the sign-in.
 func (s *Server) appConfirm(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	if origin := c.GetHeader("Origin"); origin != "" && origin != s.publicOrigin() {
+	if origin := c.GetHeader("Origin"); origin != "" && origin != "null" && origin != s.publicOrigin() {
 		s.fail(c, http.StatusForbidden, codeInvalidRequest)
 		return
 	}
@@ -225,7 +229,9 @@ func (s *Server) publicOrigin() string {
 // formAction for its forms.
 func (s *Server) writePage(c *gin.Context, t *template.Template, data any, formAction string) {
 	c.Header("Cache-Control", "no-store")
-	c.Header("Referrer-Policy", "no-referrer")
+	if c.Writer.Header().Get("Referrer-Policy") == "" {
+		c.Header("Referrer-Policy", "no-referrer")
+	}
 	c.Header("X-Robots-Tag", "noindex")
 	c.Header("X-Frame-Options", "DENY")
 	c.Header("Vary", "Accept-Language")

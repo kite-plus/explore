@@ -7,7 +7,8 @@ import { forwardedFor } from "@/lib/forwarded";
 // the reader's language, and the signature on the identity provider's
 // pushed events.
 const requestHeaders = ["cookie", "content-type", "accept-language", "zitadel-signature"];
-const responseHeaders = ["content-type", "cache-control", "location", "content-security-policy", "referrer-policy", "x-robots-tag", "vary"];
+const responseHeaders = ["content-type", "cache-control", "location", "content-security-policy", "referrer-policy", "x-frame-options",
+  "x-robots-tag", "vary"];
 
 /**
  * Hands a request to the API as it is, for the paths the API itself serves

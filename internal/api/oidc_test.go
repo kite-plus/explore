@@ -960,7 +960,7 @@ func TestSchemeAppSignInAsksFirst(t *testing.T) {
 		t.Fatalf("confirmation page:\n%s", body)
 	}
 	if !strings.Contains(h.Get("Content-Security-Policy"), "frame-ancestors 'none'") || !strings.Contains(h.Get("Content-Security-Policy"), "form-action 'self' explore:") ||
-		h.Get("X-Frame-Options") != "DENY" || h.Get("Cache-Control") != "no-store" {
+		h.Get("X-Frame-Options") != "DENY" || h.Get("Cache-Control") != "no-store" || h.Get("Referrer-Policy") != "same-origin" {
 		t.Fatalf("confirmation headers = %v", h)
 	}
 	if b.cookies["__Host-explore_login"] == "" {
@@ -995,6 +995,12 @@ func TestSchemeAppSignInAsksFirst(t *testing.T) {
 	// The confirmation is good once.
 	if loc := location(t, b.do(http.MethodPost, "/auth/app/confirm", "token="+token, form)); loc.Query().Get("error") != "login_expired" {
 		t.Fatalf("confirmed twice = %s", loc)
+	}
+	// A browser that sends "Origin: null" with the form still gets through.
+	b3, _, token3 := schemeSignIn(t, e, challenge)
+	if loc := location(t, b3.do(http.MethodPost, "/auth/app/confirm", "token="+token3, map[string]string{"Content-Type": form["Content-Type"],
+		"Origin": "null"})); loc.Query().Get("code") == "" {
+		t.Fatalf("Origin null = %s", loc)
 	}
 	// It lapses after ten minutes.
 	e.srv.Now = func() time.Time { return time.Now().Add(-11 * time.Minute) }
