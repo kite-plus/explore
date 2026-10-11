@@ -220,13 +220,17 @@ func (s *Server) oidcCallback(c *gin.Context) {
 	c.Header("Referrer-Policy", "no-referrer")
 	state := c.Query("state")
 	browser, _ := c.Cookie(s.cookieName(loginCookie))
-	s.setCookie(c, loginCookie, "", -1)
 	if state == "" || browser == "" {
 		s.flowError(c, store.LoginFlow{}, flowExpired)
 		return
 	}
 	ctx := c.Request.Context()
-	f, err := s.Store.TakeLoginFlow(ctx, sha256.Sum256([]byte(state)), sha256.Sum256([]byte(browser)))
+	binding := sha256.Sum256([]byte(browser))
+	f, err := s.Store.TakeLoginFlow(ctx, sha256.Sum256([]byte(state)), binding)
+	// The cookie goes once no other sign-in of this browser waits for it.
+	if pending, perr := s.Store.LoginFlowsPending(ctx, binding); perr == nil && !pending {
+		s.setCookie(c, loginCookie, "", -1)
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		s.flowError(c, store.LoginFlow{}, flowExpired)
 		return

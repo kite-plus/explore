@@ -240,6 +240,25 @@ func TestWebSignIn(t *testing.T) {
 	}
 }
 
+func TestParallelSignIns(t *testing.T) {
+	e, _ := newOIDCEnv(t, "https://explore.example.org", nil)
+	b := e.browser()
+	first := provider(t, b.get("/auth/login?return=/one").Header().Get("Location"))
+	second := provider(t, b.get("/auth/login?return=/two").Header().Get("Location"))
+	if loc := location(t, b.get("/auth/callback?"+second.RawQuery)); loc.String() != "/two" {
+		t.Fatalf("second went to %s", loc)
+	}
+	if b.cookies["__Host-explore_login"] == "" {
+		t.Fatal("the login cookie went while another sign-in waited for it")
+	}
+	if loc := location(t, b.get("/auth/callback?"+first.RawQuery)); loc.String() != "/one" {
+		t.Fatalf("first went to %s", loc)
+	}
+	if b.cookies["__Host-explore_login"] != "" {
+		t.Fatal("the login cookie stayed after the last sign-in")
+	}
+}
+
 func TestReturnPathsStayOnSite(t *testing.T) {
 	e, _ := newOIDCEnv(t, "https://explore.example.org", nil)
 	for _, ret := range []string{"//evil.example/x", "https://evil.example/", "/\\evil.example", "/auth/login", "/login?next=/x",

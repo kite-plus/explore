@@ -203,6 +203,15 @@ func (s *Store) TakeLoginFlow(ctx context.Context, stateHash, browserHash [sha25
 	return f, nil
 }
 
+// LoginFlowsPending reports whether the browser has started sign-ins that
+// have not finished or expired.
+func (s *Store) LoginFlowsPending(ctx context.Context, browserHash [sha256.Size]byte) (bool, error) {
+	var pending bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM login_flows WHERE browser_hash = $1 AND expires_at > now())`,
+		browserHash[:]).Scan(&pending)
+	return pending, err
+}
+
 // AppCode is a one-time code an app exchanges for a session.
 type AppCode struct {
 	CodeHash  [sha256.Size]byte
