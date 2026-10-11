@@ -129,6 +129,7 @@ func TestOIDC(t *testing.T) {
 	}
 	fp := strings.TrimSuffix(strings.Repeat("ab:", 32), ":")
 	c, err = Load(env(map[string]string{
+		"EXPLORE_PUBLIC_URL":          "http://localhost:4321",
 		"EXPLORE_OIDC_ISSUER":         "http://localhost:8090",
 		"EXPLORE_OIDC_CLIENT_ID":      "client",
 		"EXPLORE_OIDC_CLIENT_SECRET":  "secret",
@@ -159,6 +160,15 @@ func TestOIDC(t *testing.T) {
 		if _, err := Load(env(m)); err == nil {
 			t.Errorf("%v accepted", m)
 		}
+	}
+	// An http issuer for an https site only with private networks allowed.
+	plain := map[string]string{"EXPLORE_OIDC_ISSUER": "http://id.example.org", "EXPLORE_OIDC_CLIENT_ID": "c", "EXPLORE_OIDC_CLIENT_SECRET": "s"}
+	if _, err := Load(env(plain)); err == nil {
+		t.Error("an http issuer was accepted for the https default public URL")
+	}
+	plain["EXPLORE_ALLOW_PRIVATE_NETWORKS"] = "true"
+	if _, err := Load(env(plain)); err != nil {
+		t.Errorf("http issuer with private networks: %v", err)
 	}
 	if _, err := Load(env(map[string]string{"EXPLORE_OIDC_CLIENT_SECRET": "very-secret"})); err == nil || strings.Contains(err.Error(), "very-secret") {
 		t.Errorf("err = %v", err)

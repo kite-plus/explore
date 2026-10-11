@@ -81,8 +81,10 @@ func VerifySignature(header string, body []byte, secret string, now time.Time) e
 }
 
 // userEventTypes are the provider's event types that can change an account
-// here; the identity repository's README names them.
-var userEventTypes = []string{model.RemovalEvent, "user.deactivated", "user.reactivated", "user.locked", "user.unlocked"}
+// here. Locking is not one: anyone who knows a reader's email can lock their
+// account at the provider with wrong passwords, so it suspends nothing here,
+// and the provider's user.locked and user.unlocked pushes are ignored.
+var userEventTypes = []string{model.RemovalEvent, "user.deactivated", "user.reactivated"}
 
 // pushed is the body of an event ZITADEL's Actions push to a webhook target.
 type pushed struct {
@@ -188,8 +190,33 @@ func typeName(raw json.RawMessage) string {
 	return o.Type
 }
 
+// search runs one event search and returns its events, oldest first.
+func (d *Directory) search(ctx context.Context, query map[string]any) (eventsResponse, error) {
+	var page eventsResponse
+	status, raw, err := d.do(ctx, http.MethodPost, "/admin/v1/events/_search", query)
+	if err != nil {
+		return page, err
+	}
+	if status != http.StatusOK {
+		return page, fmt.Errorf("event search: HTTP %d: %.200s", status, raw)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&page); err != nil {
+		return page, fmt.Errorf("event search: %w", err)
+	}
+	return page, nil
+}
+
+// pageOverlap is how far before the newest event read so far each next
+// page starts. from is exclusive, so starting at the newest event itself
+// would skip others of the same time that the page cut off, and events the
+// provider commits slightly out of order land a little in the past.
+const pageOverlap = 5 * time.Minute
+
 // Events returns the account events recorded after from (the zero time
-// means from the start), oldest first, reading page after page.
+// means from the start), oldest first, reading page after page. Pages
+// overlap, and events read before, by (aggregate, sequence), are skipped.
 func (d *Directory) Events(ctx context.Context, from time.Time) ([]model.IdentityEvent, error) {
 	size := d.PageSize
 	if size <= 0 {
@@ -197,23 +224,15 @@ func (d *Directory) Events(ctx context.Context, from time.Time) ([]model.Identit
 	}
 	var out []model.IdentityEvent
 	seen := map[string]bool{}
+	cursor, newest := from, from
 	for {
 		query := map[string]any{"asc": true, "limit": size, "aggregateTypes": []string{"user"}, "eventTypes": userEventTypes}
-		if !from.IsZero() {
-			query["from"] = from.UTC().Format(time.RFC3339Nano)
+		if !cursor.IsZero() {
+			query["from"] = cursor.UTC().Format(time.RFC3339Nano)
 		}
-		status, raw, err := d.do(ctx, http.MethodPost, "/admin/v1/events/_search", query)
+		page, err := d.search(ctx, query)
 		if err != nil {
 			return nil, err
-		}
-		if status != http.StatusOK {
-			return nil, fmt.Errorf("event search: HTTP %d: %.200s", status, raw)
-		}
-		var page eventsResponse
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		dec.UseNumber()
-		if err := dec.Decode(&page); err != nil {
-			return nil, fmt.Errorf("event search: %w", err)
 		}
 		fresh := 0
 		for _, ev := range page.Events {
@@ -223,33 +242,92 @@ func (d *Directory) Events(ctx context.Context, from time.Time) ([]model.Identit
 			}
 			seen[id] = true
 			fresh++
-			if ev.CreationDate.After(from) {
-				from = ev.CreationDate
+			if ev.CreationDate.After(newest) {
+				newest = ev.CreationDate
 			}
 			if t := typeName(ev.Aggregate.Type); ev.Aggregate.ID != "" && (t == "" || t == "user") {
 				out = append(out, model.IdentityEvent{ID: id, Subject: ev.Aggregate.ID, Type: typeName(ev.Type), At: ev.CreationDate})
 			}
 		}
-		// A short page is the last; a full page of events seen before means
-		// more than a page share one time, which paging by time cannot pass.
-		if len(page.Events) < size || fresh == 0 {
+		if len(page.Events) < size {
 			return out, nil
 		}
+		// The next page starts pageOverlap before the newest event; when that
+		// would not move on, as when the overlap holds a page of events read
+		// before, just before the newest one (ZITADEL keeps microseconds);
+		// failing that, at it. Only more than a page of events in one
+		// microsecond can still be missed.
+		next := newest.Add(-pageOverlap)
+		if fresh == 0 || !next.After(cursor) {
+			next = newest.Add(-time.Microsecond)
+		}
+		if !next.After(cursor) {
+			next = newest
+		}
+		if !next.After(cursor) {
+			return nil, fmt.Errorf("event search: no progress past %s", newest.Format(time.RFC3339Nano))
+		}
+		cursor = next
 	}
 }
 
+// Removed reports whether the provider recorded the removal of the account
+// with this subject. Only the event search, which needs the same token as
+// the user API, says so; a pushed event could be forged by any service that
+// can read the signing key.
+func (d *Directory) Removed(ctx context.Context, subject string) (bool, error) {
+	page, err := d.search(ctx, map[string]any{"asc": true, "limit": 10, "aggregateTypes": []string{"user"},
+		"aggregateId": subject, "eventTypes": []string{model.RemovalEvent}})
+	if err != nil {
+		return false, err
+	}
+	for _, ev := range page.Events {
+		if ev.Aggregate.ID == subject && typeName(ev.Type) == model.RemovalEvent {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // userStates maps ZITADEL's user states to what they mean here. An initial
-// user has not finished signing up, and has no account here yet.
+// user has not finished signing up, and has no account here yet. A locked
+// user counts as active (see userEventTypes); ZITADEL locks only active
+// users, so a locked one is not deactivated as well.
 var userStates = map[string]model.IdentityState{
 	"USER_STATE_ACTIVE":   model.IdentityActive,
 	"USER_STATE_INITIAL":  model.IdentityActive,
+	"USER_STATE_LOCKED":   model.IdentityActive,
 	"USER_STATE_INACTIVE": model.IdentityDeactivated,
-	"USER_STATE_LOCKED":   model.IdentityLocked,
 	"USER_STATE_DELETED":  model.IdentityRemoved,
 }
 
-// State reads the account's state now. A user the provider does not know
-// is IdentityRemoved.
+// userNotFoundID is the error ID ZITADEL gives a user it does not know
+// (v4, checked against the local stack). Its message is translated, and
+// other 404s, such as an unknown instance or path, carry other IDs.
+const userNotFoundID = "QUERY-Dfbg2"
+
+// userNotFound reports whether a 404 body is ZITADEL's error for a missing
+// user, rather than any other not-found.
+func userNotFound(raw []byte) bool {
+	var body struct {
+		Code    json.Number `json:"code"`
+		Details []struct {
+			ID string `json:"id"`
+		} `json:"details"`
+	}
+	if json.Unmarshal(raw, &body) != nil || body.Code.String() != "5" {
+		return false
+	}
+	for _, d := range body.Details {
+		if d.ID == userNotFoundID {
+			return true
+		}
+	}
+	return false
+}
+
+// State reads the account's state now. A user the provider says it does not
+// know is IdentityRemoved; any other answer that is not a user is an error.
 func (d *Directory) State(ctx context.Context, subject string) (model.IdentityState, error) {
 	status, raw, err := d.do(ctx, http.MethodGet, "/v2/users/"+url.PathEscape(subject), nil)
 	if err != nil {
@@ -258,7 +336,10 @@ func (d *Directory) State(ctx context.Context, subject string) (model.IdentitySt
 	switch status {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return model.IdentityRemoved, nil
+		if userNotFound(raw) {
+			return model.IdentityRemoved, nil
+		}
+		return "", fmt.Errorf("user: HTTP 404 that is not a missing user: %.200s", raw)
 	default:
 		return "", fmt.Errorf("user: HTTP %d: %.200s", status, raw)
 	}

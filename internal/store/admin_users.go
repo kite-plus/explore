@@ -132,6 +132,7 @@ type AdminUserSession struct {
 type AdminUserIdentity struct {
 	Issuer   string    `json:"issuer"`
 	Subject  string    `json:"subject"`
+	Email    string    `json:"email"`
 	LinkedAt time.Time `json:"linked_at"`
 }
 
@@ -184,11 +185,11 @@ func (s *Store) AdminUserDetail(ctx context.Context, id string) (AdminUserDetail
 			return err
 		}
 		d.AdminUser = u
-		if d.Identities, err = collectByID(ctx, tx, `SELECT issuer, subject, linked_at FROM user_identities
+		if d.Identities, err = collectByID(ctx, tx, `SELECT issuer, subject, email, linked_at FROM user_identities
 			WHERE user_id = $1 ORDER BY linked_at`, u.ID,
 			func(row pgx.CollectableRow) (AdminUserIdentity, error) {
 				var v AdminUserIdentity
-				return v, row.Scan(&v.Issuer, &v.Subject, &v.LinkedAt)
+				return v, row.Scan(&v.Issuer, &v.Subject, &v.Email, &v.LinkedAt)
 			}); err != nil {
 			return err
 		}
@@ -350,8 +351,10 @@ func (s *Store) UpdateUserProfile(ctx context.Context, id string, displayName, e
 func (s *Store) ResetPassword(ctx context.Context, id, passwordHash, by string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var linked bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id::text = $1)`, id).Scan(&linked); err != nil {
-			return err
+		if validUUID(id) {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1)`, id).Scan(&linked); err != nil {
+				return err
+			}
 		}
 		if linked {
 			return ErrPasswordOff

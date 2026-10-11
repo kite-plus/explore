@@ -225,6 +225,12 @@ func Load(getenv func(string) string) (Config, error) {
 	if err := c.OIDC.validate(); err != nil {
 		return Config{}, err
 	}
+	// A public site trusts only an issuer it reaches over TLS; plain http
+	// is for development, where private networks are allowed anyway.
+	if c.OIDC.Enabled() && strings.HasPrefix(c.PublicURL, "https://") && !strings.HasPrefix(c.OIDC.Issuer, "https://") &&
+		!c.AllowPrivateNetworks {
+		return Config{}, fmt.Errorf("EXPLORE_OIDC_ISSUER: %q is not https, which a site at an https EXPLORE_PUBLIC_URL needs unless EXPLORE_ALLOW_PRIVATE_NETWORKS is set", c.OIDC.Issuer)
+	}
 	c.AppLinks = AppLinks{
 		AppleAppIDs:       list(getenv("EXPLORE_APPLE_APP_IDS")),
 		AndroidPackage:    or(getenv("EXPLORE_ANDROID_PACKAGE"), "plus.kite.explore"),

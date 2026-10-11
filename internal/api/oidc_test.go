@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -424,11 +426,40 @@ func TestLinkIdentity(t *testing.T) {
 	if w := link(b, me, `{"password":"wrong-password-123"}`); w.Code != http.StatusForbidden {
 		t.Fatalf("link with a wrong password = %d", w.Code)
 	}
+	// Another device signed in to the same account, signed out by linking.
+	elsewhere := e.browser()
+	{
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			t.Fatal(err)
+		}
+		token := base64.RawURLEncoding.EncodeToString(raw[:])
+		if err := e.s.CreateSession(ctx, store.Session{UserID: me.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		elsewhere.cookies["__Host-explore_session"] = token
+	}
+	if w := b.get("/api/v1/me/identity"); w.Code != http.StatusNotFound {
+		t.Fatalf("identity before linking = %d", w.Code)
+	}
 	p.SetUser(idptest.User{Subject: "sub-link", SessionID: "sid-link", Email: "another@example.org", Name: "Another"})
 	back := provider(t, started(t, link(b, me, `{"password":"long-password-123","return":"/en/account"}`)))
+	if auths := p.Authorizations(); auths[len(auths)-1].Prompt != "select_account" {
+		t.Fatalf("link prompt = %q", auths[len(auths)-1].Prompt)
+	}
 	done := b.get("/auth/callback?" + back.RawQuery)
 	if loc := location(t, done); loc.String() != "/en/account?linked=1" {
 		t.Fatalf("link went to %s", loc)
+	}
+	if w := elsewhere.get("/api/v1/me"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("another session after linking = %d", w.Code)
+	}
+	identity := decode[struct {
+		Email    string    `json:"email"`
+		LinkedAt time.Time `json:"linked_at"`
+	}](t, b.get("/api/v1/me/identity"))
+	if identity.Email != "another@example.org" || identity.LinkedAt.IsZero() {
+		t.Fatalf("identity = %+v", identity)
 	}
 	after := decode[meOut](t, b.get("/api/v1/me"))
 	if after.ID != me.ID || after.PasswordLogin || after.IdentityLinkedAt == nil || after.Email != "local@example.org" {
@@ -468,6 +499,37 @@ func TestLinkIdentity(t *testing.T) {
 	back = provider(t, started(t, link(b4, me4, `{"password":"long-password-123"}`)))
 	if loc := location(t, e.browser().get("/auth/callback?"+back.RawQuery)); loc.Query().Get("error") != "login_expired" {
 		t.Fatalf("another browser finished the link: %s", loc)
+	}
+
+	// An admin detaches the identity: the account is signed out, keeps no
+	// password, and can be given one again.
+	admin, adminMe := register("admin@example.org")
+	if err := e.s.SetUserAdmin(ctx, "admin@example.org", true); err != nil {
+		t.Fatal(err)
+	}
+	adminWrite := map[string]string{"X-CSRF-Token": adminMe.CSRFToken}
+	if w := admin.do(http.MethodPut, "/api/v1/admin/users/"+me.ID+"/password", `{"password":"temporary-pass-123"}`, adminWrite); w.Code != http.StatusConflict {
+		t.Fatalf("reset a linked account = %d", w.Code)
+	}
+	if w := admin.do(http.MethodDelete, "/api/v1/admin/users/"+adminMe.ID+"/identities", "", adminWrite); w.Code != http.StatusForbidden {
+		t.Fatalf("unlink own account = %d", w.Code)
+	}
+	if w := admin.do(http.MethodDelete, "/api/v1/admin/users/not-a-uuid/identities", "", adminWrite); w.Code != http.StatusNotFound {
+		t.Fatalf("unlink a malformed ID = %d", w.Code)
+	}
+	unlinked := admin.do(http.MethodDelete, "/api/v1/admin/users/"+me.ID+"/identities", "", adminWrite)
+	if unlinked.Code != http.StatusOK || strings.TrimSpace(unlinked.Body.String()) != `{"unlinked":1}` {
+		t.Fatalf("unlink = %d %s", unlinked.Code, unlinked.Body.String())
+	}
+	if w := b.get("/api/v1/me"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("session after unlinking = %d", w.Code)
+	}
+	if w := admin.do(http.MethodPut, "/api/v1/admin/users/"+me.ID+"/password", `{"password":"temporary-pass-123"}`, adminWrite); w.Code != http.StatusNoContent {
+		t.Fatalf("reset after unlinking = %d %s", w.Code, w.Body.String())
+	}
+	login := e.do(req{method: http.MethodPost, path: "/api/v1/auth/login", body: `{"email":"local@example.org","password":"temporary-pass-123"}`})
+	if login.Code != http.StatusOK || decode[meOut](t, login).IdentityLinkedAt != nil {
+		t.Fatalf("password after unlinking = %d %s", login.Code, login.Body.String())
 	}
 }
 
@@ -536,41 +598,52 @@ func TestIdentityWebhook(t *testing.T) {
 		return send(body, idp.Sign([]byte(body), webhookSecret, time.Now()))
 	}
 
-	locked := event("sub-1", "user.locked", 5)
+	// Locking suspends nothing: anyone who knows the email can lock an
+	// account at the provider with wrong passwords.
 	p.SetState("sub-1", "USER_STATE_LOCKED")
-	if w := send(locked, idp.Sign([]byte(locked), "wrong", time.Now())); w.Code != http.StatusUnauthorized {
+	if w := signed(event("sub-1", "user.locked", 4)); w.Code != http.StatusOK {
+		t.Fatalf("locked = %d", w.Code)
+	}
+	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
+		t.Fatal("a lock suspended the account")
+	}
+	p.SetState("sub-1", "USER_STATE_ACTIVE")
+
+	deactivated := event("sub-1", "user.deactivated", 5)
+	p.SetState("sub-1", "USER_STATE_INACTIVE")
+	if w := send(deactivated, idp.Sign([]byte(deactivated), "wrong", time.Now())); w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad signature = %d", w.Code)
 	}
-	if w := send(locked, idp.Sign([]byte(locked), webhookSecret, time.Now().Add(-10*time.Minute))); w.Code != http.StatusUnauthorized {
+	if w := send(deactivated, idp.Sign([]byte(deactivated), webhookSecret, time.Now().Add(-10*time.Minute))); w.Code != http.StatusUnauthorized {
 		t.Fatalf("old signature = %d", w.Code)
 	}
-	if w := send(locked, ""); w.Code != http.StatusUnauthorized {
+	if w := send(deactivated, ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("no signature = %d", w.Code)
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
 		t.Fatal("an unsigned event was applied")
 	}
-	if w := signed(locked); w.Code != http.StatusOK {
-		t.Fatalf("locked = %d %s", w.Code, w.Body.String())
+	if w := signed(deactivated); w.Code != http.StatusOK {
+		t.Fatalf("deactivated = %d %s", w.Code, w.Body.String())
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusUnauthorized {
-		t.Fatalf("session after the lock = %d", w.Code)
+		t.Fatalf("session after the deactivation = %d", w.Code)
 	}
 	if w := e.browser().signIn("/auth/login"); location(t, w).Query().Get("error") != "account_disabled" {
-		t.Fatalf("sign-in while locked went to %s", location(t, w))
+		t.Fatalf("sign-in while deactivated went to %s", location(t, w))
 	}
 	p.SetState("sub-1", "USER_STATE_ACTIVE")
-	if w := signed(event("sub-1", "user.unlocked", 6)); w.Code != http.StatusOK {
-		t.Fatalf("unlocked = %d", w.Code)
+	if w := signed(event("sub-1", "user.reactivated", 6)); w.Code != http.StatusOK {
+		t.Fatalf("reactivated = %d", w.Code)
 	}
 	b = e.browser()
 	b.signIn("/auth/login")
 	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
-		t.Fatalf("sign-in after unlocking = %d", w.Code)
+		t.Fatalf("sign-in after reactivating = %d", w.Code)
 	}
 	// The same delivery again is acknowledged and not applied.
-	p.SetState("sub-1", "USER_STATE_LOCKED")
-	if w := signed(locked); w.Code != http.StatusOK {
+	p.SetState("sub-1", "USER_STATE_INACTIVE")
+	if w := signed(deactivated); w.Code != http.StatusOK {
 		t.Fatalf("redelivery = %d", w.Code)
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
@@ -586,7 +659,7 @@ func TestIdentityWebhook(t *testing.T) {
 	}
 	// Unknown to the provider but not a removal: left alone.
 	p.SetState("sub-1", "")
-	if w := signed(event("sub-1", "user.locked", 8)); w.Code != http.StatusOK {
+	if w := signed(event("sub-1", "user.deactivated", 8)); w.Code != http.StatusOK {
 		t.Fatalf("missing user = %d", w.Code)
 	}
 	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
@@ -601,13 +674,31 @@ func TestIdentityWebhook(t *testing.T) {
 	if w := signed(`not json`); w.Code != http.StatusBadRequest {
 		t.Fatalf("garbage = %d", w.Code)
 	}
+	// A forged removal: the user lookup says not found, but the provider
+	// records no removal, so nothing is deleted.
+	if w := signed(event("sub-1", "user.removed", 10)); w.Code != http.StatusOK {
+		t.Fatalf("unrecorded removal = %d", w.Code)
+	}
+	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
+		t.Fatal("a removal the provider has no record of deleted the account")
+	}
+	// A 404 that is not a missing user is no removal either.
+	p.Record(idptest.Event{Subject: "sub-1", Sequence: 11, Type: "user.removed", At: time.Now()})
+	p.SetUsersGone(true)
+	if w := signed(event("sub-1", "user.removed", 11)); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a 404 that is not a missing user = %d", w.Code)
+	}
+	p.SetUsersGone(false)
+	if w := b.get("/api/v1/me"); w.Code != http.StatusOK {
+		t.Fatal("an unknown 404 deleted the account")
+	}
 	// The provider cannot be read: the push fails and reconciliation reads it later.
 	e.srv.IdentityDirectory.Token = "revoked"
-	if w := signed(event("sub-1", "user.removed", 10)); w.Code != http.StatusServiceUnavailable {
+	if w := signed(event("sub-1", "user.removed", 11)); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unreadable provider = %d", w.Code)
 	}
 	e.srv.IdentityDirectory.Token = idptest.DirectoryToken
-	if w := signed(event("sub-1", "user.removed", 10)); w.Code != http.StatusOK {
+	if w := signed(event("sub-1", "user.removed", 11)); w.Code != http.StatusOK {
 		t.Fatalf("removed = %d", w.Code)
 	}
 	if _, err := e.s.AdminUserDetail(context.Background(), me.ID); err == nil {
@@ -727,10 +818,6 @@ func TestAppSignIn(t *testing.T) {
 		t.Fatalf("web sign-in went to %s", loc)
 	}
 
-	// Without app links the custom scheme is allowed, for servers the app cannot claim.
-	if loc := appSignIn("client=ios&callback=scheme&challenge=" + challenge); loc.Scheme != "explore" || loc.Host != "app" || loc.Path != "/auth/done" {
-		t.Fatalf("scheme callback = %s", loc)
-	}
 	// A refused sign-in reaches the app with the error.
 	p.SetDeny(true)
 	if loc := appSignIn("client=ios&challenge=" + challenge); loc.Path != "/app/auth/done" || loc.Query().Get("error") != "access_denied" {
@@ -843,4 +930,150 @@ func mustHash(t *testing.T, password string) string {
 		t.Fatal(err)
 	}
 	return string(hash)
+}
+
+// schemeSignIn runs a custom-scheme app sign-in up to the confirmation page
+// and returns the browser, the page and its token.
+func schemeSignIn(t *testing.T, e *env, challenge string) (*browser, *httptest.ResponseRecorder, string) {
+	t.Helper()
+	b := e.browser()
+	page := b.signIn("/auth/app/start?client=ios&callback=scheme&challenge=" + challenge)
+	m := regexp.MustCompile(`name="token" value="([^"]+)"`).FindStringSubmatch(page.Body.String())
+	if page.Code != http.StatusOK || m == nil {
+		t.Fatalf("confirmation page = %d %v\n%s", page.Code, page.Header(), page.Body.String())
+	}
+	return b, page, m[1]
+}
+
+func TestSchemeAppSignInAsksFirst(t *testing.T) {
+	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
+	p.SetUser(idptest.User{Subject: "sub-app", SessionID: "sid-app", Email: "app@example.org", Name: "App Reader"})
+	verifier := strings.Repeat("v", 50)
+	challenge := challengeOf(verifier)
+	form := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+
+	b, page, token := schemeSignIn(t, e, challenge)
+	body, h := page.Body.String(), page.Header()
+	if !strings.Contains(body, "App Reader (app@example.org)") || !strings.Contains(body, "explore.example.org") ||
+		strings.Contains(body, "code=") || !strings.Contains(body, `action="/auth/app/confirm"`) ||
+		!strings.Contains(body, `href="explore://app/auth/done?error=access_denied"`) {
+		t.Fatalf("confirmation page:\n%s", body)
+	}
+	if !strings.Contains(h.Get("Content-Security-Policy"), "frame-ancestors 'none'") || !strings.Contains(h.Get("Content-Security-Policy"), "form-action 'self' explore:") ||
+		h.Get("X-Frame-Options") != "DENY" || h.Get("Cache-Control") != "no-store" {
+		t.Fatalf("confirmation headers = %v", h)
+	}
+	if b.cookies["__Host-explore_login"] == "" {
+		t.Fatal("the binding cookie went before the confirmation")
+	}
+	// Another browser, another site and a missing token get no code.
+	other := e.browser()
+	other.cookies["__Host-explore_login"] = strings.Repeat("o", 43)
+	if loc := location(t, other.do(http.MethodPost, "/auth/app/confirm", "token="+token, form)); loc.String() != "explore://app/auth/done?error=login_expired" {
+		t.Fatalf("another browser = %s", loc)
+	}
+	if w := b.do(http.MethodPost, "/auth/app/confirm", "token="+token, map[string]string{"Content-Type": form["Content-Type"],
+		"Origin": "https://evil.example"}); w.Code != http.StatusForbidden {
+		t.Fatalf("another site = %d", w.Code)
+	}
+	if loc := location(t, b.do(http.MethodPost, "/auth/app/confirm", "", form)); loc.Query().Get("error") != "login_expired" {
+		t.Fatalf("no token = %s", loc)
+	}
+	done := b.do(http.MethodPost, "/auth/app/confirm", "token="+token, map[string]string{"Content-Type": form["Content-Type"],
+		"Origin": "https://explore.example.org"})
+	loc := location(t, done)
+	if done.Code != http.StatusSeeOther || loc.Scheme != "explore" || loc.Host != "app" || loc.Path != "/auth/done" || len(loc.Query().Get("code")) != 43 {
+		t.Fatalf("confirmed = %d %s", done.Code, loc)
+	}
+	if b.cookies["__Host-explore_login"] != "" {
+		t.Fatal("the binding cookie stayed after the confirmation")
+	}
+	w := e.do(req{method: http.MethodPost, path: "/api/v1/auth/app/exchange", body: `{"code":"` + loc.Query().Get("code") + `","verifier":"` + verifier + `"}`})
+	if w.Code != http.StatusOK {
+		t.Fatalf("exchange = %d %s", w.Code, w.Body.String())
+	}
+	// The confirmation is good once.
+	if loc := location(t, b.do(http.MethodPost, "/auth/app/confirm", "token="+token, form)); loc.Query().Get("error") != "login_expired" {
+		t.Fatalf("confirmed twice = %s", loc)
+	}
+	// It lapses after ten minutes.
+	e.srv.Now = func() time.Time { return time.Now().Add(-11 * time.Minute) }
+	b2, _, token2 := schemeSignIn(t, e, challenge)
+	e.srv.Now = time.Now
+	if loc := location(t, b2.do(http.MethodPost, "/auth/app/confirm", "token="+token2, form)); loc.Query().Get("error") != "login_expired" {
+		t.Fatalf("lapsed confirmation = %s", loc)
+	}
+	// In Chinese.
+	zh := e.browser()
+	start := zh.do(http.MethodGet, "/auth/app/start?client=android&callback=scheme&challenge="+challenge, "", nil)
+	back := provider(t, start.Header().Get("Location"))
+	cn := zh.do(http.MethodGet, "/auth/callback?"+back.RawQuery, "", map[string]string{"Accept-Language": "zh-CN"})
+	if !strings.Contains(cn.Body.String(), "以 App Reader（app@example.org）的身份登录 Kite 应用？") {
+		t.Fatalf("Chinese confirmation:\n%s", cn.Body.String())
+	}
+	// A claimed https callback goes straight back, as before.
+	direct := e.browser().signIn("/auth/app/start?client=ios&challenge=" + challenge)
+	if loc := location(t, direct); loc.Host != "explore.example.org" || loc.Query().Get("code") == "" {
+		t.Fatalf("https callback = %s", loc)
+	}
+}
+
+func TestBackchannelLogoutLimitsAndUnavailableKeys(t *testing.T) {
+	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
+	p.SetKeysDown(true)
+	logout := func(token string) *httptest.ResponseRecorder {
+		return e.do(req{method: http.MethodPost, path: "/auth/backchannel-logout", body: "logout_token=" + url.QueryEscape(token),
+			header: map[string]string{"Content-Type": "application/x-www-form-urlencoded"}})
+	}
+	if w := logout(p.LogoutToken("sub-1", "sid-1", nil)); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("keys unreachable = %d %s", w.Code, w.Body.String())
+	}
+	p.SetKeysDown(false)
+	limited := false
+	for range 130 {
+		if logout("x.y.z").Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("back-channel logout has no rate limit")
+	}
+}
+
+func TestConcurrentFirstSignIn(t *testing.T) {
+	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
+	p.SetUser(idptest.User{Subject: "sub-race", SessionID: "sid", Email: "race@example.org", Name: "Race"})
+	const n = 6
+	callbacks := make([]struct {
+		b     *browser
+		query string
+	}, n)
+	for i := range callbacks {
+		b := e.browser()
+		start := b.get("/auth/login?return=/race")
+		callbacks[i].b, callbacks[i].query = b, provider(t, start.Header().Get("Location")).RawQuery
+	}
+	results := make(chan string, n)
+	var wg sync.WaitGroup
+	for _, cb := range callbacks {
+		wg.Go(func() {
+			hr := httptest.NewRequest(http.MethodGet, "/auth/callback?"+cb.query, nil)
+			hr.Header.Set("Cookie", "__Host-explore_login="+cb.b.cookies["__Host-explore_login"])
+			w := httptest.NewRecorder()
+			e.h.ServeHTTP(w, hr)
+			results <- w.Header().Get("Location")
+		})
+	}
+	wg.Wait()
+	close(results)
+	for loc := range results {
+		if loc != "/race" {
+			t.Errorf("a first sign-in went to %s", loc)
+		}
+	}
+	users, total, _, err := e.s.AdminUsers(context.Background(), store.AdminUserQuery{Search: "race@example.org", Sort: "created", Limit: 10})
+	if err != nil || total != 1 || len(users) != 1 {
+		t.Fatalf("accounts = %d, %v", total, err)
+	}
 }

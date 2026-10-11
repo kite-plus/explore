@@ -37,6 +37,7 @@ type Client struct {
 
 	mu       sync.Mutex
 	provider *oidc.Provider
+	verify   *oidc.IDTokenVerifier
 	retryAt  time.Time
 }
 
@@ -77,6 +78,17 @@ func (c *Client) discover() (*oidc.Provider, error) {
 		c.retryAt = now.Add(discoveryRetry)
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
+	var meta struct {
+		JWKSURL string   `json:"jwks_uri"`
+		Algs    []string `json:"id_token_signing_alg_values_supported"`
+	}
+	if err := p.Claims(&meta); err != nil || meta.JWKSURL == "" {
+		c.retryAt = now.Add(discoveryRetry)
+		return nil, fmt.Errorf("%w: discovery names no jwks_uri", ErrUnavailable)
+	}
+	keys := &keySet{url: meta.JWKSURL, client: c.cfg.HTTPClient, now: c.cfg.Now}
+	c.verify = oidc.NewVerifier(c.cfg.Issuer, keys, &oidc.Config{ClientID: c.cfg.ClientID, Now: c.cfg.Now,
+		SupportedSigningAlgs: meta.Algs})
 	c.provider = p
 	return p, nil
 }
@@ -91,8 +103,10 @@ func (c *Client) oauth(p *oidc.Provider) *oauth2.Config {
 	}
 }
 
-func (c *Client) verifier(p *oidc.Provider) *oidc.IDTokenVerifier {
-	return p.Verifier(&oidc.Config{ClientID: c.cfg.ClientID, Now: c.cfg.Now})
+func (c *Client) verifier() *oidc.IDTokenVerifier {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.verify
 }
 
 // AuthRequest is one sign-in's parameters. Verifier is the PKCE verifier,
@@ -155,7 +169,11 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (Id
 	if raw == "" {
 		return Identity{}, fmt.Errorf("%w: no id_token", ErrInvalidToken)
 	}
-	idt, err := c.verifier(p).Verify(ctx, raw)
+	vctx, fetch := withFetchFailure(ctx)
+	idt, err := c.verifier().Verify(vctx, raw)
+	if fetch.err != nil {
+		return Identity{}, fmt.Errorf("%w: %w", ErrUnavailable, fetch.err)
+	}
 	if err != nil {
 		return Identity{}, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
@@ -211,11 +229,14 @@ const (
 // provider's keys, issuer, audience, expiry, issue time, the logout event,
 // no nonce, and a sub or sid. Replays are the caller's to refuse by TokenID.
 func (c *Client) VerifyLogout(ctx context.Context, raw string) (Logout, error) {
-	p, err := c.discover()
-	if err != nil {
+	if _, err := c.discover(); err != nil {
 		return Logout{}, err
 	}
-	lt, err := c.verifier(p).VerifyLogout(ctx, raw)
+	vctx, fetch := withFetchFailure(ctx)
+	lt, err := c.verifier().VerifyLogout(vctx, raw)
+	if fetch.err != nil {
+		return Logout{}, fmt.Errorf("%w: %w", ErrUnavailable, fetch.err)
+	}
 	if err != nil {
 		return Logout{}, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}

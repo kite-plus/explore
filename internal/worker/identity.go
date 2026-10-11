@@ -3,7 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
-	"slices"
+	"fmt"
 	"time"
 
 	"github.com/kite-plus/explore/internal/model"
@@ -44,8 +44,19 @@ func (w *Worker) identityLoop(ctx context.Context) {
 // (docs/design/accounts.md section 1): every account an event since the
 // last run names gets the state the provider gives it now. An account the
 // provider no longer knows is deleted only when a removal event says so
-// too. Then accounts whose removal waited for another admin are deleted.
+// too. An account that cannot be read or updated is skipped and read again
+// next run: the cursor stops short of its first event. Accounts whose
+// removal waited for another admin are deleted whatever else failed.
 func (w *Worker) ReconcileIdentities(ctx context.Context) error {
+	err := w.reconcileEvents(ctx)
+	removed, ferr := w.Store.FinishIdentityRemovals(ctx)
+	if ferr == nil && removed > 0 {
+		w.log().Info("accounts removed after their identity", "accounts", removed)
+	}
+	return errors.Join(err, ferr)
+}
+
+func (w *Worker) reconcileEvents(ctx context.Context) error {
 	cursor, err := w.Store.IdentityCursor(ctx, w.IdentityIssuer)
 	if err != nil {
 		return err
@@ -59,11 +70,15 @@ func (w *Worker) ReconcileIdentities(ctx context.Context) error {
 		return err
 	}
 	var subjects []string
+	first := map[string]time.Time{}
 	removals := map[string]bool{}
 	next := cursor
 	for _, e := range events {
-		if !slices.Contains(subjects, e.Subject) {
+		if _, ok := first[e.Subject]; !ok {
 			subjects = append(subjects, e.Subject)
+			first[e.Subject] = e.At
+		} else if e.At.Before(first[e.Subject]) {
+			first[e.Subject] = e.At
 		}
 		if e.Type == model.RemovalEvent {
 			removals[e.Subject] = true
@@ -73,23 +88,16 @@ func (w *Worker) ReconcileIdentities(ctx context.Context) error {
 		}
 	}
 	outcomes := map[string]int{}
+	failed := 0
 	for _, sub := range subjects {
-		if _, err := w.Store.UserByIdentity(ctx, w.IdentityIssuer, sub); errors.Is(err, store.ErrNotFound) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		state, err := w.Identity.State(ctx, sub)
+		outcome, err := w.reconcileOne(ctx, sub, removals[sub])
 		if err != nil {
-			return err
-		}
-		if state == model.IdentityRemoved && !removals[sub] {
-			w.log().Warn("identity provider has no such account, but no removal event says so")
+			failed++
+			w.log().Warn("reconciling an identity account failed; it is read again next run", "error", err)
+			if retry := first[sub].Add(-time.Microsecond); retry.Before(next) {
+				next = retry
+			}
 			continue
-		}
-		outcome, err := w.Store.ApplyIdentityState(ctx, w.IdentityIssuer, sub, state)
-		if err != nil {
-			return err
 		}
 		outcomes[outcome]++
 	}
@@ -98,15 +106,30 @@ func (w *Worker) ReconcileIdentities(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(outcomes) > 0 {
-		w.log().Info("identity accounts reconciled", "events", len(events), "outcomes", outcomes)
+	if len(events) > 0 {
+		w.log().Info("identity accounts reconciled", "events", len(events), "outcomes", outcomes, "failed", failed)
 	}
-	removed, err := w.Store.FinishIdentityRemovals(ctx)
-	if err != nil {
-		return err
-	}
-	if removed > 0 {
-		w.log().Info("accounts removed after their identity", "accounts", removed)
+	if failed > 0 {
+		return fmt.Errorf("%d identity accounts could not be reconciled", failed)
 	}
 	return nil
+}
+
+// reconcileOne applies the provider's state to the account linked to sub,
+// if any. removal says whether the events read include its removal.
+func (w *Worker) reconcileOne(ctx context.Context, sub string, removal bool) (string, error) {
+	if _, err := w.Store.UserByIdentity(ctx, w.IdentityIssuer, sub); errors.Is(err, store.ErrNotFound) {
+		return store.IdentityIgnored, nil
+	} else if err != nil {
+		return "", err
+	}
+	state, err := w.Identity.State(ctx, sub)
+	if err != nil {
+		return "", err
+	}
+	if state == model.IdentityRemoved && !removal {
+		w.log().Warn("identity provider has no such account, but no removal event says so")
+		return store.IdentityUnchanged, nil
+	}
+	return w.Store.ApplyIdentityState(ctx, w.IdentityIssuer, sub, state)
 }

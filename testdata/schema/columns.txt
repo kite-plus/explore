@@ -6,6 +6,13 @@ app_codes.session_hash bytea
 app_codes.sid text
 app_codes.used_at timestamp with time zone
 app_codes.user_id uuid
+app_confirmations.browser_hash bytea
+app_confirmations.challenge text
+app_confirmations.client text
+app_confirmations.expires_at timestamp with time zone
+app_confirmations.sid text
+app_confirmations.token_hash bytea
+app_confirmations.user_id uuid
 blog_claim_challenges.blog_id bigint
 blog_claim_challenges.expires_at timestamp with time zone
 blog_claim_challenges.token_hash bytea
@@ -153,6 +160,7 @@ takedown_requests.reviewed_at timestamp with time zone
 takedown_requests.reviewed_by text
 takedown_requests.status text
 takedown_requests.target_type text
+user_identities.email text
 user_identities.issuer text
 user_identities.linked_at timestamp with time zone
 user_identities.subject text

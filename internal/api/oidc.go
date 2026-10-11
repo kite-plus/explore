@@ -201,7 +201,9 @@ func (s *Server) oidcLink(c *gin.Context) {
 		s.fail(c, http.StatusForbidden, codeWrongPassword)
 		return
 	}
-	target, err := s.prepareFlow(c, store.LoginFlow{Mode: modeLink, ReturnPath: safeReturn(body.Return, "/account"), UserID: u.ID}, false)
+	// The provider asks which account to link rather than taking whichever
+	// is signed in there.
+	target, err := s.prepareFlow(c, store.LoginFlow{Mode: modeLink, ReturnPath: safeReturn(body.Return, "/account"), UserID: u.ID}, true)
 	switch {
 	case errors.Is(err, idp.ErrUnavailable):
 		s.fail(c, http.StatusServiceUnavailable, codeIdentityUnavailable)
@@ -227,9 +229,10 @@ func (s *Server) oidcCallback(c *gin.Context) {
 	ctx := c.Request.Context()
 	binding := sha256.Sum256([]byte(browser))
 	f, err := s.Store.TakeLoginFlow(ctx, sha256.Sum256([]byte(state)), binding)
-	// The cookie goes once no other sign-in of this browser waits for it.
-	if pending, perr := s.Store.LoginFlowsPending(ctx, binding); perr == nil && !pending {
-		s.setCookie(c, loginCookie, "", -1)
+	// A custom-scheme app sign-in still needs the cookie for its
+	// confirmation; otherwise it goes once no other sign-in waits for it.
+	if f.AppRedirect != schemeCallback {
+		s.releaseBinding(c, binding)
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		s.flowError(c, store.LoginFlow{}, flowExpired)
@@ -270,6 +273,10 @@ func (s *Server) oidcCallback(c *gin.Context) {
 		s.flowError(c, f, code)
 		return
 	}
+	if f.Mode == modeApp && f.AppRedirect == schemeCallback {
+		s.askAppConfirmation(c, f, u, id.SessionID, binding)
+		return
+	}
 	if f.Mode == modeApp {
 		s.issueAppCode(c, f, u, id.SessionID)
 		return
@@ -283,52 +290,70 @@ func (s *Server) oidcCallback(c *gin.Context) {
 	c.Redirect(http.StatusFound, f.ReturnPath)
 }
 
+// releaseBinding clears the cookie that binds sign-ins to this browser once
+// none of its sign-ins waits for it.
+func (s *Server) releaseBinding(c *gin.Context, binding [sha256.Size]byte) {
+	if pending, err := s.Store.LoginFlowsPending(c.Request.Context(), binding); err == nil && !pending {
+		s.setCookie(c, loginCookie, "", -1)
+	}
+}
+
 // identityUser finds the account linked to id or creates one from its
 // claims. Accounts are never matched by email: an email a local account
 // already uses stops the sign-in, and its owner links the identity from
 // the account page instead. code is why the reader cannot sign in.
-func (s *Server) identityUser(ctx context.Context, id idp.Identity) (u store.User, code string, err error) {
+func (s *Server) identityUser(ctx context.Context, id idp.Identity) (store.User, string, error) {
 	issuer := s.OIDC.Issuer()
-	for range 2 {
-		u, err = s.Store.UserByIdentity(ctx, issuer, id.Subject)
-		if err == nil {
-			if u.Disabled {
-				return store.User{}, flowDisabled, nil
+	email := validEmail(id.Email)
+	u, err := s.Store.UserByIdentity(ctx, issuer, id.Subject)
+	if err == nil {
+		if email != "" {
+			if err := s.Store.RecordIdentityEmail(ctx, issuer, id.Subject, email); err != nil {
+				return store.User{}, "", err
 			}
-			return u, "", nil
 		}
-		if !errors.Is(err, store.ErrNotFound) {
-			return store.User{}, "", err
-		}
-		open, err := s.Store.Setting(ctx, "registration_enabled")
-		if err != nil {
-			return store.User{}, "", err
-		}
-		if open != "true" {
-			return store.User{}, flowRegistrationClosed, nil
-		}
-		email := validEmail(id.Email)
-		if email == "" {
-			s.Log.Warn("identity provider sent no usable email")
-			return store.User{}, flowFailed, nil
-		}
-		if id.EmailVerified != nil && !*id.EmailVerified {
-			return store.User{}, flowEmailUnverified, nil
-		}
-		u, err = s.Store.CreateIdentityUser(ctx, issuer, id.Subject, email, displayName(id, email))
-		switch {
-		case errors.Is(err, store.ErrEmailTaken):
-			return store.User{}, flowEmailInUse, nil
-		case errors.Is(err, store.ErrIdentityTaken):
-			// Another sign-in of the same reader created it a moment ago.
-			continue
-		case err != nil:
-			return store.User{}, "", err
-		}
-		s.Log.Info("account created from an identity")
-		return u, "", nil
+		return signInAs(u)
 	}
-	return store.User{}, "", errors.New("identity account vanished while signing in")
+	if !errors.Is(err, store.ErrNotFound) {
+		return store.User{}, "", err
+	}
+	open, err := s.Store.Setting(ctx, "registration_enabled")
+	if err != nil {
+		return store.User{}, "", err
+	}
+	if open != "true" {
+		return store.User{}, flowRegistrationClosed, nil
+	}
+	if email == "" {
+		s.Log.Warn("identity provider sent no usable email")
+		return store.User{}, flowFailed, nil
+	}
+	if id.EmailVerified != nil && !*id.EmailVerified {
+		return store.User{}, flowEmailUnverified, nil
+	}
+	u, err = s.Store.CreateIdentityUser(ctx, issuer, id.Subject, email, displayName(id, email))
+	if errors.Is(err, store.ErrEmailTaken) || errors.Is(err, store.ErrIdentityTaken) {
+		// Another sign-in of the same reader that ran alongside may have
+		// created the account; only then is the email someone else's.
+		if u, err := s.Store.UserByIdentity(ctx, issuer, id.Subject); err == nil {
+			return signInAs(u)
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return store.User{}, "", err
+		}
+		return store.User{}, flowEmailInUse, nil
+	}
+	if err != nil {
+		return store.User{}, "", err
+	}
+	s.Log.Info("account created from an identity")
+	return u, "", nil
+}
+
+func signInAs(u store.User) (store.User, string, error) {
+	if u.Disabled {
+		return store.User{}, flowDisabled, nil
+	}
+	return u, "", nil
 }
 
 // displayName takes the name the provider knows, then the username, then
@@ -352,9 +377,10 @@ func displayName(id idp.Identity, email string) string {
 }
 
 // finishLink attaches the identity to the account that started the link,
-// which the browser must still be signed in to.
+// which the browser must still be signed in to. As after a password change,
+// the account's other sessions end; this one stays.
 func (s *Server) finishLink(c *gin.Context, f store.LoginFlow, id idp.Identity) {
-	u, _, _, err := s.sessionUser(c)
+	u, token, _, err := s.sessionUser(c)
 	if errors.Is(err, store.ErrNotFound) || (err == nil && u.ID != f.UserID) {
 		s.flowError(c, f, flowExpired)
 		return
@@ -363,7 +389,8 @@ func (s *Server) finishLink(c *gin.Context, f store.LoginFlow, id idp.Identity) 
 		s.storeError(c, err)
 		return
 	}
-	err = s.Store.LinkIdentity(c.Request.Context(), f.UserID, s.OIDC.Issuer(), id.Subject)
+	err = s.Store.LinkIdentity(c.Request.Context(), f.UserID, s.OIDC.Issuer(), id.Subject, validEmail(id.Email),
+		sha256.Sum256([]byte(token)))
 	switch {
 	case errors.Is(err, store.ErrIdentityTaken):
 		s.flowError(c, f, flowIdentityTaken)
@@ -377,4 +404,15 @@ func (s *Server) finishLink(c *gin.Context, f store.LoginFlow, id idp.Identity) 
 		s.Log.Info("identity linked to an account")
 		c.Redirect(http.StatusFound, withQuery(f.ReturnPath, "linked", "1"))
 	}
+}
+
+// myIdentity is the Kite Plus account linked to the signed-in one, for the
+// account page: GET /api/v1/me/identity gives {email, linked_at}, or 404.
+func (s *Server) myIdentity(c *gin.Context) {
+	i, err := s.Store.IdentityOf(c.Request.Context(), currentUser(c).ID)
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	writeJSON(c, http.StatusOK, gin.H{"email": i.Email, "linked_at": i.LinkedAt.UTC()})
 }

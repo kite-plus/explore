@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kite-plus/explore/internal/model"
 )
@@ -68,10 +69,18 @@ func (s *Store) UserByIdentity(ctx context.Context, issuer, subject string) (Use
 		WHERE id = (SELECT user_id FROM user_identities WHERE issuer = $1 AND subject = $2)`, issuer, subject))
 }
 
+// validUUID reports whether id is a UUID, so a query can compare it with a
+// uuid column, and its index, instead of failing on a malformed one.
+func validUUID(id string) bool {
+	var u pgtype.UUID
+	return u.Scan(id) == nil
+}
+
 // CreateIdentityUser creates an account with no password for a new
-// identity. An email a local account already uses is ErrEmailTaken, since
-// accounts are never merged by email; an identity another sign-in has just
-// created an account for is ErrIdentityTaken.
+// identity, whose email is also kept as the identity's. An email a local
+// account already uses is ErrEmailTaken, since accounts are never merged by
+// email; an identity another sign-in has just created an account for is
+// ErrIdentityTaken.
 func (s *Store) CreateIdentityUser(ctx context.Context, issuer, subject, email, displayName string) (User, error) {
 	var u User
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -86,8 +95,8 @@ func (s *Store) CreateIdentityUser(ctx context.Context, issuer, subject, email, 
 			return err
 		}
 		var linked time.Time
-		err = tx.QueryRow(ctx, `INSERT INTO user_identities (issuer, subject, user_id) VALUES ($1, $2, $3) RETURNING linked_at`,
-			issuer, subject, u.ID).Scan(&linked)
+		err = tx.QueryRow(ctx, `INSERT INTO user_identities (issuer, subject, user_id, email) VALUES ($1, $2, $3, $4) RETURNING linked_at`,
+			issuer, subject, u.ID, email).Scan(&linked)
 		if isUniqueViolation(err) {
 			return ErrIdentityTaken
 		}
@@ -97,13 +106,18 @@ func (s *Store) CreateIdentityUser(ctx context.Context, issuer, subject, email, 
 	return u, err
 }
 
-// LinkIdentity attaches the identity (issuer, subject) to an account and
-// turns off its password, which the identity provider replaces. Linking the
+// LinkIdentity attaches the identity (issuer, subject), whose email is
+// email, to an account and turns off its password, which the identity
+// provider replaces. Like a password change, it ends every other session of
+// the account, keeping the one with the token hash keep. Linking the
 // identity the account already has changes nothing.
-func (s *Store) LinkIdentity(ctx context.Context, userID, issuer, subject string) error {
+func (s *Store) LinkIdentity(ctx context.Context, userID, issuer, subject, email string, keep [sha256.Size]byte) error {
+	if !validUUID(userID) {
+		return ErrNotFound
+	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var disabled bool
-		err := tx.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id::text = $1 FOR UPDATE`, userID).Scan(&disabled)
+		err := tx.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&disabled)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -124,22 +138,85 @@ func (s *Store) LinkIdentity(ctx context.Context, userID, issuer, subject string
 			return err
 		}
 		var other bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id::text = $1 AND issuer = $2)`,
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND issuer = $2)`,
 			userID, issuer).Scan(&other); err != nil {
 			return err
 		}
 		if other {
 			return ErrAlreadyLinked
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO user_identities (issuer, subject, user_id) VALUES ($1, $2, $3)`, issuer, subject, userID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO user_identities (issuer, subject, user_id, email) VALUES ($1, $2, $3, $4)`,
+			issuer, subject, userID, email); err != nil {
 			if isUniqueViolation(err) {
 				return ErrIdentityTaken
 			}
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE users SET password_hash = '', password_reset_at = NULL, password_reset_by = '' WHERE id::text = $1`, userID)
+		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = '', password_reset_at = NULL, password_reset_by = '' WHERE id = $1`,
+			userID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2`, userID, keep[:])
 		return err
 	})
+}
+
+// RecordIdentityEmail keeps the identity's email as the provider sent it at
+// the latest sign-in.
+func (s *Store) RecordIdentityEmail(ctx context.Context, issuer, subject, email string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE user_identities SET email = $3 WHERE issuer = $1 AND subject = $2 AND email <> $3`,
+		issuer, subject, email)
+	return err
+}
+
+// Identity is a Kite Plus account linked to an account.
+type Identity struct {
+	Issuer   string
+	Subject  string
+	Email    string
+	LinkedAt time.Time
+}
+
+// IdentityOf is the identity linked to the account, or ErrNotFound.
+func (s *Store) IdentityOf(ctx context.Context, userID string) (Identity, error) {
+	if !validUUID(userID) {
+		return Identity{}, ErrNotFound
+	}
+	var i Identity
+	err := s.pool.QueryRow(ctx, `SELECT issuer, subject, email, linked_at FROM user_identities WHERE user_id = $1
+		ORDER BY linked_at LIMIT 1`, userID).Scan(&i.Issuer, &i.Subject, &i.Email, &i.LinkedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Identity{}, ErrNotFound
+	}
+	return i, err
+}
+
+// UnlinkIdentities detaches every identity from an account and ends its
+// sessions, which those identities may have signed in. The account keeps
+// no password, so an admin then resets one for it. It returns how many
+// identities it detached.
+func (s *Store) UnlinkIdentities(ctx context.Context, id string) (int64, error) {
+	if !validUUID(id) {
+		return 0, ErrNotFound
+	}
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var found bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, id).Scan(&found); err != nil {
+			return err
+		}
+		if !found {
+			return ErrNotFound
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM user_identities WHERE user_id = $1`, id)
+		if err != nil {
+			return err
+		}
+		n = tag.RowsAffected()
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id)
+		return err
+	})
+	return n, err
 }
 
 // EndIdentitySessions deletes the sessions a back-channel logout names: with
@@ -173,8 +250,11 @@ type LoginFlow struct {
 	Expires     time.Time
 }
 
+// CreateLoginFlow stores a sign-in and, so abandoned ones do not pile up,
+// deletes those that have expired.
 func (s *Store) CreateLoginFlow(ctx context.Context, f LoginFlow) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO login_flows (state_hash, browser_hash, mode, nonce, verifier, return_path,
+	_, err := s.pool.Exec(ctx, `WITH expired AS (DELETE FROM login_flows WHERE expires_at < now())
+		INSERT INTO login_flows (state_hash, browser_hash, mode, nonce, verifier, return_path,
 			user_id, challenge, client, app_redirect, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''), $9, $10, $11)`,
 		f.StateHash[:], f.BrowserHash[:], f.Mode, f.Nonce, f.Verifier, f.ReturnPath, f.UserID, f.Challenge,
@@ -203,13 +283,57 @@ func (s *Store) TakeLoginFlow(ctx context.Context, stateHash, browserHash [sha25
 	return f, nil
 }
 
-// LoginFlowsPending reports whether the browser has started sign-ins that
-// have not finished or expired.
+// LoginFlowsPending reports whether the browser has started sign-ins, or app
+// sign-ins waiting for confirmation, that have not finished or expired.
 func (s *Store) LoginFlowsPending(ctx context.Context, browserHash [sha256.Size]byte) (bool, error) {
 	var pending bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM login_flows WHERE browser_hash = $1 AND expires_at > now())`,
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM login_flows WHERE browser_hash = $1 AND expires_at > now())
+		OR EXISTS (SELECT 1 FROM app_confirmations WHERE browser_hash = $1 AND expires_at > now())`,
 		browserHash[:]).Scan(&pending)
 	return pending, err
+}
+
+// AppConfirmation is an app sign-in back from the provider that waits for
+// the reader to confirm it, in the browser that started it, before a code
+// goes to the app's custom scheme.
+type AppConfirmation struct {
+	TokenHash   [sha256.Size]byte
+	BrowserHash [sha256.Size]byte
+	UserID      string
+	SID         string
+	Challenge   string
+	Client      string
+	Expires     time.Time
+}
+
+// CreateAppConfirmation stores a confirmation and deletes expired ones.
+func (s *Store) CreateAppConfirmation(ctx context.Context, c AppConfirmation) error {
+	_, err := s.pool.Exec(ctx, `WITH expired AS (DELETE FROM app_confirmations WHERE expires_at < now())
+		INSERT INTO app_confirmations (token_hash, browser_hash, user_id, sid, challenge, client, expires_at)
+		VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7)`,
+		c.TokenHash[:], c.BrowserHash[:], c.UserID, c.SID, c.Challenge, c.Client, c.Expires)
+	return err
+}
+
+// TakeAppConfirmation removes and returns the confirmation with this token,
+// if the same browser holds it; one that has expired is ErrNotFound.
+func (s *Store) TakeAppConfirmation(ctx context.Context, tokenHash, browserHash [sha256.Size]byte) (AppConfirmation, error) {
+	c := AppConfirmation{TokenHash: tokenHash, BrowserHash: browserHash}
+	var sid *string
+	err := s.pool.QueryRow(ctx, `DELETE FROM app_confirmations WHERE token_hash = $1 AND browser_hash = $2
+		RETURNING user_id::text, sid, challenge, client, expires_at`, tokenHash[:], browserHash[:]).Scan(
+		&c.UserID, &sid, &c.Challenge, &c.Client, &c.Expires)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AppConfirmation{}, ErrNotFound
+	}
+	if err != nil {
+		return AppConfirmation{}, err
+	}
+	if !c.Expires.After(time.Now()) {
+		return AppConfirmation{}, ErrNotFound
+	}
+	c.SID = deref(sid)
+	return c, nil
 }
 
 // AppCode is a one-time code an app exchanges for a session.
@@ -262,7 +386,7 @@ func (s *Store) RedeemAppCode(ctx context.Context, codeHash [sha256.Size]byte, v
 		if !expiresAt.After(time.Now()) || !verify(c.Challenge) {
 			return nil
 		}
-		u, err = scanUser(tx.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id::text = $1`, c.UserID))
+		u, err = scanUser(tx.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, c.UserID))
 		if errors.Is(err, ErrNotFound) || (err == nil && u.Disabled) {
 			return nil
 		}
@@ -317,7 +441,8 @@ func (s *Store) SeenReceipt(ctx context.Context, kind, id string) (bool, error) 
 
 // disabledByIdentity is users.disabled_by for an account the identity
 // provider disabled; no admin's email looks like it. disabled_reason then
-// holds the provider's state: deactivated, locked or removed.
+// holds the provider's state: deactivated or removed (locked, from before
+// locking stopped suspending, is restored like deactivated).
 const disabledByIdentity = "idp"
 
 // What ApplyIdentityState did.
@@ -335,27 +460,26 @@ const (
 // Removed deletes the account as DeleteUser does, except that an admin with
 // no other active admin beside it is disabled instead and left for
 // FinishIdentityRemovals, so the setup wizard does not open to anyone.
-// Deactivated and locked disable the account and end its sessions; active
-// restores it when the provider disabled it, and never undoes an admin's
-// disabling. A subject no account is linked to is ignored.
+// Deactivated disables the account and ends its sessions; active restores
+// it when the provider disabled it, and never undoes an admin's disabling.
+// A subject no account is linked to is ignored.
 func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, state model.IdentityState) (string, error) {
 	outcome := IdentityIgnored
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		var userID string
-		err := tx.QueryRow(ctx, `SELECT user_id::text FROM user_identities WHERE issuer = $1 AND subject = $2`,
-			issuer, subject).Scan(&userID)
+		// The lock every change of an account's admin standing takes, before
+		// the account is read, so a deletion cannot slip in between.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1517, 1)`); err != nil {
+			return err
+		}
+		var userID, by, reason string
+		var admin, disabled bool
+		err := tx.QueryRow(ctx, `SELECT u.id::text, u.is_admin, u.disabled_at IS NOT NULL, u.disabled_by, u.disabled_reason
+			FROM user_identities i JOIN users u ON u.id = i.user_id
+			WHERE i.issuer = $1 AND i.subject = $2 FOR UPDATE OF u`, issuer, subject).Scan(&userID, &admin, &disabled, &by, &reason)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
-			return err
-		}
-		admin, disabled, err := lockUser(ctx, tx, userID)
-		if err != nil {
-			return err
-		}
-		var by, reason string
-		if err := tx.QueryRow(ctx, `SELECT disabled_by, disabled_reason FROM users WHERE id::text = $1`, userID).Scan(&by, &reason); err != nil {
 			return err
 		}
 		ours := disabled && by == disabledByIdentity
@@ -364,7 +488,7 @@ func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, 
 		case model.IdentityRemoved:
 			if admin {
 				var others int
-				if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE is_admin AND disabled_at IS NULL AND id::text <> $1`,
+				if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE is_admin AND disabled_at IS NULL AND id <> $1`,
 					userID).Scan(&others); err != nil {
 					return err
 				}
@@ -376,9 +500,9 @@ func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, 
 				}
 			}
 			outcome = IdentityDeleted
-			_, err := tx.Exec(ctx, `DELETE FROM users WHERE id::text = $1`, userID)
+			_, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 			return err
-		case model.IdentityDeactivated, model.IdentityLocked:
+		case model.IdentityDeactivated:
 			if (disabled && !ours) || (ours && (reason == string(state) || reason == string(model.IdentityRemoved))) {
 				return nil
 			}
@@ -389,7 +513,7 @@ func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, 
 				return nil
 			}
 			outcome = IdentityRestored
-			_, err := tx.Exec(ctx, `UPDATE users SET disabled_at = NULL, disabled_reason = '', disabled_by = '' WHERE id::text = $1`, userID)
+			_, err := tx.Exec(ctx, `UPDATE users SET disabled_at = NULL, disabled_reason = '', disabled_by = '' WHERE id = $1`, userID)
 			return err
 		}
 		return fmt.Errorf("unknown identity state %q", state)
@@ -399,10 +523,10 @@ func (s *Store) ApplyIdentityState(ctx context.Context, issuer, subject string, 
 
 func disableForIdentity(ctx context.Context, tx pgx.Tx, userID string, state model.IdentityState) error {
 	if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = coalesce(disabled_at, now()), disabled_reason = $2, disabled_by = $3
-		WHERE id::text = $1`, userID, string(state), disabledByIdentity); err != nil {
+		WHERE id = $1`, userID, string(state), disabledByIdentity); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id::text = $1`, userID)
+	_, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
 	return err
 }
 
@@ -440,10 +564,12 @@ func (s *Store) SetIdentityCursor(ctx context.Context, issuer string, t time.Tim
 	return err
 }
 
-// PurgeSignIns deletes sign-ins that were never finished, app codes past
-// use and receipts no longer needed against replays.
+// PurgeSignIns deletes sign-ins and app confirmations that were never
+// finished, app codes past use and receipts no longer needed against
+// replays.
 func (s *Store) PurgeSignIns(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `WITH flows AS (DELETE FROM login_flows WHERE expires_at < now()),
+		confirmations AS (DELETE FROM app_confirmations WHERE expires_at < now()),
 		codes AS (DELETE FROM app_codes WHERE expires_at < now() - interval '1 day')
 		DELETE FROM idp_receipts WHERE expires_at < now()`)
 	return err

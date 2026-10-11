@@ -9,14 +9,13 @@ type IdentityState string
 const (
 	IdentityActive      IdentityState = "active"
 	IdentityDeactivated IdentityState = "deactivated"
-	IdentityLocked      IdentityState = "locked"
 	IdentityRemoved     IdentityState = "removed"
 )
 
 // IdentityEvent is a change the provider recorded, or pushed, for the
 // account it knows by Subject. It says which account to look at; what to do
 // follows from the account's state, read from the provider. ID is unique
-// per event; Type is the provider's, such as "user.locked".
+// per event; Type is the provider's, such as "user.deactivated".
 type IdentityEvent struct {
 	ID      string
 	Subject string

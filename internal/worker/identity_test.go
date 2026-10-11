@@ -13,26 +13,33 @@ import (
 const issuer = "https://id.example.org"
 
 type fakeDirectory struct {
-	events  []model.IdentityEvent
-	states  map[string]model.IdentityState
-	err     error
-	froms   []time.Time
-	lookups []string
+	events    []model.IdentityEvent
+	states    map[string]model.IdentityState
+	err       error
+	stateErrs map[string]error
+	froms     []time.Time
+	lookups   []string
 }
 
 func (f *fakeDirectory) Events(_ context.Context, from time.Time) ([]model.IdentityEvent, error) {
 	f.froms = append(f.froms, from)
+	if f.err != nil {
+		return nil, f.err
+	}
 	var out []model.IdentityEvent
 	for _, e := range f.events {
 		if e.At.After(from) {
 			out = append(out, e)
 		}
 	}
-	return out, f.err
+	return out, nil
 }
 
 func (f *fakeDirectory) State(_ context.Context, subject string) (model.IdentityState, error) {
 	f.lookups = append(f.lookups, subject)
+	if err := f.stateErrs[subject]; err != nil {
+		return "", err
+	}
 	if s, ok := f.states[subject]; ok {
 		return s, nil
 	}
@@ -46,21 +53,33 @@ func TestReconcileIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := &fakeDirectory{states: map[string]model.IdentityState{"sub-1": model.IdentityLocked}}
+	if _, err := st.CreateIdentityUser(ctx, issuer, "sub-2", "second@example.org", "Second"); err != nil {
+		t.Fatal(err)
+	}
+	dir := &fakeDirectory{states: map[string]model.IdentityState{"sub-1": model.IdentityDeactivated, "sub-2": model.IdentityActive},
+		stateErrs: map[string]error{}}
 	w := &Worker{Store: st, Identity: dir, IdentityIssuer: issuer}
-	disabled := func() bool {
+	disabled := func(sub string) bool {
 		t.Helper()
-		found, err := st.UserByIdentity(ctx, issuer, "sub-1")
+		found, err := st.UserByIdentity(ctx, issuer, sub)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return found.Disabled
 	}
+	cursor := func() time.Time {
+		t.Helper()
+		c, err := st.IdentityCursor(ctx, issuer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
 	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
 	dir.events = []model.IdentityEvent{
-		{ID: "sub-1/3", Subject: "sub-1", Type: "user.locked", At: t0},
-		{ID: "other/1", Subject: "other", Type: "user.locked", At: t0.Add(time.Minute)},
-		{ID: "sub-1/4", Subject: "sub-1", Type: "user.unlocked", At: t0.Add(2 * time.Minute)},
+		{ID: "sub-1/3", Subject: "sub-1", Type: "user.deactivated", At: t0},
+		{ID: "other/1", Subject: "other", Type: "user.deactivated", At: t0.Add(time.Minute)},
+		{ID: "sub-1/4", Subject: "sub-1", Type: "user.reactivated", At: t0.Add(2 * time.Minute)},
 	}
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
@@ -69,37 +88,45 @@ func TestReconcileIdentities(t *testing.T) {
 		t.Fatalf("froms = %v, lookups = %v", dir.froms, dir.lookups)
 	}
 	// What the provider says now counts, not the order of the events.
-	if !disabled() {
-		t.Fatal("the account the provider says is locked is not disabled")
+	if !disabled("sub-1") {
+		t.Fatal("the account the provider says is deactivated is not disabled")
 	}
-	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(t0.Add(2 * time.Minute)) {
+	if c := cursor(); !c.Equal(t0.Add(2 * time.Minute)) {
 		t.Fatalf("cursor = %v", c)
 	}
 
-	// A failed read leaves the cursor where it was.
-	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/5", Subject: "sub-1", Type: "user.unlocked", At: t0.Add(time.Hour)})
-	dir.states["sub-1"] = model.IdentityActive
-	dir.err = errors.New("provider down")
+	// One account that cannot be read is skipped; the others are handled and
+	// the cursor stops just before its first event.
+	t1 := t0.Add(time.Hour)
+	dir.events = append(dir.events,
+		model.IdentityEvent{ID: "sub-1/5", Subject: "sub-1", Type: "user.reactivated", At: t1},
+		model.IdentityEvent{ID: "sub-2/2", Subject: "sub-2", Type: "user.deactivated", At: t1.Add(time.Minute)})
+	dir.states["sub-1"], dir.states["sub-2"] = model.IdentityActive, model.IdentityDeactivated
+	dir.stateErrs["sub-2"] = errors.New("provider hiccup")
 	if err := w.ReconcileIdentities(ctx); err == nil {
-		t.Fatal("a failed read reported success")
+		t.Fatal("a skipped account was not reported")
 	}
-	if c, _ := st.IdentityCursor(ctx, issuer); !c.Equal(t0.Add(2 * time.Minute)) {
-		t.Fatalf("cursor after a failure = %v", c)
+	if disabled("sub-1") || disabled("sub-2") {
+		t.Fatal("the readable account was not handled, or the unreadable one was")
 	}
-	dir.err = nil
+	if c := cursor(); !c.Equal(t1.Add(time.Minute - time.Microsecond)) {
+		t.Fatalf("cursor with a skipped account = %v", c)
+	}
+	delete(dir.stateErrs, "sub-2")
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if last := dir.froms[len(dir.froms)-1]; !last.Equal(t0.Add(2*time.Minute - identityOverlap)) {
-		t.Fatalf("from = %v", last)
+	if !disabled("sub-2") {
+		t.Fatal("the skipped account was not handled on the next run")
 	}
-	if disabled() {
-		t.Fatal("not restored once active")
+	if c := cursor(); !c.Equal(t1.Add(time.Minute)) {
+		t.Fatalf("cursor after the retry = %v", c)
 	}
 
 	// Unknown to the provider without a removal event: left alone.
+	dir.states["sub-2"] = model.IdentityActive
 	delete(dir.states, "sub-1")
-	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/6", Subject: "sub-1", Type: "user.locked", At: t0.Add(2 * time.Hour)})
+	dir.events = append(dir.events, model.IdentityEvent{ID: "sub-1/6", Subject: "sub-1", Type: "user.deactivated", At: t0.Add(2 * time.Hour)})
 	if err := w.ReconcileIdentities(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +134,8 @@ func TestReconcileIdentities(t *testing.T) {
 		t.Fatalf("deleted without a removal event: %v", err)
 	}
 
-	// A removal that waited for another admin finishes on the next run.
+	// A removal that waited for another admin finishes on a later run, even
+	// one whose event search fails.
 	if err := st.SetUserAdminByID(ctx, u.ID, true); err != nil {
 		t.Fatal(err)
 	}
@@ -125,10 +153,15 @@ func TestReconcileIdentities(t *testing.T) {
 	if err := st.SetUserAdminByID(ctx, other.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.ReconcileIdentities(ctx); err != nil {
-		t.Fatal(err)
+	before := cursor()
+	dir.err = errors.New("provider down")
+	if err := w.ReconcileIdentities(ctx); err == nil {
+		t.Fatal("a failed event search reported success")
 	}
 	if _, err := st.UserByIdentity(ctx, issuer, "sub-1"); err == nil {
-		t.Fatal("the removal did not finish")
+		t.Fatal("the removal did not finish while the event search failed")
+	}
+	if c := cursor(); !c.Equal(before) {
+		t.Fatalf("cursor moved on a failed search: %v", c)
 	}
 }

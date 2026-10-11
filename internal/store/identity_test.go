@@ -36,6 +36,13 @@ func TestIdentityAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	keep := sha256.Sum256([]byte("this browser"))
+	gone := sha256.Sum256([]byte("another device"))
+	for _, hash := range [][32]byte{keep, gone} {
+		if err := s.CreateSession(ctx, Session{UserID: local.ID, TokenHash: hash, Expires: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := s.CreateIdentityUser(ctx, testIssuer, "sub-2", "local@example.com", "Someone"); !errors.Is(err, ErrEmailTaken) {
 		t.Fatalf("taken email: %v", err)
 	}
@@ -43,20 +50,41 @@ func TestIdentityAccounts(t *testing.T) {
 		t.Fatalf("local account changed: %+v", got)
 	}
 
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-1"); !errors.Is(err, ErrIdentityTaken) {
+	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-1", "kp@example.com", keep); !errors.Is(err, ErrIdentityTaken) {
 		t.Fatalf("link taken identity: %v", err)
 	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2"); err != nil {
+	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2", "kp@example.com", keep); err != nil {
 		t.Fatal(err)
 	}
 	linked, err := s.UserByEmail(ctx, "local@example.com")
 	if err != nil || linked.PasswordHash != "" || linked.LinkedAt == nil {
 		t.Fatalf("linked = %+v, %v", linked, err)
 	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2"); err != nil {
+	if _, err := s.UserBySession(ctx, keep); err != nil {
+		t.Fatalf("the linking session ended: %v", err)
+	}
+	if _, err := s.UserBySession(ctx, gone); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another session survived linking: %v", err)
+	}
+	if i, err := s.IdentityOf(ctx, local.ID); err != nil || i.Email != "kp@example.com" || i.Subject != "sub-2" {
+		t.Fatalf("identity = %+v, %v", i, err)
+	}
+	if err := s.RecordIdentityEmail(ctx, testIssuer, "sub-2", "new-kp@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if i, _ := s.IdentityOf(ctx, local.ID); i.Email != "new-kp@example.com" {
+		t.Fatalf("recorded email = %q", i.Email)
+	}
+	if i, err := s.IdentityOf(ctx, u.ID); err != nil || i.Email != "new@example.com" {
+		t.Fatalf("identity of a created account = %+v, %v", i, err)
+	}
+	if _, err := s.IdentityOf(ctx, "not-a-uuid"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("malformed ID: %v", err)
+	}
+	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-2", "kp@example.com", keep); err != nil {
 		t.Fatalf("relinking the same identity: %v", err)
 	}
-	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-3"); !errors.Is(err, ErrAlreadyLinked) {
+	if err := s.LinkIdentity(ctx, local.ID, testIssuer, "sub-3", "kp@example.com", keep); !errors.Is(err, ErrAlreadyLinked) {
 		t.Fatalf("second identity: %v", err)
 	}
 	if err := s.ResetPassword(ctx, local.ID, "new-hash", "admin@example.com"); !errors.Is(err, ErrPasswordOff) {
@@ -69,12 +97,72 @@ func TestIdentityAccounts(t *testing.T) {
 	if err := s.SetUserDisabled(ctx, banned.ID, true, "spam", "admin@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.LinkIdentity(ctx, banned.ID, testIssuer, "sub-4"); !errors.Is(err, ErrUserDisabled) {
+	if err := s.LinkIdentity(ctx, banned.ID, testIssuer, "sub-4", "kp@example.com", keep); !errors.Is(err, ErrUserDisabled) {
 		t.Fatalf("link a disabled account: %v", err)
 	}
 	detail, err := s.AdminUserDetail(ctx, local.ID)
 	if err != nil || len(detail.Identities) != 1 || detail.Identities[0].Subject != "sub-2" || detail.PasswordLogin {
 		t.Fatalf("detail = %+v, %v", detail, err)
+	}
+
+	if n, err := s.UnlinkIdentities(ctx, local.ID); err != nil || n != 1 {
+		t.Fatalf("unlink = %d, %v", n, err)
+	}
+	if _, err := s.UserBySession(ctx, keep); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a session survived unlinking: %v", err)
+	}
+	if _, err := s.UserByIdentity(ctx, testIssuer, "sub-2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("identity after unlinking: %v", err)
+	}
+	if err := s.ResetPassword(ctx, local.ID, "new-hash", "admin@example.com"); err != nil {
+		t.Fatalf("reset after unlinking: %v", err)
+	}
+	if _, err := s.UnlinkIdentities(ctx, "not-a-uuid"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unlink a malformed ID: %v", err)
+	}
+	if _, err := s.UnlinkIdentities(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unlink nobody: %v", err)
+	}
+	if err := s.ResetPassword(ctx, "not-a-uuid", "hash", "admin@example.com"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("reset a malformed ID: %v", err)
+	}
+}
+
+func TestAppConfirmations(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	u, err := s.CreateIdentityUser(ctx, testIssuer, "sub-1", "app@example.com", "App")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, browser := sha256.Sum256([]byte("token")), sha256.Sum256([]byte("browser"))
+	c := AppConfirmation{TokenHash: token, BrowserHash: browser, UserID: u.ID, SID: "sid", Challenge: "ch", Client: ClientIOS,
+		Expires: time.Now().Add(time.Minute)}
+	if err := s.CreateAppConfirmation(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := s.LoginFlowsPending(ctx, browser); err != nil || !pending {
+		t.Fatalf("pending with a confirmation = %v, %v", pending, err)
+	}
+	if _, err := s.TakeAppConfirmation(ctx, token, sha256.Sum256([]byte("other"))); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other browser: %v", err)
+	}
+	got, err := s.TakeAppConfirmation(ctx, token, browser)
+	if err != nil || got.UserID != u.ID || got.SID != "sid" || got.Challenge != "ch" || got.Client != ClientIOS {
+		t.Fatalf("taken = %+v, %v", got, err)
+	}
+	if _, err := s.TakeAppConfirmation(ctx, token, browser); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("taken twice: %v", err)
+	}
+	if pending, _ := s.LoginFlowsPending(ctx, browser); pending {
+		t.Fatal("still pending after the confirmation")
+	}
+	c.TokenHash, c.Expires = sha256.Sum256([]byte("old")), time.Now().Add(-time.Second)
+	if err := s.CreateAppConfirmation(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.TakeAppConfirmation(ctx, c.TokenHash, browser); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expired: %v", err)
 	}
 }
 
@@ -156,6 +244,19 @@ func TestLoginFlows(t *testing.T) {
 	}
 	if err := s.PurgeSignIns(ctx); err != nil {
 		t.Fatal(err)
+	}
+	// Storing a sign-in also clears expired ones.
+	f.StateHash, f.Expires = sha256.Sum256([]byte("stale")), time.Now().Add(-time.Second)
+	if err := s.CreateLoginFlow(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	f.StateHash, f.Expires = sha256.Sum256([]byte("fresh")), time.Now().Add(time.Minute)
+	if err := s.CreateLoginFlow(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM login_flows`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("flows left = %d, %v", n, err)
 	}
 }
 
@@ -281,20 +382,19 @@ func TestApplyIdentityState(t *testing.T) {
 		return
 	}
 
-	apply("nobody", model.IdentityLocked, IdentityIgnored)
+	apply("nobody", model.IdentityDeactivated, IdentityIgnored)
 	apply("sub-1", model.IdentityActive, IdentityUnchanged)
-	apply("sub-1", model.IdentityLocked, IdentityDisabled)
-	if d, by, reason := state(u.ID); !d || by != "idp" || reason != "locked" {
-		t.Fatalf("locked: %v %q %q", d, by, reason)
+	apply("sub-1", model.IdentityDeactivated, IdentityDisabled)
+	if d, by, reason := state(u.ID); !d || by != "idp" || reason != "deactivated" {
+		t.Fatalf("deactivated: %v %q %q", d, by, reason)
 	}
 	if _, err := s.UserBySession(ctx, session); !errors.Is(err, ErrNotFound) {
-		t.Fatal("session survived the lock")
+		t.Fatal("session survived the deactivation")
 	}
-	apply("sub-1", model.IdentityLocked, IdentityUnchanged)
-	apply("sub-1", model.IdentityDeactivated, IdentityDisabled)
-	if _, _, reason := state(u.ID); reason != "deactivated" {
-		t.Fatalf("reason = %q", reason)
-	}
+	apply("sub-1", model.IdentityDeactivated, IdentityUnchanged)
+	apply("sub-1", model.IdentityActive, IdentityRestored)
+	// An account a lock disabled before locking stopped suspending comes back.
+	s.exec(t, `UPDATE users SET disabled_at = now(), disabled_by = 'idp', disabled_reason = 'locked' WHERE id = $1`, u.ID)
 	apply("sub-1", model.IdentityActive, IdentityRestored)
 	if d, by, reason := state(u.ID); d || by != "" || reason != "" {
 		t.Fatalf("restored: %v %q %q", d, by, reason)
@@ -304,7 +404,7 @@ func TestApplyIdentityState(t *testing.T) {
 	if err := s.SetUserDisabled(ctx, u.ID, true, "spam", "admin@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	apply("sub-1", model.IdentityLocked, IdentityUnchanged)
+	apply("sub-1", model.IdentityDeactivated, IdentityUnchanged)
 	apply("sub-1", model.IdentityActive, IdentityUnchanged)
 	if d, by, reason := state(u.ID); !d || by != "admin@example.com" || reason != "spam" {
 		t.Fatalf("admin's disabling: %v %q %q", d, by, reason)
@@ -329,7 +429,7 @@ func TestApplyIdentityState(t *testing.T) {
 	}
 	apply("sub-admin", model.IdentityRemoved, IdentityUnchanged)
 	apply("sub-admin", model.IdentityActive, IdentityUnchanged)
-	apply("sub-admin", model.IdentityLocked, IdentityUnchanged)
+	apply("sub-admin", model.IdentityDeactivated, IdentityUnchanged)
 	if pending, err := s.SetupPending(ctx); err != nil || pending {
 		t.Fatalf("setup reopened: %v %v", pending, err)
 	}

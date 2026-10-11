@@ -65,6 +65,7 @@ type Server struct {
 	importLimit   *limiter
 	feedLimit     *limiter
 	flowLimit     *limiter
+	logoutLimit   *limiter
 	images        map[string]cachedImage
 	faviconMu     sync.Mutex
 	favicons      map[string]cachedImage
@@ -99,6 +100,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	s.feedLimit = newLimiter(600, time.Hour, s.Now)
 	// Each sign-in started stores a row until it expires.
 	s.flowLimit = newLimiter(30, time.Minute, s.Now)
+	// Logout tokens come from the provider's servers; a flood of forged ones
+	// is cut off before each costs a signature check.
+	s.logoutLimit = newLimiter(120, time.Minute, s.Now)
 	s.linkSlots = make(chan struct{}, 4)
 
 	// Release mode keeps Gin's startup chatter out of the logs, and gin.New
@@ -128,8 +132,9 @@ func (s *Server) Handler() (http.Handler, error) {
 		r.GET("/auth/login", s.limit(s.flowLimit), s.oidcLogin)
 		r.GET("/auth/callback", s.limit(s.flowLimit), s.oidcCallback)
 		r.GET("/auth/app/start", s.limit(s.flowLimit), s.appStart)
+		r.POST("/auth/app/confirm", s.limit(s.flowLimit), s.appConfirm)
 		r.GET("/app/auth/done", s.limit(s.readLimit), s.appDone)
-		r.POST("/auth/backchannel-logout", s.backchannelLogout)
+		r.POST("/auth/backchannel-logout", s.limit(s.logoutLimit), s.backchannelLogout)
 		if s.IdentityWebhookSecret != "" && s.IdentityDirectory != nil {
 			r.POST("/hooks/idp", s.identityHook)
 		}
@@ -169,6 +174,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	if s.OIDC != nil {
 		account.POST("/auth/link", s.limit(s.loginLimit), s.oidcLink)
 	}
+	account.GET("/me/identity", s.myIdentity)
 	account.GET("/me/subscriptions", s.subscriptions)
 	account.GET("/me/subscriptions.opml", s.exportSubscriptions)
 	account.POST("/me/subscriptions/import", s.limit(s.importLimit), s.importSubscriptions)
@@ -192,6 +198,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	admin.DELETE("/users/:id", s.adminDeleteUser)
 	admin.PUT("/users/:id/password", s.adminResetPassword)
 	admin.DELETE("/users/:id/sessions", s.adminRevokeSessions)
+	admin.DELETE("/users/:id/identities", s.adminUnlinkIdentities)
 	admin.DELETE("/users/:id/blogs/:host", s.adminReleaseBlog)
 	admin.GET("/entries", s.adminEntries)
 	admin.PATCH("/entries/:id", s.adminUpdateEntry)

@@ -3,6 +3,7 @@ package idp_test
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	jose "github.com/go-jose/go-jose/v4"
 
 	"github.com/kite-plus/explore/internal/idp"
 	"github.com/kite-plus/explore/internal/idp/idptest"
@@ -201,15 +204,17 @@ func TestSignature(t *testing.T) {
 
 func TestParseEvent(t *testing.T) {
 	e, ok, err := idp.ParseEvent([]byte(`{"aggregateID":"u-1","aggregateType":"user","resourceOwner":"o","instanceID":"i",
-		"version":"v2","sequence":7,"event_type":"user.locked","created_at":"2026-10-10T08:00:00.123456Z","userID":"admin"}`))
+		"version":"v2","sequence":7,"event_type":"user.deactivated","created_at":"2026-10-10T08:00:00.123456Z","userID":"admin"}`))
 	if err != nil || !ok {
 		t.Fatalf("ok = %v, err = %v", ok, err)
 	}
-	if e.Subject != "u-1" || e.Type != "user.locked" || e.ID != "u-1/7" || !e.At.Equal(time.Date(2026, 10, 10, 8, 0, 0, 123456000, time.UTC)) {
+	if e.Subject != "u-1" || e.Type != "user.deactivated" || e.ID != "u-1/7" || !e.At.Equal(time.Date(2026, 10, 10, 8, 0, 0, 123456000, time.UTC)) {
 		t.Fatalf("event = %+v", e)
 	}
-	if _, ok, err := idp.ParseEvent([]byte(`{"aggregateID":"u-1","aggregateType":"user","sequence":8,"event_type":"user.human.profile.changed","created_at":"2026-10-10T08:00:00Z"}`)); ok || err != nil {
-		t.Fatalf("profile change: ok = %v, err = %v", ok, err)
+	for _, kind := range []string{"user.human.profile.changed", "user.locked", "user.unlocked"} {
+		if _, ok, err := idp.ParseEvent([]byte(`{"aggregateID":"u-1","aggregateType":"user","sequence":8,"event_type":"` + kind + `","created_at":"2026-10-10T08:00:00Z"}`)); ok || err != nil {
+			t.Fatalf("%s: ok = %v, err = %v", kind, ok, err)
+		}
 	}
 	if _, _, err := idp.ParseEvent([]byte(`{"aggregateType":"user","event_type":"user.removed"}`)); err == nil {
 		t.Fatal("event without an aggregate was accepted")
@@ -222,35 +227,44 @@ func TestParseEvent(t *testing.T) {
 func TestDirectory(t *testing.T) {
 	p := idptest.New(t)
 	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
-	p.Record(idptest.Event{Subject: "u-1", Sequence: 3, Type: "user.locked", At: t0})
+	p.Record(idptest.Event{Subject: "u-1", Sequence: 3, Type: "user.deactivated", At: t0})
+	p.Record(idptest.Event{Subject: "u-5", Sequence: 2, Type: "user.locked", At: t0.Add(30 * time.Second)})
 	p.Record(idptest.Event{Subject: "u-2", Sequence: 9, Type: "user.human.added", At: t0.Add(time.Minute)})
-	p.Record(idptest.Event{Subject: "u-1", Sequence: 4, Type: "user.unlocked", At: t0.Add(2 * time.Minute)})
+	p.Record(idptest.Event{Subject: "u-1", Sequence: 4, Type: "user.reactivated", At: t0.Add(2 * time.Minute)})
 	p.Record(idptest.Event{Subject: "u-3", Sequence: 1, Type: "user.removed", At: t0.Add(3 * time.Minute)})
 	d := &idp.Directory{Issuer: p.URL, Token: idptest.DirectoryToken, PageSize: 2}
 	events, err := d.Events(t.Context(), time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 3 || events[0].Type != "user.locked" || events[1].Type != "user.unlocked" || events[2].Subject != "u-3" ||
+	if len(events) != 3 || events[0].Type != "user.deactivated" || events[1].Type != "user.reactivated" || events[2].Subject != "u-3" ||
 		events[2].ID != "u-3/1" || !events[2].At.Equal(t0.Add(3*time.Minute)) {
 		t.Fatalf("events = %+v", events)
 	}
 	searches := p.Searches()
-	if _, has := searches[0]["from"]; has || searches[0]["asc"] != true || searches[0]["limit"] != float64(2) {
+	if _, has := searches[0]["from"]; has || searches[0]["asc"] != true || searches[0]["limit"] != float64(2) ||
+		len(searches[0]["eventTypes"].([]any)) != 3 {
 		t.Fatalf("first search = %v", searches[0])
-	}
-	if searches[1]["from"] != "2026-10-10T08:02:00Z" || len(searches[1]["eventTypes"].([]any)) != 5 {
-		t.Fatalf("second search = %v", searches[1])
 	}
 	if later, err := d.Events(t.Context(), t0.Add(2*time.Minute)); err != nil || len(later) != 1 || later[0].Subject != "u-3" {
 		t.Fatalf("after a cursor = %+v, %v", later, err)
+	}
+	if removed, err := d.Removed(t.Context(), "u-3"); err != nil || !removed {
+		t.Fatalf("removed u-3 = %v, %v", removed, err)
+	}
+	if removed, err := d.Removed(t.Context(), "u-1"); err != nil || removed {
+		t.Fatalf("removed u-1 = %v, %v", removed, err)
+	}
+	if last := p.Searches()[len(p.Searches())-1]; last["aggregateId"] != "u-1" {
+		t.Fatalf("removal search = %v", last)
 	}
 
 	p.SetState("u-1", "USER_STATE_LOCKED")
 	p.SetState("u-2", "USER_STATE_ACTIVE")
 	p.SetState("u-4", "USER_STATE_INACTIVE")
 	p.SetState("u-5", "USER_STATE_SOMETHING")
-	for sub, want := range map[string]model.IdentityState{"u-1": model.IdentityLocked, "u-2": model.IdentityActive,
+	// A locked user counts as active: locking suspends nothing.
+	for sub, want := range map[string]model.IdentityState{"u-1": model.IdentityActive, "u-2": model.IdentityActive,
 		"u-3": model.IdentityRemoved, "u-4": model.IdentityDeactivated} {
 		if got, err := d.State(t.Context(), sub); err != nil || got != want {
 			t.Errorf("%s: %q, %v", sub, got, err)
@@ -259,6 +273,12 @@ func TestDirectory(t *testing.T) {
 	if _, err := d.State(t.Context(), "u-5"); err == nil {
 		t.Error("an unknown state was accepted")
 	}
+	// Only ZITADEL's missing-user error means removed, not any 404.
+	p.SetUsersGone(true)
+	if state, err := d.State(t.Context(), "u-3"); err == nil {
+		t.Errorf("a 404 that is not a missing user = %q", state)
+	}
+	p.SetUsersGone(false)
 	bad := &idp.Directory{Issuer: p.URL, Token: "wrong"}
 	if _, err := bad.Events(t.Context(), time.Time{}); err == nil {
 		t.Error("an unauthorized search succeeded")
@@ -271,4 +291,86 @@ func TestDirectory(t *testing.T) {
 	if _, err := (&idp.Directory{Issuer: srv.URL, Token: "x"}).State(t.Context(), "u-1"); !errors.Is(err, idp.ErrUnavailable) {
 		t.Errorf("unreachable: %v", err)
 	}
+}
+
+func TestEventsAtPageBoundaries(t *testing.T) {
+	p := idptest.New(t)
+	t0 := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
+	p.Record(idptest.Event{Subject: "u-1", Sequence: 1, Type: "user.deactivated", At: t0.Add(-time.Minute)})
+	// Two events of one time, which a page of two cuts between.
+	p.Record(idptest.Event{Subject: "u-2", Sequence: 1, Type: "user.deactivated", At: t0})
+	p.Record(idptest.Event{Subject: "u-3", Sequence: 1, Type: "user.deactivated", At: t0})
+	p.Record(idptest.Event{Subject: "u-4", Sequence: 1, Type: "user.deactivated", At: t0.Add(time.Minute)})
+	d := &idp.Directory{Issuer: p.URL, Token: idptest.DirectoryToken, PageSize: 2}
+	events, err := d.Events(t.Context(), time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var subjects []string
+	for _, e := range events {
+		subjects = append(subjects, e.Subject)
+	}
+	if strings.Join(subjects, ",") != "u-1,u-2,u-3,u-4" {
+		t.Fatalf("subjects = %v", subjects)
+	}
+}
+
+func TestKeys(t *testing.T) {
+	p := idptest.New(t)
+	now := time.Now()
+	c := idp.New(idp.Config{Issuer: p.URL, ClientID: idptest.ClientID, ClientSecret: idptest.ClientSecret, RedirectURL: redirect,
+		Now: func() time.Time { return now }})
+	// Keys that cannot be fetched make the provider unavailable, not the token invalid.
+	p.SetKeysDown(true)
+	if _, err := c.VerifyLogout(t.Context(), p.LogoutToken("u-1", "s-1", nil)); !errors.Is(err, idp.ErrUnavailable) {
+		t.Fatalf("keys down: %v", err)
+	}
+	p.SetKeysDown(false)
+	now = now.Add(time.Minute)
+	if _, err := c.VerifyLogout(t.Context(), p.LogoutToken("u-1", "s-1", map[string]any{"iat": now.Unix(), "exp": now.Add(time.Minute).Unix()})); err != nil {
+		t.Fatalf("keys back: %v", err)
+	}
+	// Tokens naming keys the provider never had fetch the keys again at most every 30 seconds.
+	other, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Minute)
+	fetches := p.KeyFetches()
+	for range 5 {
+		if _, err := c.VerifyLogout(t.Context(), signWith(t, other, "made-up", p.URL, now)); !errors.Is(err, idp.ErrInvalidToken) {
+			t.Fatalf("unknown key: %v", err)
+		}
+	}
+	if got := p.KeyFetches() - fetches; got != 1 {
+		t.Fatalf("refetches for unknown keys = %d", got)
+	}
+	now = now.Add(time.Minute)
+	if _, err := c.VerifyLogout(t.Context(), signWith(t, other, "made-up", p.URL, now)); !errors.Is(err, idp.ErrInvalidToken) {
+		t.Fatalf("unknown key later: %v", err)
+	}
+	if got := p.KeyFetches() - fetches; got != 2 {
+		t.Fatalf("refetches after the wait = %d", got)
+	}
+}
+
+// signWith signs a logout token with key under key ID kid.
+func signWith(t *testing.T, key *rsa.PrivateKey, kid, issuer string, now time.Time) string {
+	t.Helper()
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", kid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"iss": issuer, "aud": idptest.ClientID, "sub": "u-1", "iat": now.Unix(),
+		"exp": now.Add(time.Minute).Unix(), "jti": kid + now.String(),
+		"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}}})
+	obj, err := signer.Sign(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }

@@ -166,3 +166,19 @@ func (s *Server) adminReleaseBlog(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// adminUnlinkIdentities detaches the Kite Plus account from an account and
+// signs it out everywhere, for a reader who lost theirs or linked the wrong
+// one. The account is left with no password: the admin then resets one,
+// which works again once no identity is linked.
+func (s *Server) adminUnlinkIdentities(c *gin.Context) {
+	if s.ownAccount(c) {
+		return
+	}
+	n, err := s.Store.UnlinkIdentities(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		s.storeError(c, err)
+		return
+	}
+	writeJSON(c, http.StatusOK, gin.H{"unlinked": n})
+}

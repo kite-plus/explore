@@ -70,6 +70,11 @@ type Provider struct {
 	states   map[string]string
 	events   []Event
 	searches []map[string]any
+	// usersGone answers every user lookup with a 404 that is not ZITADEL's
+	// missing-user error, as a wrong path or instance would.
+	usersGone bool
+	keysDown  bool
+	keyFetch  int
 }
 
 type grant struct {
@@ -128,6 +133,15 @@ func (p *Provider) SetState(subject, state string) {
 	p.states[subject] = state
 }
 
+// SetUsersGone makes every user lookup a 404 that is not a missing user.
+func (p *Provider) SetUsersGone(gone bool) { p.mu.Lock(); p.usersGone = gone; p.mu.Unlock() }
+
+// SetKeysDown makes the signing keys unreachable.
+func (p *Provider) SetKeysDown(down bool) { p.mu.Lock(); p.keysDown = down; p.mu.Unlock() }
+
+// KeyFetches counts requests for the signing keys.
+func (p *Provider) KeyFetches() int { p.mu.Lock(); defer p.mu.Unlock(); return p.keyFetch }
+
 // Record adds an event for the event search to return.
 func (p *Provider) Record(e Event) { p.mu.Lock(); p.events = append(p.events, e); p.mu.Unlock() }
 
@@ -165,6 +179,14 @@ func (p *Provider) discovery(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (p *Provider) keys(w http.ResponseWriter, _ *http.Request) {
+	p.mu.Lock()
+	p.keyFetch++
+	down := p.keysDown
+	p.mu.Unlock()
+	if down {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
 		{Key: p.key.Public(), KeyID: keyID, Algorithm: "RS256", Use: "sig"},
@@ -265,10 +287,11 @@ func (p *Provider) searchEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var q struct {
-		Asc        bool     `json:"asc"`
-		Limit      int      `json:"limit"`
-		From       string   `json:"from"`
-		EventTypes []string `json:"eventTypes"`
+		Asc         bool     `json:"asc"`
+		Limit       int      `json:"limit"`
+		From        string   `json:"from"`
+		EventTypes  []string `json:"eventTypes"`
+		AggregateID string   `json:"aggregateId"`
 	}
 	var raw map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
@@ -298,7 +321,8 @@ func (p *Provider) searchEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	page := []out{}
 	for _, e := range events {
-		if !e.At.After(from) || (len(q.EventTypes) > 0 && !slices.Contains(q.EventTypes, e.Type)) {
+		if !e.At.After(from) || (len(q.EventTypes) > 0 && !slices.Contains(q.EventTypes, e.Type)) ||
+			(q.AggregateID != "" && e.Subject != q.AggregateID) {
 			continue
 		}
 		if q.Limit > 0 && len(page) == q.Limit {
@@ -321,11 +345,18 @@ func (p *Provider) user(w http.ResponseWriter, r *http.Request) {
 	}
 	p.mu.Lock()
 	state, ok := p.states[r.PathValue("id")]
+	gone := p.usersGone
 	p.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	if !ok {
+	if gone {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"code":5,"message":"User could not be found (QUERY-Dfbg2)"}`))
+		_, _ = w.Write([]byte(`{"code":5,"message":"Not Found"}`))
+		return
+	}
+	if !ok {
+		// ZITADEL v4's answer, its message translated for the instance.
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"code":5,"message":"User could not be found (QUERY-Dfbg2)","details":[{"@type":"type.googleapis.com/zitadel.v1.ErrorDetail","id":"QUERY-Dfbg2","message":"User could not be found"}]}`))
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"user": map[string]any{"userId": r.PathValue("id"), "state": state}})

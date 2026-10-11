@@ -127,10 +127,22 @@ func (s *Server) identityHook(c *gin.Context) {
 			s.fail(c, http.StatusServiceUnavailable, codeInternal)
 			return
 		}
-		if state == model.IdentityRemoved && e.Type != model.RemovalEvent {
-			s.Log.Warn("identity provider has no such account, but the event is not a removal", "type", e.Type)
-			c.Status(http.StatusOK)
-			return
+		if state == model.IdentityRemoved {
+			// The pushed type proves nothing, so the provider's own record of
+			// the removal must agree before the account is deleted.
+			lookup, cancel := context.WithTimeout(ctx, identityLookupTimeout)
+			removed, err := s.IdentityDirectory.Removed(lookup, e.Subject)
+			cancel()
+			if err != nil {
+				s.Log.Warn("reading account events from the identity provider failed", "error", err)
+				s.fail(c, http.StatusServiceUnavailable, codeInternal)
+				return
+			}
+			if !removed {
+				s.Log.Warn("identity provider has no such account, but no removal of it either")
+				c.Status(http.StatusOK)
+				return
+			}
 		}
 		if outcome, err = s.Store.ApplyIdentityState(ctx, s.OIDC.Issuer(), e.Subject, state); err != nil {
 			s.storeError(c, err)
@@ -140,6 +152,8 @@ func (s *Server) identityHook(c *gin.Context) {
 		s.storeError(c, err)
 		return
 	}
+	// A forged push can claim an ID ahead of the real event, which the
+	// webhook then skips; the hourly reconciliation still reads that event.
 	if _, err := s.Store.RememberReceipt(ctx, store.ReceiptEvent, e.ID, s.Now().Add(receiptLifetime)); err != nil {
 		s.storeError(c, err)
 		return
