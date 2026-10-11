@@ -100,7 +100,7 @@ func (a *AppLinks) validate() error {
 	for i, f := range a.AndroidCertSHA256 {
 		a.AndroidCertSHA256[i] = strings.ToUpper(f)
 		if !fingerprint.MatchString(a.AndroidCertSHA256[i]) {
-			return fmt.Errorf("EXPLORE_ANDROID_CERT_SHA256: %q is not a SHA-256 fingerprint such as AB:CD:...", f)
+			return fmt.Errorf("EXPLORE_ANDROID_CERT_SHA256: %q is not a SHA-256 fingerprint of 32 hex pairs joined by colons", f)
 		}
 	}
 	return nil

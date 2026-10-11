@@ -196,12 +196,12 @@ func (e *Events) Since(ctx context.Context, since, until time.Time) ([]model.Ide
 		req.Header.Set("Accept", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 		_ = resp.Body.Close()
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("event search: HTTP %d: %.200s", resp.StatusCode, raw)

@@ -75,7 +75,7 @@ func (c *Client) discover() (*oidc.Provider, error) {
 	p, err := oidc.NewProvider(oidc.ClientContext(context.Background(), c.cfg.HTTPClient), c.cfg.Issuer)
 	if err != nil {
 		c.retryAt = now.Add(discoveryRetry)
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	c.provider = p
 	return p, nil
@@ -147,9 +147,9 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (Id
 	if err != nil {
 		var re *oauth2.RetrieveError
 		if errors.As(err, &re) {
-			return Identity{}, fmt.Errorf("%w: token endpoint: %v", ErrInvalidToken, err)
+			return Identity{}, fmt.Errorf("%w: token endpoint: %w", ErrInvalidToken, err)
 		}
-		return Identity{}, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return Identity{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	raw, _ := tok.Extra("id_token").(string)
 	if raw == "" {
@@ -157,7 +157,7 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (Id
 	}
 	idt, err := c.verifier(p).Verify(ctx, raw)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return Identity{}, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 	if nonce == "" || subtle.ConstantTimeCompare([]byte(idt.Nonce), []byte(nonce)) != 1 {
 		return Identity{}, fmt.Errorf("%w: nonce mismatch", ErrInvalidToken)
@@ -171,7 +171,7 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (Id
 		PreferredUsername string `json:"preferred_username"`
 	}
 	if err := idt.Claims(&claims); err != nil {
-		return Identity{}, fmt.Errorf("%w: claims: %v", ErrInvalidToken, err)
+		return Identity{}, fmt.Errorf("%w: claims: %w", ErrInvalidToken, err)
 	}
 	// ZITADEL adds its project to the audience; azp then names the client.
 	if claims.AuthorizedParty != "" && claims.AuthorizedParty != c.cfg.ClientID {
@@ -217,7 +217,7 @@ func (c *Client) VerifyLogout(ctx context.Context, raw string) (Logout, error) {
 	}
 	lt, err := c.verifier(p).VerifyLogout(ctx, raw)
 	if err != nil {
-		return Logout{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return Logout{}, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 	now := c.cfg.Now()
 	if lt.IssuedAt.IsZero() || lt.IssuedAt.After(now.Add(logoutMaxSkew)) || lt.IssuedAt.Before(now.Add(-LogoutMaxAge)) {

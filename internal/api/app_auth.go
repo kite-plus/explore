@@ -34,19 +34,20 @@ func (s *Server) appLinksPublished() bool {
 	return len(s.AppleAppIDs) > 0 || len(s.AndroidCertSHA256) > 0
 }
 
-// pkceChallenge is a base64url SHA-256, 43 characters.
-func pkceChallenge(v string) bool {
-	return len(v) == 43 && !strings.ContainsFunc(v, func(r rune) bool {
-		return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_')
+// only reports whether v has nothing but ASCII letters, digits and the
+// characters in extra.
+func only(v, extra string) bool {
+	return !strings.ContainsFunc(v, func(r rune) bool {
+		alnum := r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
+		return !alnum && !strings.ContainsRune(extra, r)
 	})
 }
 
+// pkceChallenge is a base64url SHA-256, 43 characters.
+func pkceChallenge(v string) bool { return len(v) == 43 && only(v, "-_") }
+
 // pkceVerifier follows RFC 7636 section 4.1.
-func pkceVerifier(v string) bool {
-	return len(v) >= 43 && len(v) <= 128 && !strings.ContainsFunc(v, func(r rune) bool {
-		return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("-._~", r))
-	})
-}
+func pkceVerifier(v string) bool { return len(v) >= 43 && len(v) <= 128 && only(v, "-._~") }
 
 // appStart begins an app's sign-in in the system browser:
 // GET /auth/app/start?challenge=…&client=ios|android, with switch=1 to pick
