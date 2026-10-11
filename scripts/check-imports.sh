@@ -35,10 +35,12 @@ for pure in internal/policy internal/model internal/i18n internal/feed internal/
 done
 
 # 2 and 3. Only internal/api imports Gin; only internal/store imports pgx;
-# only internal/tagger talks to a model.
+# only internal/tagger talks to a model; only internal/idp speaks OpenID
+# Connect.
 direct=$(go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...)
 for rule in "github.com/gin-gonic/gin $MODULE/internal/api" "github.com/jackc/pgx $MODULE/internal/store" \
-    "github.com/anthropics/anthropic-sdk-go $MODULE/internal/tagger"; do
+    "github.com/anthropics/anthropic-sdk-go $MODULE/internal/tagger" \
+    "github.com/coreos/go-oidc $MODULE/internal/idp" "golang.org/x/oauth2 $MODULE/internal/idp"; do
     lib=${rule% *}
     owner=${rule#* }
     # The owner's own subpackages, such as internal/store/storetest, count as the owner.

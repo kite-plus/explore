@@ -42,14 +42,18 @@ type Tagger interface {
 // Worker fetches due blogs and tags new entries. Zero values of the optional
 // fields get sensible defaults; a nil Tagger leaves entries untagged.
 type Worker struct {
-	Store       *store.Store
-	Fetch       *fetch.Client
-	Tagger      Tagger
-	Log         *slog.Logger
-	Concurrency int
-	PollEvery   time.Duration
-	Now         func() time.Time
-	Rand        func() float64
+	Store  *store.Store
+	Fetch  *fetch.Client
+	Tagger Tagger
+	// Identity reconciles accounts with the identity provider's events of
+	// IdentityIssuer every hour; nil leaves it off.
+	Identity       IdentityEvents
+	IdentityIssuer string
+	Log            *slog.Logger
+	Concurrency    int
+	PollEvery      time.Duration
+	Now            func() time.Time
+	Rand           func() float64
 
 	lastMaintenance time.Time
 	lastLinkCheck   time.Time
@@ -69,6 +73,9 @@ func (w *Worker) Run(ctx context.Context) error {
 	wg.Go(func() { w.pageLoop(ctx) })
 	if w.Tagger != nil {
 		wg.Go(func() { w.tagLoop(ctx) })
+	}
+	if w.Identity != nil {
+		wg.Go(func() { w.identityLoop(ctx) })
 	}
 	poll := w.PollEvery
 	if poll == 0 {
@@ -410,6 +417,9 @@ func (w *Worker) maintain(ctx context.Context) {
 	w.lastMaintenance = now
 	if m.Ran {
 		w.log().Info("maintenance", "removed", m.Removed, "purged_submissions", m.Purged)
+	}
+	if err := w.Store.PurgeSignIns(ctx); err != nil {
+		w.log().Error("purging finished sign-ins failed", "error", err)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/kite-plus/explore/internal/check"
 	"github.com/kite-plus/explore/internal/config"
 	"github.com/kite-plus/explore/internal/fetch"
+	"github.com/kite-plus/explore/internal/idp"
 	"github.com/kite-plus/explore/internal/model"
 	"github.com/kite-plus/explore/internal/store"
 	"github.com/kite-plus/explore/internal/tagger"
@@ -68,6 +69,18 @@ func newServeCmd() *cobra.Command {
 				TrustedProxies: cfg.TrustedProxies,
 				AllowPrivate:   cfg.AllowPrivateNetworks,
 				Log:            log,
+
+				AppleAppIDs:       cfg.AppLinks.AppleAppIDs,
+				AndroidPackage:    cfg.AppLinks.AndroidPackage,
+				AndroidCertSHA256: cfg.AppLinks.AndroidCertSHA256,
+			}
+			if cfg.OIDC.Enabled() {
+				srv.OIDC = idp.New(idp.Config{Issuer: cfg.OIDC.Issuer, ClientID: cfg.OIDC.ClientID,
+					ClientSecret: cfg.OIDC.ClientSecret, RedirectURL: cfg.PublicURL + "/auth/callback"})
+				srv.IdentityAccountURL = cfg.OIDC.AccountURL
+				srv.IdentityWebhookSecret = cfg.OIDC.WebhookSecret
+				log.Info("sign-in with the identity provider is on", "issuer", cfg.OIDC.Issuer,
+					"webhook", cfg.OIDC.WebhookSecret != "")
 			}
 			h, err := srv.Handler()
 			if err != nil {
@@ -125,6 +138,10 @@ func newWorkerCmd() *cobra.Command {
 			}
 			defer st.Close()
 			w := &worker.Worker{Store: st, Fetch: newFetcher(cfg), Log: log, Concurrency: cfg.WorkerConcurrency}
+			if cfg.OIDC.Enabled() && cfg.OIDC.APIToken != "" {
+				w.Identity = &idp.Events{Issuer: cfg.OIDC.Issuer, Token: cfg.OIDC.APIToken}
+				w.IdentityIssuer = cfg.OIDC.Issuer
+			}
 			if cfg.Tagger.Enabled() {
 				w.Tagger = entryTagger{tagger.New(tagger.Options{
 					Provider: cfg.Tagger.Provider, BaseURL: cfg.Tagger.BaseURL, APIKey: cfg.Tagger.APIKey,
@@ -132,7 +149,7 @@ func newWorkerCmd() *cobra.Command {
 				})}
 			}
 			log.Info("worker started", "concurrency", cfg.WorkerConcurrency, "tagger_provider", cfg.Tagger.Provider,
-				"tagger_model", cfg.Tagger.Model, "version", buildinfo.Version)
+				"tagger_model", cfg.Tagger.Model, "identity_reconciliation", w.Identity != nil, "version", buildinfo.Version)
 			return w.Run(ctx)
 		},
 	}
