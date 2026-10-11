@@ -10,7 +10,8 @@ export const readerProxy: APIRoute = async ({ request, params, clientAddress }) 
   const group = url.pathname.split("/")[3];
   const target = `${apiURL()}/api/v1/${group}${path ? `/${path}` : ""}${url.search}`;
   const headers = new Headers();
-  for (const name of ["cookie", "content-type", "accept-language", "x-csrf-token"]) {
+  // Authorization carries an app's session token (docs/design/accounts.md section 1.1).
+  for (const name of ["cookie", "authorization", "content-type", "accept-language", "x-csrf-token"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }

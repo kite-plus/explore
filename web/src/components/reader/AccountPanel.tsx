@@ -240,6 +240,9 @@ const linkErrors: Record<string, [string, string]> = {
 /** The Kite Plus account linked to this one, or the way to link one. */
 function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: boolean; prefix: string; accountURL: string }) {
   const [returned, setReturned] = useState<{ linked: boolean; error: string | null }>({ linked: false, error: null });
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState("");
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setReturned({ linked: params.get("linked") === "1", error: params.get("error") });
@@ -248,6 +251,27 @@ function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: bool
   const linked = user.identity_linked_at
     ? new Date(user.identity_linked_at).toLocaleDateString(zh ? "zh-CN" : "en", { dateStyle: zh ? "long" : "medium" })
     : null;
+
+  // The API answers with the provider's address rather than redirecting: the
+  // page's CSP (form-action 'self') stops a form from leaving the site.
+  const link: NonNullable<ComponentProps<"form">["onSubmit"]> = async event => {
+    event.preventDefault();
+    if (busy) return;
+    if (!password) { setFailed(zh ? "请输入当前密码。" : "Enter your current password."); return; }
+    setBusy(true); setFailed("");
+    try {
+      const { url } = await readerRequest<{ url: string }>("auth/link", {
+        method: "POST",
+        headers: { "Accept-Language": zh ? "zh-CN" : "en" },
+        body: JSON.stringify({ password, return: `${prefix}/account` }),
+      }, user.csrf_token);
+      window.location.assign(url);
+    } catch (reason) {
+      setFailed(reason instanceof Error ? reason.message : String(reason));
+      setBusy(false);
+    }
+  };
+
   return <section id="kite-plus" className="scroll-mt-24"><h2 className="text-lg font-semibold">{zh ? "Kite Plus 账号" : "Kite Plus account"}</h2>
     {returned.linked && linked && <p role="status" className="mt-2 text-sm text-success">{zh ? "已关联 Kite Plus 账号，以后用它登录。" : "Kite Plus account linked; sign in with it from now on."}</p>}
     {error && <p role="alert" className="mt-2 text-sm text-destructive">{zh ? error[0] : error[1]}</p>}
@@ -258,11 +282,12 @@ function KitePlus({ user, zh, prefix, accountURL }: { user: ReaderUser; zh: bool
       <p className="mt-1 text-sm text-muted-foreground">{zh
         ? "关联后用 Kite Plus 账号登录，本站密码随即停用；订阅和认领的博客都会保留。一个 Kite Plus 账号只能关联本站的一个账号。"
         : "Once linked, you sign in with your Kite Plus account and your password here stops working; your follows and blogs stay. A Kite Plus account links to one account here."}</p>
-      <form method="post" action="/auth/link" className="mt-3" data-kite-plus-link>
-        <input type="hidden" name="csrf_token" value={user.csrf_token} />
-        <input type="hidden" name="return" value={`${prefix}/account`} />
-        <button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">{zh ? "关联 Kite Plus 账号" : "Link a Kite Plus account"}</button>
+      <form className="mt-3 flex max-w-md flex-wrap items-end gap-2" onSubmit={link} noValidate data-kite-plus-link>
+        <label className="grid min-w-0 flex-1 gap-1.5 text-sm">{zh ? "当前密码" : "Current password"}
+          <input className="w-full rounded-md border bg-background px-3 py-2 text-sm" type="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></label>
+        <button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={busy}>{busy ? (zh ? "正在跳转…" : "Opening…") : (zh ? "关联 Kite Plus 账号" : "Link a Kite Plus account")}</button>
       </form>
+      {failed && <p role="alert" className="mt-2 text-sm text-destructive">{failed}</p>}
     </>}
   </section>;
 }

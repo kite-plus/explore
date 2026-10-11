@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"github.com/kite-plus/explore/internal/api"
 	"github.com/kite-plus/explore/internal/idp"
 	"github.com/kite-plus/explore/internal/idp/idptest"
+	"github.com/kite-plus/explore/internal/store"
 	"github.com/kite-plus/explore/internal/store/storetest"
 )
 
@@ -356,35 +358,55 @@ func TestSignInRules(t *testing.T) {
 func TestLinkIdentity(t *testing.T) {
 	e, p := newOIDCEnv(t, "https://explore.example.org", nil)
 	ctx := context.Background()
+	// register makes a password account signed in through a session made in
+	// the store, which keeps the login rate limit for the calls under test.
 	register := func(email string) (*browser, meOut) {
 		t.Helper()
-		if err := e.s.SetSetting(ctx, "registration_enabled", "true", "x"); err != nil {
+		u, err := e.s.CreateUser(ctx, email, mustHash(t, "long-password-123"), "Local")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			t.Fatal(err)
+		}
+		token := base64.RawURLEncoding.EncodeToString(raw[:])
+		if err := e.s.CreateSession(ctx, store.Session{UserID: u.ID, TokenHash: sha256.Sum256([]byte(token)), Expires: time.Now().Add(time.Hour)}); err != nil {
 			t.Fatal(err)
 		}
 		b := e.browser()
-		if _, err := e.s.CreateUser(ctx, email, mustHash(t, "long-password-123"), "Local"); err != nil {
-			t.Fatal(err)
+		b.cookies["__Host-explore_session"] = token
+		return b, decode[meOut](t, b.get("/api/v1/me"))
+	}
+	// link starts linking and returns where at the provider it goes on.
+	link := func(b *browser, me meOut, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		return b.do(http.MethodPost, "/api/v1/auth/link", body, map[string]string{"X-CSRF-Token": me.CSRFToken})
+	}
+	started := func(t *testing.T, w *httptest.ResponseRecorder) string {
+		t.Helper()
+		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatalf("link = %d %s", w.Code, w.Body.String())
 		}
-		w := b.do(http.MethodPost, "/api/v1/auth/login", `{"email":"`+email+`","password":"long-password-123"}`, nil)
-		if w.Code != http.StatusOK {
-			t.Fatalf("login = %d %s", w.Code, w.Body.String())
-		}
-		return b, decode[meOut](t, w)
+		return decode[struct {
+			URL string `json:"url"`
+		}](t, w).URL
 	}
 	b, me := register("local@example.org")
 	if !me.PasswordLogin || me.IdentityLinkedAt != nil {
 		t.Fatalf("before linking: %+v", me)
 	}
-	form := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
-	if w := b.do(http.MethodPost, "/auth/link", "return=/en/account", form); w.Code != http.StatusForbidden {
-		t.Fatalf("link without the CSRF token = %d", w.Code)
+	if w := b.do(http.MethodPost, "/api/v1/auth/link", `{"password":"long-password-123"}`, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("link without the CSRF header = %d", w.Code)
 	}
-	if w := e.do(req{method: http.MethodPost, path: "/auth/link", body: "csrf_token=" + me.CSRFToken, header: form}); w.Code != http.StatusUnauthorized {
+	if w := e.do(req{method: http.MethodPost, path: "/api/v1/auth/link", body: `{"password":"long-password-123"}`}); w.Code != http.StatusUnauthorized {
 		t.Fatalf("link signed out = %d", w.Code)
 	}
+	if w := link(b, me, `{"password":"wrong-password-123"}`); w.Code != http.StatusForbidden {
+		t.Fatalf("link with a wrong password = %d", w.Code)
+	}
 	p.SetUser(idptest.User{Subject: "sub-link", SessionID: "sid-link", Email: "another@example.org", Name: "Another"})
-	start := b.do(http.MethodPost, "/auth/link", "csrf_token="+me.CSRFToken+"&return=/en/account", form)
-	back := provider(t, location(t, start).String())
+	back := provider(t, started(t, link(b, me, `{"password":"long-password-123","return":"/en/account"}`)))
 	done := b.get("/auth/callback?" + back.RawQuery)
 	if loc := location(t, done); loc.String() != "/en/account?linked=1" {
 		t.Fatalf("link went to %s", loc)
@@ -403,26 +425,30 @@ func TestLinkIdentity(t *testing.T) {
 		t.Fatal("sign-in after linking reached another account")
 	}
 	// Linking again is refused; so is an identity linked elsewhere.
-	if w := b.do(http.MethodPost, "/auth/link", "csrf_token="+after.CSRFToken, form); location(t, w).String() != "/account?error=already_linked" {
-		t.Fatalf("second link went to %s", location(t, w))
+	if w := link(b, after, `{"password":"long-password-123"}`); w.Code != http.StatusConflict {
+		t.Fatalf("second link = %d", w.Code)
 	}
 	b2, me2 := register("second@example.org")
-	start = b2.do(http.MethodPost, "/auth/link", "csrf_token="+me2.CSRFToken, form)
-	back = provider(t, location(t, start).String())
+	back = provider(t, started(t, link(b2, me2, `{"password":"long-password-123"}`)))
 	if loc := location(t, b2.get("/auth/callback?"+back.RawQuery)); loc.String() != "/account?error=identity_taken" {
 		t.Fatalf("taken identity went to %s", loc)
 	}
-	if decode[meOut](t, b2.get("/api/v1/me")).PasswordLogin != true {
+	if !decode[meOut](t, b2.get("/api/v1/me")).PasswordLogin {
 		t.Fatal("a refused link turned the password off")
 	}
 	// The browser must still be signed in to the account that started it.
 	b3, me3 := register("third@example.org")
 	p.SetUser(idptest.User{Subject: "sub-third", SessionID: "s3", Email: "third-kp@example.org"})
-	start = b3.do(http.MethodPost, "/auth/link", "csrf_token="+me3.CSRFToken, form)
-	back = provider(t, location(t, start).String())
+	back = provider(t, started(t, link(b3, me3, `{"password":"long-password-123","return":"//evil.example"}`)))
 	b3.do(http.MethodPost, "/api/v1/auth/logout", "", map[string]string{"X-CSRF-Token": me3.CSRFToken})
 	if loc := location(t, b3.get("/auth/callback?"+back.RawQuery)); loc.String() != "/account?error=login_expired" {
 		t.Fatalf("link after signing out went to %s", loc)
+	}
+	// A link flow's state is no web sign-in: another browser cannot finish it.
+	b4, me4 := register("fourth@example.org")
+	back = provider(t, started(t, link(b4, me4, `{"password":"long-password-123"}`)))
+	if loc := location(t, e.browser().get("/auth/callback?"+back.RawQuery)); loc.Query().Get("error") != "login_expired" {
+		t.Fatalf("another browser finished the link: %s", loc)
 	}
 }
 

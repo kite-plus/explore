@@ -126,7 +126,6 @@ func (s *Server) Handler() (http.Handler, error) {
 	// see docs/design/accounts.md section 1.
 	if s.OIDC != nil {
 		r.GET("/auth/login", s.limit(s.flowLimit), s.oidcLogin)
-		r.POST("/auth/link", s.limit(s.flowLimit), s.oidcLink)
 		r.GET("/auth/callback", s.limit(s.flowLimit), s.oidcCallback)
 		r.GET("/auth/app/start", s.limit(s.flowLimit), s.appStart)
 		r.GET("/app/auth/done", s.limit(s.readLimit), s.appDone)
@@ -167,6 +166,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	account.DELETE("/me", s.deleteMe)
 	account.PUT("/me/password", s.limit(s.loginLimit), s.changePassword)
 	account.POST("/auth/logout", s.logout)
+	if s.OIDC != nil {
+		account.POST("/auth/link", s.limit(s.loginLimit), s.oidcLink)
+	}
 	account.GET("/me/subscriptions", s.subscriptions)
 	account.GET("/me/subscriptions.opml", s.exportSubscriptions)
 	account.POST("/me/subscriptions/import", s.limit(s.importLimit), s.importSubscriptions)

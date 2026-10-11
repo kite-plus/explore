@@ -47,35 +47,40 @@ const (
 	codeWrongPassword      = "wrong_password"
 	codePasswordDisabled   = "password_disabled"
 	codeInvalidGrant       = "invalid_grant"
+	codeAlreadyLinked      = "already_linked"
+	// The identity provider could not be reached.
+	codeIdentityUnavailable = "identity_unavailable"
 )
 
 var messages = map[string]struct{ en, zh string }{
-	codeInvalidRequest:     {"The request is malformed.", "请求格式不正确。"},
-	codeInvalidURL:         {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
-	codeInvalidCursor:      {"The cursor is not valid.", "游标无效。"},
-	codeInvalidOPML:        {"The file is not an OPML subscription list.", "文件不是 OPML 订阅列表。"},
-	codeUnauthorized:       {"Sign in first.", "请先登录。"},
-	codeExcluded:           {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
-	codeNotFound:           {"Not found.", "没有找到。"},
-	codeAlreadyListed:      {"This blog is already listed.", "这个博客已经收录了。"},
-	codeAlreadyPending:     {"This blog already has a submission waiting for review.", "这个博客已经有一条等待审核的提交。"},
-	codeNotPending:         {"This submission has already been reviewed.", "这条提交已经审核过了。"},
-	codeCheckFailed:        {"The blog did not pass the check; see the report.", "博客没有通过检查，原因见检查报告。"},
-	codeRateLimited:        {"Too many requests; try again later.", "请求太频繁，请稍后再试。"},
-	codeInternal:           {"Something went wrong on our side.", "服务端出错了。"},
-	codeConflict:           {"This account already exists or the resource is already owned.", "账号已存在或资源已被认领。"},
-	codeVerificationFailed: {"The domain verification record was not found.", "未找到匹配的域名验证记录。"},
-	codeBadCredentials:     {"The email or password is incorrect.", "邮箱或密码不正确。"},
-	codeFeatureDisabled:    {"This feature is currently disabled.", "这项功能当前已关闭。"},
-	codeWrongPassword:      {"The current password is incorrect.", "当前密码不正确。"},
-	codeLastAdmin:          {"You are the only admin. Give admin access to another account before deleting yours.", "你是唯一的管理员。删除账号前，请先把后台权限交给另一个账号。"},
-	codeSetupDone:          {"This server is already set up; sign in instead.", "已经完成安装，请直接登录。"},
-	codeKeepAdmin:          {"This is the only active admin. Give admin access to another account first.", "这是唯一可用的管理员，请先把后台权限交给另一个账号。"},
-	codeAccountDisabled:    {"This account is disabled; restore it first.", "这个账号已停用，请先恢复。"},
-	codeOwnAccount:         {"You cannot do this to your own account.", "不能对自己的账号执行这个操作。"},
-	codeEmailTaken:         {"Another account already uses this email.", "这个邮箱已被其他账号使用。"},
-	codePasswordDisabled:   {"This account signs in with a Kite Plus account and has no password here.", "这个账号用 Kite Plus 账号登录，在本站没有密码。"},
-	codeInvalidGrant:       {"The sign-in code is not valid or has expired. Sign in again.", "登录授权码无效或已过期，请重新登录。"},
+	codeInvalidRequest:      {"The request is malformed.", "请求格式不正确。"},
+	codeInvalidURL:          {"The address is not a public http or https URL.", "地址不是公网的 http 或 https 地址。"},
+	codeInvalidCursor:       {"The cursor is not valid.", "游标无效。"},
+	codeInvalidOPML:         {"The file is not an OPML subscription list.", "文件不是 OPML 订阅列表。"},
+	codeUnauthorized:        {"Sign in first.", "请先登录。"},
+	codeExcluded:            {"This blog has left Explore or was blocked.", "这个博客已经退出 Explore，或者被屏蔽了。"},
+	codeNotFound:            {"Not found.", "没有找到。"},
+	codeAlreadyListed:       {"This blog is already listed.", "这个博客已经收录了。"},
+	codeAlreadyPending:      {"This blog already has a submission waiting for review.", "这个博客已经有一条等待审核的提交。"},
+	codeNotPending:          {"This submission has already been reviewed.", "这条提交已经审核过了。"},
+	codeCheckFailed:         {"The blog did not pass the check; see the report.", "博客没有通过检查，原因见检查报告。"},
+	codeRateLimited:         {"Too many requests; try again later.", "请求太频繁，请稍后再试。"},
+	codeInternal:            {"Something went wrong on our side.", "服务端出错了。"},
+	codeConflict:            {"This account already exists or the resource is already owned.", "账号已存在或资源已被认领。"},
+	codeVerificationFailed:  {"The domain verification record was not found.", "未找到匹配的域名验证记录。"},
+	codeBadCredentials:      {"The email or password is incorrect.", "邮箱或密码不正确。"},
+	codeFeatureDisabled:     {"This feature is currently disabled.", "这项功能当前已关闭。"},
+	codeWrongPassword:       {"The current password is incorrect.", "当前密码不正确。"},
+	codeLastAdmin:           {"You are the only admin. Give admin access to another account before deleting yours.", "你是唯一的管理员。删除账号前，请先把后台权限交给另一个账号。"},
+	codeSetupDone:           {"This server is already set up; sign in instead.", "已经完成安装，请直接登录。"},
+	codeKeepAdmin:           {"This is the only active admin. Give admin access to another account first.", "这是唯一可用的管理员，请先把后台权限交给另一个账号。"},
+	codeAccountDisabled:     {"This account is disabled; restore it first.", "这个账号已停用，请先恢复。"},
+	codeOwnAccount:          {"You cannot do this to your own account.", "不能对自己的账号执行这个操作。"},
+	codeEmailTaken:          {"Another account already uses this email.", "这个邮箱已被其他账号使用。"},
+	codePasswordDisabled:    {"This account signs in with a Kite Plus account and has no password here.", "这个账号用 Kite Plus 账号登录，在本站没有密码。"},
+	codeInvalidGrant:        {"The sign-in code is not valid or has expired. Sign in again.", "登录授权码无效或已过期，请重新登录。"},
+	codeAlreadyLinked:       {"This account is already linked to a Kite Plus account.", "这个账号已经关联了 Kite Plus 账号。"},
+	codeIdentityUnavailable: {"Kite Plus accounts are unavailable right now. Please try again later.", "Kite Plus 账号暂时无法访问，请稍后再试。"},
 }
 
 type errorBody struct {

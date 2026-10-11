@@ -76,10 +76,6 @@ export function startStub() {
         res.writeHead(302, { Location: "https://id.example.org/authorize?state=s", "Set-Cookie": "explore_login=binding; Path=/; Max-Age=1800; HttpOnly; SameSite=Lax", "Cache-Control": "no-store" });
         return res.end();
       }
-      if (url.pathname === "/auth/link") {
-        res.writeHead(302, { Location: "https://id.example.org/authorize?state=l", "Cache-Control": "no-store" });
-        return res.end();
-      }
       if (url.pathname === "/app/auth/done") {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" });
         return res.end("<!doctype html><title>Finish signing in in the Kite app</title>");

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"errors"
 	"net/http"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/kite-plus/explore/internal/i18n"
 	"github.com/kite-plus/explore/internal/idp"
@@ -115,31 +115,42 @@ func (s *Server) browserBinding(c *gin.Context) (string, error) {
 	return v, nil
 }
 
-// startFlow records a sign-in bound to this browser and sends the browser
-// to the provider.
-func (s *Server) startFlow(c *gin.Context, f store.LoginFlow, selectAccount bool) {
-	c.Header("Cache-Control", "no-store")
+// prepareFlow records a sign-in bound to this browser and returns where at
+// the provider it goes on. An error is the provider being unreachable, or
+// the database failing (err is then wrapped in neither).
+func (s *Server) prepareFlow(c *gin.Context, f store.LoginFlow, selectAccount bool) (string, error) {
 	state, err1 := randomToken()
 	nonce, err2 := randomToken()
 	browser, err3 := s.browserBinding(c)
 	if err := errors.Join(err1, err2, err3); err != nil {
-		s.storeError(c, err)
-		return
+		return "", err
 	}
 	verifier := idp.NewVerifier()
 	target, err := s.OIDC.AuthURL(idp.AuthRequest{State: state, Nonce: nonce, Verifier: verifier, SelectAccount: selectAccount})
 	if err != nil {
 		s.Log.Warn("identity provider unavailable", "error", err)
-		s.flowError(c, f, flowUnavailable)
-		return
+		return "", err
 	}
 	f.StateHash, f.BrowserHash = sha256.Sum256([]byte(state)), sha256.Sum256([]byte(browser))
 	f.Nonce, f.Verifier, f.Expires = nonce, verifier, s.Now().Add(flowLifetime)
 	if err := s.Store.CreateLoginFlow(c.Request.Context(), f); err != nil {
-		s.storeError(c, err)
-		return
+		return "", err
 	}
-	c.Redirect(http.StatusFound, target)
+	return target, nil
+}
+
+// startFlow records a sign-in and sends the browser to the provider.
+func (s *Server) startFlow(c *gin.Context, f store.LoginFlow, selectAccount bool) {
+	c.Header("Cache-Control", "no-store")
+	target, err := s.prepareFlow(c, f, selectAccount)
+	switch {
+	case errors.Is(err, idp.ErrUnavailable):
+		s.flowError(c, f, flowUnavailable)
+	case err != nil:
+		s.storeError(c, err)
+	default:
+		c.Redirect(http.StatusFound, target)
+	}
 }
 
 // flowError sends the reader to where the sign-in would have ended, saying
@@ -166,29 +177,39 @@ func (s *Server) oidcLogin(c *gin.Context) {
 	s.startFlow(c, store.LoginFlow{Mode: modeWeb, ReturnPath: safeReturn(c.Query("return"), "/")}, false)
 }
 
-// oidcLink starts linking a Kite Plus account to the signed-in one. It is a
-// form POST from the account page carrying the session's CSRF token, so no
-// other site can start it.
+// oidcLink starts linking a Kite Plus account to the signed-in one:
+// POST /api/v1/auth/link {password, return}, with the session's CSRF
+// header. The password is asked again because a linked identity outlives
+// the session, so a stolen session must not be enough to attach one. It
+// answers with the provider's address for the page to go to, rather than a
+// redirect, which the site's CSP (form-action 'self') would stop.
 func (s *Server) oidcLink(c *gin.Context) {
-	u, token, bearer, err := s.sessionUser(c)
-	if err != nil || bearer {
-		if err != nil && !errors.Is(err, store.ErrNotFound) {
-			s.storeError(c, err)
-			return
-		}
-		s.fail(c, http.StatusUnauthorized, codeUnauthorized)
+	var body struct {
+		Password string `json:"password"`
+		Return   string `json:"return"`
+	}
+	if !strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") || c.ShouldBindJSON(&body) != nil {
+		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(c.PostForm("csrf_token")), []byte(csrfToken(token))) != 1 {
-		s.fail(c, http.StatusForbidden, codeInvalidRequest)
+	u := currentUser(c)
+	if u.LinkedAt != nil || u.PasswordHash == "" {
+		s.fail(c, http.StatusConflict, codeAlreadyLinked)
 		return
 	}
-	ret := safeReturn(c.PostForm("return"), "/account")
-	if u.LinkedAt != nil {
-		s.flowError(c, store.LoginFlow{Mode: modeLink, ReturnPath: ret}, flowAlreadyLinked)
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.Password)) != nil {
+		s.fail(c, http.StatusForbidden, codeWrongPassword)
 		return
 	}
-	s.startFlow(c, store.LoginFlow{Mode: modeLink, ReturnPath: ret, UserID: u.ID}, false)
+	target, err := s.prepareFlow(c, store.LoginFlow{Mode: modeLink, ReturnPath: safeReturn(body.Return, "/account"), UserID: u.ID}, false)
+	switch {
+	case errors.Is(err, idp.ErrUnavailable):
+		s.fail(c, http.StatusServiceUnavailable, codeIdentityUnavailable)
+	case err != nil:
+		s.storeError(c, err)
+	default:
+		writeJSON(c, http.StatusOK, gin.H{"url": target})
+	}
 }
 
 // oidcCallback is where the provider sends the browser back. It checks the

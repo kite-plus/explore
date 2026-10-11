@@ -925,11 +925,8 @@ describe("sign-in with a Kite Plus account", () => {
     assert.equal(logout.status, 200);
     assert.equal(stub.state.serverRequests.at(-1).body, "logout_token=x.y.z");
 
-    const link = await get("/auth/link", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: base, Cookie: "explore_session=test-session" }, body: "csrf_token=test-csrf&return=%2Faccount" });
-    assert.equal(link.status, 302);
-    assert.equal(stub.state.serverRequests.at(-1).headers.cookie, "explore_session=test-session");
-    const forged = await get("/auth/link", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://evil.example" }, body: "csrf_token=x" });
-    assert.equal(forged.status, 403);
+    const forged = await get("/auth/app/start", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://evil.example" }, body: "x=1" });
+    assert.equal(forged.status, 403, "other sites still cannot post forms to sign-in paths");
 
     const done = await get("/app/auth/done?code=abc");
     assert.equal(done.status, 200);
