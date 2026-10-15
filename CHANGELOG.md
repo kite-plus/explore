@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Sign in now always stops at Kite Plus to confirm the account. A reader already signed in there used to come straight back signed in, with nothing to show which account Explore got; now they pick the account and press Continue. A reader who is not signed in there goes straight to the sign-in form as before.
+
 ## [0.1.22] - 2026-10-15
 
 The reader site now looks like the rest of Kite Plus: the paper, serif headings, seal red and kite of kite.plus. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.

@@ -176,8 +176,11 @@ func (s *Server) flowError(c *gin.Context, f store.LoginFlow, code string) {
 }
 
 // oidcLogin starts a sign-in on the site: GET /auth/login?return=/path.
+// It asks the provider to confirm the account, so a reader already signed
+// in there still sees which account Explore gets instead of bouncing back
+// unseen; one who is not goes straight to the sign-in form.
 func (s *Server) oidcLogin(c *gin.Context) {
-	s.startFlow(c, store.LoginFlow{Mode: modeWeb, ReturnPath: safeReturn(c.Query("return"), "/")}, false)
+	s.startFlow(c, store.LoginFlow{Mode: modeWeb, ReturnPath: safeReturn(c.Query("return"), "/")}, true)
 }
 
 // oidcCallback is where the provider sends the browser back. It checks the

@@ -188,7 +188,7 @@ func TestWebSignIn(t *testing.T) {
 	}
 	back := provider(t, start.Header().Get("Location"))
 	auth := p.Authorizations()[0]
-	if auth.RedirectURI != "https://explore.example.org/auth/callback" || auth.ChallengeMethod != "S256" || auth.Nonce == "" || auth.Prompt != "" {
+	if auth.RedirectURI != "https://explore.example.org/auth/callback" || auth.ChallengeMethod != "S256" || auth.Nonce == "" || auth.Prompt != "select_account" {
 		t.Fatalf("authorization = %+v", auth)
 	}
 	done := b.get("/auth/callback?" + back.RawQuery)
