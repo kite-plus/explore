@@ -8,6 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-10-15
+
+The reader site now looks like the rest of Kite Plus: the paper, serif headings, seal red and kite of kite.plus. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
+### Changed
+
+- The reader pages take the paper look of kite.plus: a warm paper tone with a faint grain, serif headings and post titles, seal red for the current tab, blog avatars as small seals, covers set like prints and dashed rules between posts, in light and dark alike. The admin is unchanged.
+- The first page of each stream opens with a short masthead on what Explore is, with a kite whose string runs down to the paper tag in the sidebar. On narrow screens, which have no sidebar, the kite flies without its string; readers who prefer less motion get a still kite.
+- The mark after a post title that opens in a new tab is a drawn arrow. "Awaiting check" shows only while the post is hovered or focused, and not on touch screens, since links are checked within minutes; checked results show as before.
+- The page a post opens through is a paper tag with the kite, naming the blog and the post and drawing a line before it moves on; "Not moving? Go there now" stays. Links opened from outside Explore still ask first.
+
 ## [0.1.21] - 2026-10-11
 
 With Kite Plus configured, Explore signs readers in with Kite Plus alone: no passwords of its own, and Sign in goes straight to Kite Plus. Accounts made with a password come back through a Kite Plus account of the same, verified email. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
