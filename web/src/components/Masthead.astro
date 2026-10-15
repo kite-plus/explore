@@ -6,7 +6,7 @@ interface Props {
 }
 
 // The head of the stream pages: what Explore is, and the kite of kite.plus
-// whose string ends on the stream tab being read (global.css, .kite-*).
+// tied to the sidebar's paper tag (global.css, .kite-*).
 const { lang } = Astro.props;
 const t = dict(lang);
 ---
@@ -52,49 +52,44 @@ const t = dict(lang);
   </div>
   <svg class="kite-string" aria-hidden="true">
     <path data-kite-line></path>
-    <circle data-kite-knot r="3"></circle>
   </svg>
 </section>
 
 <script>
-  // The string runs from the kite to the current tab while the head is in
-  // view. Once the toolbar sticks under the header the kite has gone, and so
-  // does the string.
+  // The string runs from the kite down to the hole of the sidebar's paper
+  // tag (StreamSidebar.astro) while the head is in view. Narrow screens have
+  // no sidebar, and once the head scrolls away the kite has gone, so in both
+  // cases the string goes too.
   const head = document.querySelector<HTMLElement>("[data-kite-masthead]");
   const line = head?.querySelector<SVGPathElement>("[data-kite-line]");
-  const knot = head?.querySelector<SVGCircleElement>("[data-kite-knot]");
   const anchor = head?.querySelector<HTMLElement>("[data-kite-anchor]");
-  if (head && line && knot && anchor) {
+  if (head && line && anchor) {
     const svg = line.ownerSVGElement!;
     const update = () => {
-      const tab = document.querySelector<HTMLElement>('[data-stream-toolbar] [aria-current="page"]');
-      const box = head.getBoundingClientRect();
-      if (!tab || !svg.getClientRects().length || box.bottom < 64) {
+      const tie = document.querySelector<HTMLElement>("[data-kite-tie]");
+      if (!tie || !tie.getClientRects().length || !svg.getClientRects().length || head.getBoundingClientRect().bottom < 64) {
         line.setAttribute("d", "");
-        knot.setAttribute("r", "0");
         return;
       }
       const o = svg.getBoundingClientRect();
       const k = anchor.getBoundingClientRect();
-      const t = tab.getBoundingClientRect();
+      const t = tie.getBoundingClientRect();
       const kx = k.left - o.left;
       const ky = k.top - o.top;
-      const tx = t.right - o.left + 4;
-      const ty = t.bottom - o.top - 1;
-      const c1x = tx + (kx - tx) * 0.55;
-      const c1y = ty + Math.min(28, Math.abs(kx - tx) * 0.06);
-      const c2x = kx - (kx - tx) * 0.06;
+      const tx = t.left + t.width / 2 - o.left;
+      const ty = t.top + t.height / 2 - o.top;
+      // A line hanging under its own weight: shallow at the tie, steep at the kite.
+      const c1x = tx + (kx - tx) * 0.4;
+      const c1y = ty + (ky - ty) * 0.15;
+      const c2x = kx + (tx - kx) * 0.12;
       const c2y = ky + (ty - ky) * 0.45;
       line.setAttribute("d", `M${tx} ${ty} C${c1x} ${c1y}, ${c2x} ${c2y}, ${kx} ${ky}`);
-      knot.setAttribute("cx", String(tx));
-      knot.setAttribute("cy", String(ty));
-      knot.setAttribute("r", "3");
     };
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
       update();
       addEventListener("scroll", update, { passive: true });
       addEventListener("resize", update);
-      new MutationObserver(update).observe(document.body, { subtree: true, attributeFilter: ["aria-current"] });
+      new MutationObserver(update).observe(document.body, { subtree: true, childList: true });
     } else {
       // The kite bobs, so the string follows it every frame.
       const loop = () => {

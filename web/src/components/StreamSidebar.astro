@@ -30,11 +30,7 @@ const pingHelp = lang === "zh" ? "/about#发布后更快出现" : "/en/about#app
 
 <aside class="hidden space-y-8 pt-4 lg:sticky lg:top-14 lg:block lg:self-start">
   <section class="kite-tag relative mt-4 rounded-xl border bg-card p-5">
-    <span class="kite-tag-hole" aria-hidden="true"></span>
-    <svg class="kite-tag-string" viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M33 37 C 30 22, 16 18, 20 2"></path>
-      <path class="bow" d="M22 21 l7 -3 l-1 7 z"></path>
-    </svg>
+    <span class="kite-tag-hole" data-kite-tie aria-hidden="true"></span>
     <div class="flex items-center gap-3 pr-6">
       <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background text-brand ring-1 ring-border [&>svg]:size-4.5">
         {stream === "latest" ? <PenLine aria-hidden="true" /> : stream === "recommended" ? <Sparkles aria-hidden="true" /> : <Rss aria-hidden="true" />}
