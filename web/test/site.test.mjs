@@ -412,7 +412,7 @@ describe("content", () => {
   });
 
   test("links that open a new tab say so, in the page's language", async () => {
-    const mark = '<span aria-hidden="true" class="external-mark">↗</span>';
+    const mark = '<span aria-hidden="true" class="external-mark"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>';
     const zh = (await page("/")).html;
     const en = (await page("/en/")).html;
     assert.ok(zh.includes(`${mark}<span class="sr-only" lang="zh-CN">（在新标签页打开）</span></a>`));

@@ -14,7 +14,7 @@ const html = await Astro.slots.render("default");
 const marked = html.replace(/<a href="(https?:\/\/[^"]*)">([\s\S]*?)<\/a>/g, (_, href: string, inner: string) => {
   const t = dict(lang ?? (/\p{Script=Han}/u.test(inner) ? "zh" : "en"));
   return (
-    `<a href="${href}" target="_blank" rel="noopener">${inner}<span aria-hidden="true" class="external-mark">↗</span>` +
+    `<a href="${href}" target="_blank" rel="noopener">${inner}<span aria-hidden="true" class="external-mark"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>` +
     `<span class="sr-only" lang="${t.htmlLang}">${t.newTab}</span></a>`
   );
 });

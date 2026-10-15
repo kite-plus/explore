@@ -39,6 +39,8 @@ const statusLabel = linkStatus === "available"
 const checkedAt = entry.link_checked_at ? t.entryStatus.checkedAt(relativeTime(entry.link_checked_at, lang)) : null;
 const statusDescription = [statusLabel, checkedAt, t.entryStatus.hint].filter(Boolean).join(" · ");
 const pending = linkStatus === "unknown" && !entry.link_checked_at;
+// A link no one has checked yet is no news: the worker checks it within
+// minutes, so its status waits until the reader points at the post.
 const statusClass = linkStatus === "available" || linkStatus === "unavailable" ? `entry-status-${linkStatus}` : "entry-status-unknown";
 ---
 
@@ -61,6 +63,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
         <span>{t.blog.undated}</span>
       )
     }
+    <span class:list={["entry-status-slot", linkStatus === "unknown" && "entry-status-quiet"]}>
     <span aria-hidden="true">·</span>
     {pending ? (
       <>
@@ -116,6 +119,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
         {entry.link_checked_at && linkStatus !== "available" && <time datetime={entry.link_checked_at}>{checkedAt}</time>}
       </>
     )}
+    </span>
     </div>
     <h3 class="mt-1.5 font-serif text-[1.0625rem] leading-snug font-bold sm:text-[1.1875rem]">
       <ExternalLink

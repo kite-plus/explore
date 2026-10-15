@@ -232,12 +232,54 @@
     transition: opacity 0.15s;
   }
 
-  /* The arrow after a link that opens in a new tab (ExternalLink.astro). */
+  /* The arrow after a link that opens in a new tab (ExternalLink.astro):
+     drawn rather than a font's ↗, small and raised like a note mark. */
   .external-mark {
     display: inline-block;
+    width: 0.66em;
+    height: 0.66em;
     margin-inline-start: 0.2em;
-    font-size: 0.85em;
-    opacity: 0.6;
+    vertical-align: 0.36em;
+    color: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
+    transition:
+      color 0.15s,
+      translate 0.15s;
+    & svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  }
+  a:hover > .external-mark {
+    color: var(--brand);
+    translate: 1px -1px;
+  }
+
+  /* A post's link status (EntryItem.astro). One still to be checked shows
+     only while the reader points at or tabs into the post, and stays once a
+     check has run; touch screens leave it to the worker. */
+  .entry-status-slot {
+    display: inline-flex;
+    align-items: center;
+    column-gap: 0.5rem;
+  }
+  .entry-status-quiet {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  article:is(:hover, :focus-within) .entry-status-quiet,
+  .entry-status-quiet:has([data-entry-check-result]:not(.hidden)) {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .entry-status-quiet:not(:has([data-entry-check-result]:not(.hidden))) {
+      display: none;
+    }
   }
 
   /* The kite.plus sky on the stream pages' head (Masthead.astro). */
