@@ -14,9 +14,9 @@ const { host, name, size = "sm" } = Astro.props;
 <span
   aria-hidden="true"
   class={cn(
-    "group/avatar relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white",
+    "group/avatar relative inline-flex shrink-0 -rotate-3 items-center justify-center overflow-hidden font-serif font-bold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)]",
     avatarColor(host),
-    { sm: "size-5 text-[0.65rem]", md: "size-8 text-sm", lg: "size-12 text-xl" }[size],
+    { sm: "size-5 rounded-[5px] text-[0.65rem]", md: "size-8 rounded-[7px] text-sm", lg: "size-12 rounded-[10px] text-xl" }[size],
   )}
 >
   <span class="group-[.has-favicon]/avatar:hidden">{initial(name)}</span>

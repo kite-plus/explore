@@ -34,6 +34,9 @@ export const zh = {
   home: {
     title: "独立博客的最新文章",
     heading: "发现",
+    mastheadEyebrow: "独立博客 · 每天更新",
+    mastheadTitle: "独立博客，今天写了什么",
+    mastheadLede: "Explore 汇集独立博客公开的订阅源。点开标题，就回到作者自己的网站阅读。",
     feedLabel: "文章流",
     latest: "最新",
     recommended: "推荐",

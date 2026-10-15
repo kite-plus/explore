@@ -42,7 +42,7 @@ const pending = linkStatus === "unknown" && !entry.link_checked_at;
 const statusClass = linkStatus === "available" || linkStatus === "unavailable" ? `entry-status-${linkStatus}` : "entry-status-unknown";
 ---
 
-<article class="flex gap-4 border-b py-4" lang={contentLang}>
+<article class="flex gap-5 border-b border-dashed border-dash py-5" lang={contentLang}>
   <div class="min-w-0 flex-1">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" lang={t.htmlLang}>
     {
@@ -117,7 +117,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
       </>
     )}
     </div>
-    <h3 class="mt-1.5 text-[0.9375rem] leading-snug font-semibold sm:text-base">
+    <h3 class="mt-1.5 font-serif text-[1.0625rem] leading-snug font-bold sm:text-[1.1875rem]">
       <ExternalLink
         lang={lang}
         href={withSource(entry.url)}
@@ -147,7 +147,7 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
   </div>
   {
     entry.image_url && (
-      <div class="mt-1 h-16 w-24 shrink-0 overflow-hidden rounded-lg border bg-muted sm:h-20 sm:w-30">
+      <div class="entry-cover mt-1 h-16 w-24 shrink-0 overflow-hidden bg-muted sm:h-20 sm:w-30">
         <img src={entry.image_url} alt="" loading="lazy" decoding="async" data-entry-cover class="h-full w-full object-cover" />
       </div>
     )

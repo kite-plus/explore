@@ -35,9 +35,9 @@ const links = [
 
 <header class="sticky top-0 z-30 h-14 border-b bg-background/85 backdrop-blur-md">
   <div class:list={["mx-auto flex h-full w-full items-center gap-6 px-4 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl"]}>
-    <a href={localePath(lang, "/")} class="inline-flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
+    <a href={localePath(lang, "/")} class="inline-flex shrink-0 items-center gap-2">
       <Logo class="h-6 w-auto" />
-      <span>Explore</span>
+      <span class="font-serif text-lg font-bold tracking-wide">Explore</span>
     </a>
     <nav aria-label={t.nav.label} class="hidden flex-1 items-center gap-6 text-sm sm:flex">
       {

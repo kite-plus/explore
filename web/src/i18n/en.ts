@@ -36,6 +36,9 @@ export const en: Dict = {
   home: {
     title: "New posts from independent blogs",
     heading: "Discover",
+    mastheadEyebrow: "INDEPENDENT BLOGS · DAILY",
+    mastheadTitle: "What independent blogs wrote today",
+    mastheadLede: "Explore gathers the public feeds of independent blogs. Open a title to read it on the author's own site.",
     feedLabel: "Post feeds",
     latest: "Latest",
     recommended: "Recommended",

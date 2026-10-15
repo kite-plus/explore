@@ -1,5 +1,6 @@
 ---
 import EntryStream from "@/components/EntryStream.astro";
+import Masthead from "@/components/Masthead.astro";
 import Message from "@/components/Message.astro";
 import StreamSidebar from "@/components/StreamSidebar.astro";
 import StreamToolbar from "@/components/StreamToolbar.astro";
@@ -42,11 +43,12 @@ const unrated = recommended && !data?.paged && !data?.filter && !data?.tag;
   flush={Boolean(data)}
   noindex={Boolean(data?.paged || data?.filter || data?.tag)}
 >
+  {data && !data.paged && <Masthead lang={lang} />}
   {
     data ? (
       <SwapRoot class="lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-12">
         <div class="min-w-0">
-          <h1 class="sr-only">{t.home.heading}</h1>
+          {data.paged && <h1 class="sr-only">{t.home.heading}</h1>}
           <StreamToolbar lang={lang} stream={stream} path={path} filter={data.filter} tag={data.tag} tags={data.tags} />
           {data.page.data.length === 0 && unrated ? (
             <div class="flex flex-col items-center gap-4 py-16 text-center">

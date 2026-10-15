@@ -231,12 +231,13 @@ describe("content", () => {
   });
 
   test("the streams share one nav item and one heading", async () => {
+    const titles = { 发现: "独立博客，今天写了什么", Discover: "What independent blogs wrote today" };
     for (const [path, label] of [["/", "发现"], ["/recommended", "发现"], ["/en/", "Discover"], ["/en/recommended", "Discover"]]) {
       const { html } = await page(path);
       const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
       assert.match(header, new RegExp(`<a href="[^"]*" aria-current="page" class="[^"]*">\\s*${label}\\s*</a>`), `${path} marks the Discover item`);
       assert.doesNotMatch(header, /href="(\/en)?\/following"/, "following is a tab, not a nav item");
-      assert.match(html, new RegExp(`<h1[^>]*>${label}</h1>`), `${path} keeps the heading`);
+      assert.match(html, new RegExp(`<h1[^>]*>\\s*${titles[label]}\\s*</h1>`), `${path} keeps the masthead heading`);
     }
   });
 
@@ -304,10 +305,14 @@ describe("content", () => {
     }
   });
 
-  test("the streams list posts in one run under a toolbar, with no fixed intro", async () => {
+  test("the streams list posts in one run under a toolbar, with the masthead on the first page only", async () => {
     const { html } = await page("/");
-    assert.match(html, /<h1 class="sr-only">发现<\/h1>/);
+    assert.match(html, /data-kite-masthead/);
+    assert.doesNotMatch(html, /<h1 class="sr-only">/, "the masthead heading is the page's heading");
     assert.doesNotMatch(html, /来自已收录博客的公开订阅源/);
+    const next = (await page("/?cursor=page-two")).html;
+    assert.doesNotMatch(next, /data-kite-masthead/, "later pages start at the toolbar");
+    assert.match(next, /<h1 class="sr-only">发现<\/h1>/);
     assert.doesNotMatch(html, /data-day=/, "no day headings");
     assert.match(html, /<time datetime="[^"]+">1小时前<\/time>/);
     assert.match(html, /<time datetime="[^"]+">昨天<\/time>/, "each post says when it came out");
