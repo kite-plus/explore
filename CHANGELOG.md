@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-10-15
+
+Sign in now asks at Kite Plus which account to use, instead of coming back signed in without a word. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
 ### Changed
 
 - Sign in now always stops at Kite Plus to confirm the account. A reader already signed in there used to come straight back signed in, with nothing to show which account Explore got; now they pick the account and press Continue. A reader who is not signed in there goes straight to the sign-in form as before.
