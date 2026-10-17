@@ -185,7 +185,8 @@ func joinTerms(terms []searchTerm, title bool) string {
 }
 
 // searchEntriesFrom is what entry search looks through: the entries of
-// visible blogs that a blog page would show, matching every term.
+// visible blogs that a blog page would show, matching every term. Queries
+// over it run with searchPlan.
 const searchEntriesFrom = `
 	FROM entries e
 	JOIN blogs b ON b.id = e.blog_id
@@ -194,6 +195,11 @@ const searchEntriesFrom = `
 	  AND ` + notSuppressed + `
 	  AND (e.published_at IS NULL OR e.published_at <= now() + (@future_tolerance * interval '1 second'))
 	  AND (@lang::text = '' OR lower(b.language) = @lang OR lower(b.language) LIKE @lang || '-%')`
+
+// searchPlan plans an entry search for its own terms each time. A cached
+// generic plan guesses that a handful of blogs pass the filters, loops
+// over them all and runs about 15 times slower.
+const searchPlan = pgx.QueryExecModeExec
 
 func searchArgs(terms []searchTerm, lang string) pgx.NamedArgs {
 	return pgx.NamedArgs{
@@ -238,7 +244,7 @@ func (s *Store) SearchEntries(ctx context.Context, q SearchQuery) ([]FoundEntry,
 		FROM page p
 		JOIN entries e ON e.id = p.id
 		JOIN blogs b ON b.id = e.blog_id
-		ORDER BY p.top DESC, p.at DESC, p.id DESC`, args)
+		ORDER BY p.top DESC, p.at DESC, p.id DESC`, searchPlan, args)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +267,7 @@ func (s *Store) CountSearchEntries(ctx context.Context, text, lang string, most 
 	args := searchArgs(terms, lang)
 	args["most"] = most
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 `+searchEntriesFrom+` LIMIT @most) AS hits`, args).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 `+searchEntriesFrom+` LIMIT @most) AS hits`, searchPlan, args).Scan(&n)
 	return n, err
 }
 
