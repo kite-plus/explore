@@ -41,6 +41,7 @@ blogs.last_modified text
 blogs.last_succeeded_at timestamp with time zone
 blogs.name text
 blogs.next_fetch_at timestamp with time zone
+blogs.search tsvector
 blogs.show_excerpt boolean
 blogs.site_url text
 blogs.sitemap_next_check_at timestamp with time zone
@@ -62,6 +63,7 @@ entries.page_image_url text
 entries.page_next_check_at timestamp with time zone
 entries.published_at timestamp with time zone
 entries.score smallint
+entries.search tsvector
 entries.source text
 entries.synced_at timestamp with time zone
 entries.tagged_at timestamp with time zone

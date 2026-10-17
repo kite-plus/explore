@@ -200,21 +200,27 @@ func (s *Server) pageParams(c *gin.Context) (cur *store.Cursor, limit int, langu
 		s.fail(c, http.StatusBadRequest, codeInvalidCursor)
 		return nil, 0, "", false
 	}
+	limit, language, ok = s.limitAndLang(c)
+	return cur, limit, language, ok
+}
+
+// limitAndLang reads limit and lang, the list parameters besides the cursor.
+func (s *Server) limitAndLang(c *gin.Context) (limit int, language string, ok bool) {
 	limit = 30
 	if v := c.Query("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 100 {
 			s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-			return nil, 0, "", false
+			return 0, "", false
 		}
 		limit = n
 	}
 	language = strings.ToLower(c.Query("lang"))
 	if language != "" && !validLang(language) {
 		s.fail(c, http.StatusBadRequest, codeInvalidRequest)
-		return nil, 0, "", false
+		return 0, "", false
 	}
-	return cur, limit, language, true
+	return limit, language, true
 }
 
 // validLang accepts BCP 47 shaped tags such as "zh" or "zh-cn", which also

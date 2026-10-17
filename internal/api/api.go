@@ -150,6 +150,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	v1.GET("/blogs", s.limit(s.readLimit), s.blogs)
 	v1.GET("/blogs/:host/favicon", s.limit(s.readLimit), s.blogFavicon)
 	v1.GET("/blogs/:host", s.limit(s.readLimit), s.blog)
+	v1.GET("/search/entries", s.limit(s.readLimit), s.searchEntries)
+	v1.GET("/search/blogs", s.limit(s.readLimit), s.searchBlogs)
 	v1.GET("/site-config", s.limit(s.readLimit), s.siteConfig)
 	v1.GET("/notices", s.limit(s.readLimit), s.notices)
 	v1.GET("/notices/:id", s.limit(s.readLimit), s.notice)

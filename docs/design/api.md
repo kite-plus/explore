@@ -1,6 +1,6 @@
 # API 设计
 
-> 状态：公开 API、本站账号与订阅接口、Kite Plus 账号登录与应用登录接口已实现 · 最近更新：2026-10-10
+> 状态：公开 API、本站账号与订阅接口、Kite Plus 账号登录与应用登录接口、搜索已实现 · 最近更新：2026-10-17
 > 服务：`explore serve`（Gin）。读者看到的页面由独立的前端在服务端渲染（[architecture.md §8](architecture.md#8-前端与-seo)），前端只调用本文的公开接口。
 > 登录、会话、订阅和博客认领接口见下文及 [accounts.md](accounts.md)。标签已经实现（§2.1、§2.1.1）。
 
@@ -225,6 +225,32 @@
 
 Explore 自己发布的公告和广告，正在显示的才返回；字段、`audience` 参数和缓存见 [notices.md §3](notices.md#3-接口)。
 
+### 2.7 `GET /api/v1/search/entries` 与 `GET /api/v1/search/blogs`
+
+搜索文章和博客。怎么匹配、为什么这样处理中文，见 [data-model.md §4.4](data-model.md#44-搜索)。
+
+| 参数 | 说明 |
+|---|---|
+| `q` | 必填，去掉首尾空白后 1 到 100 个字符，否则返回 `400 invalid_request`。空格隔开的词都要出现，只取前 8 个；中文按字面匹配，其他文字按整词匹配，不分大小写 |
+| `cursor` | 上一页返回的 `next_cursor`，只在同一个接口、`q` 和 `lang` 里有效 |
+| `limit` | 默认 30，最大 100 |
+| `lang` | 同 §2.1，按博客语言的前缀筛选 |
+
+- **文章**（`/search/entries`）：匹配标题和订阅源里的摘要，可见规则同博客页（§2.3），包括没有日期和日期不可信的。所有词都在标题里的排前面，其余的排后面；同一档里按发布时间倒序，没有日期的排最后。每一项同 §2.1 的列表项，带 `blog`。
+- **博客**（`/search/blogs`）：匹配名字、主机名和简介，只含可见的博客。中文词，或三个字符以上的其他词，在名字和主机名里按子串匹配，所以 `ruanyifeng` 找得到 `www.ruanyifeng.com`。所有词都在名字或主机名里的排前面，同一档里按最近一篇文章倒序。每一项同 §2.2。
+- 第一页（不带 `cursor`）带 `total`：文章最多数到 1,000，超过时 `total` 为 `1000`、`total_capped` 为 `true`；博客是准确的数目。后面的页 `total` 为 `null`。
+- 只有标点、切不出词的 `q` 返回空列表，不算错误。
+- 和其他公开接口一样缓存一分钟。查询词和其他参数一样不写日志（§1）。
+
+```json
+{
+  "data": [{ "id": "8412", "title": "胶片摄影入门", "blog": { "host": "blog.example.com", "...": "..." }, "...": "..." }],
+  "next_cursor": "MToxNzg2ODM0ODAwMDAwMDAwMDA6ODQxMg",
+  "total": 214,
+  "total_capped": false
+}
+```
+
 ---
 
 ## 3. 订阅与导出
@@ -360,7 +386,7 @@ Explore 自己发布的公告和广告，正在显示的才返回；字段、`au
 
 ## 7. 与前端的约定
 
-- 页面和接口一一对应：`/` 对应 §2.1，`/blogs` 对应 §2.2，`/blogs/{host}` 对应 §2.3，提交页对应 §2.4 和 §2.5。
+- 页面和接口一一对应：`/` 对应 §2.1，`/blogs` 对应 §2.2，`/blogs/{host}` 对应 §2.3，提交页对应 §2.4 和 §2.5，`/search` 对应 §2.7。
 - **没有单篇文章的接口，也就没有文章页**（[architecture.md §8](architecture.md#8-前端与-seo)）。
 - 前端（Astro，见 [frontend.md](frontend.md)）只在服务端调用接口；接口的缓存头让前端和 CDN 可以直接复用响应。
 - 前端在服务端代读者调用接口时都带上 `X-Forwarded-For`（[frontend.md §6](frontend.md#6-提交流程) 第 5 条）；反向代理和 `web` 服务都要列在 `EXPLORE_TRUSTED_PROXIES` 里，限流才能按读者计数。

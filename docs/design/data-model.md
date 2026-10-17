@@ -1,6 +1,6 @@
 # 数据模型
 
-> 状态：设计中 · 最近更新：2026-10-10
+> 状态：设计中 · 最近更新：2026-10-17
 > 原则见 [architecture.md §0.1](architecture.md#0-两个核心判断)：只存"有哪些博客"和"谁订阅了什么"，不存"博客写了什么"。本文把它落到 PostgreSQL 上。
 > 迁移文件落地后，表结构以 `migrations/` 为准；本文同步更新。
 
@@ -60,7 +60,10 @@ CREATE TABLE blogs (
     gone_since           timestamptz,
 
     created_at           timestamptz NOT NULL DEFAULT now(),
-    updated_at           timestamptz NOT NULL DEFAULT now()
+    updated_at           timestamptz NOT NULL DEFAULT now(),
+    search               tsvector    GENERATED ALWAYS AS (
+                             setweight(to_tsvector('simple', search_text(name)), 'A') ||
+                             setweight(to_tsvector('simple', search_text(description)), 'B')) STORED
 );
 
 CREATE INDEX blogs_due ON blogs (next_fetch_at) WHERE status = 'active';
@@ -77,6 +80,7 @@ CREATE INDEX blogs_due ON blogs (next_fetch_at) WHERE status = 'active';
 | `extra_domains` | 文章链接允许出现的额外域名（[architecture.md §6.3](architecture.md#6-抓取与展示规则)） |
 | `default_tags` | 维护者给这个博客设的默认标签，打标签时给模型当提示，不直接贴到文章上。修改后，这个博客的文章会重新打标签（[accounts.md §5.2](accounts.md#52-怎么打)） |
 | `etag` … `last_error` | 抓取状态，属于缓存性质，丢了只是多一轮完整下载 |
+| `search` | 名字和简介的检索向量，由数据库生成（§4.4）；几千个博客不建索引 |
 | `gone_since` | 第一次收到退出信号（`410 Gone`，或 robots.txt 明确禁止）的时间；恢复正常后清空（[worker.md §3.4](worker.md#34-结果分类)） |
 
 博客健康不单独存状态，而是由抓取字段推导：
@@ -116,6 +120,9 @@ CREATE TABLE entries (
     page_next_check_at timestamptz DEFAULT now(),
     source             text        NOT NULL DEFAULT 'feed' CHECK (source IN ('feed', 'sitemap')),
     url_key            text        GENERATED ALWAYS AS (entry_url_key(url)) STORED,
+    search             tsvector    GENERATED ALWAYS AS (
+                           setweight(to_tsvector('simple', search_text(title)), 'A') ||
+                           setweight(to_tsvector('simple', search_text(coalesce(excerpt, ''))), 'B')) STORED,
 
     UNIQUE (blog_id, identity),
     CHECK (published_at IS NOT NULL OR NOT date_trusted)
@@ -128,6 +135,7 @@ CREATE INDEX entries_untagged ON entries (published_at DESC NULLS LAST, id DESC)
 CREATE INDEX entries_link_due ON entries (link_next_check_at, id);
 CREATE INDEX entries_page_due ON entries (page_next_check_at) WHERE page_next_check_at IS NOT NULL;
 CREATE INDEX entries_url_key  ON entries (blog_id, url_key);
+CREATE INDEX entries_search   ON entries USING gin (search);
 ```
 
 - **没有正文字段**，`excerpt` 在数据库层面限制在 140 字以内：不是"约定不存"，而是"存不进去"。140 是 [architecture.md §6.5](architecture.md#6-抓取与展示规则) 的 `[待定]` 值，E0 改动它需要一个迁移。
@@ -140,6 +148,7 @@ CREATE INDEX entries_url_key  ON entries (blog_id, url_key);
 - `categories` 是订阅源里这篇文章自带的分类，只给打标签当线索，不展示；去掉了 WordPress 的 `Uncategorized` 这类占位分类。
 - `tags` 是 Explore 从标签表里给文章打的标签（[accounts.md §5](accounts.md#5-文章标签)），`tagged_at` 为空表示还没打。`score` 是同一次模型调用给出的推荐分数（[accounts.md §3.1](accounts.md#31-推荐评分)）：深度、原创、价值三项各 1 到 5 分之和，广告、测试等为 0，为空表示还没评。它们和其他列一样是缓存：同步时标题没变就保留，标题变了就清空重打；清空 `entries` 后全部重打。
 - `link_status`、`link_checked_at` 和 `link_next_check_at` 是原文链接的检测缓存。订阅源更新链接时重置检测状态；链接不变时保留。worker 每个博客每轮最多检查一篇，避免集中请求同一个站点；从没检查过的文章排在到期复查之前，免得新文章一直等在复查后面。读者主动检测只认领尚未检查的文章，和 worker 共用 `link_next_check_at` 租约，避免重复请求源站。
+- `search` 是标题（权重 A）和订阅源摘要（权重 B）的检索向量，由数据库从这两列生成，和它们一起随缓存重建（§4.4）。不含 `page_excerpt`。
 - `page_image_url`、`page_excerpt` 是订阅源缺图或摘要被截断时，从文章页 `<head>` 读到的封面地址和描述（[worker.md §12](worker.md#12-读文章页)）；`page_next_check_at` 是下次该读的时间，读过后为空。它们也是缓存：同步时链接不变就保留，链接变了就清空重读。展示时订阅源自己的图片和完整摘要优先。
 
 ### 2.2.1 `sitemap_urls`
@@ -354,6 +363,27 @@ LIMIT @page_size;
 - 游标仍是 `(rank_at, id)`。`rank_at` 是当天零点加一段偏移：把这一天按分数 0 到 15 均分成 16 段，分数越高的段越靠后，段内再按发布时刻的先后排。所以按 `rank_at` 倒序，就是新的一天在前、同一天里分高的在前、同分时新的在前。它只由发布时间、分数和时区决定，不随当前时间变化，翻页前后一致。
 - 每一段的长度按这一天的实际时长算，夏令时那天是 23 或 25 小时也不会跨进相邻的一天。
 - 和 4.1 一样先算每天的上限再套游标，"每天"也按 `@tz` 划分。
+
+### 4.4 搜索
+
+接口见 [api.md §2.7](api.md#27-get-apiv1searchentries-与-get-apiv1searchblogs)。搜文章的标题和订阅源摘要，搜博客的名字、主机名和简介；空格隔开的词都要出现。
+
+**中文怎么切。** PostgreSQL 自带的解析器把一串连续的汉字当成一个词（"今天写了什么"是一个词，搜"写了"找不到），官方镜像里也没有中文分词的字典。可选的做法和取舍：
+
+| 做法 | 为什么没选或选了 |
+|---|---|
+| zhparser、pg_jieba 等分词扩展 | 不在 `postgres:16-alpine` 里，自部署的人都得换成自己构建的 PostgreSQL 镜像；词典切不准的新词还会漏 |
+| pg_trgm | 镜像里有，但三元组至少要三个字才用得上索引；中文常用词多是两个字（摄影、读书、前端），这些查询退化成全表扫描。2026-10-16 在生产库（16.3 万篇）上不走索引扫一遍要 130–170 ms，还随文章数增长。它对英文也按子串匹配，`ai` 会命中 said、email |
+| 字符对（选用） | 把连续的中日韩字符改写成相邻的两字一组再交给 `to_tsvector('simple')`，查询要求这些字对首尾相接，等于按字面匹配，两个字的词也走 GIN 索引；英文仍是整词。只用自带的功能 |
+
+`search_text(text)`（迁移 25）把每一段连续的中日韩字符（平假名、片假名、汉字及其扩展区、谚文音节）写成相邻的字对，再加上最后一个字："独立博客"写成"独立 立博 博客 客"，其余文字原样留着，各段之间用空格隔开。`entries.search` 和 `blogs.search` 由它生成，`internal/store/search.go` 用同一组字符范围（`cjk`）切查询，两边必须一致。
+
+查询的每个词变成一个短语：中文段变成首尾相接的字对，`独立博客` 是 `'独立' <-> '立博' <-> '博客'`；后面还接着别的文字时，带上最后一个字，因为文章里这一段也在那里结束（`博客RSS` 是 `'博客' <-> '客' <-> 'rss'`）；只有一个字又在词尾时按前缀匹配（`'猫':*`），文章里它可能是更长一段的头一个字。其他文字原样交给同一个解析器，所以 `node.js`、`open-source`、`it's` 两边切法相同；不做词干还原，`blog` 找不到 `blogs`。只由标点组成的一段把词断开，`你好，世界` 是两个词。最多取 8 个词。
+
+- **文章**：可见规则同博客页（§4.2），包括没有日期和日期不可信的。所有词都在标题里（`search @@` 带权重 A 的查询）的排第一档，其余排第二档；档内按 `coalesce(published_at, 'epoch')` 倒序。游标是 `(档, 时间, id)`。只在有下一页时另数一次总数，数到 1,000 为止。
+- **博客**：中文词，或三个字符以上的其他词，还在名字和主机名里按子串匹配（`strpos`），这样 `talk` 找得到 MacTalk；更短的词只按词匹配，免得 `ai` 命中 daily。所有词都在名字或主机名里的排第一档，档内按最近一篇文章倒序，和目录一样。
+- **页面摘要不进索引**：`page_excerpt` 常是全站共用的描述，每篇文章都带着它；收进来，搜这段描述里的词就会列出整个博客。展示时同站重复的页面摘要本来就不显示（§2.2）。
+- **代价**：生成列让 `entries` 每行多存一个向量。生产库多数文章没有订阅源摘要，标题平均 24 个字，增加几十 MB；GIN 索引在 16.5 万行的合成数据上约 30 MB。常见的两个字的词在合成数据上匹配 3.6 万行，取第一页约 30 ms。
 
 ---
 
