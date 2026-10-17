@@ -243,6 +243,17 @@ func TestMigrateTwice(t *testing.T) {
 	}
 }
 
+func TestJITIsOff(t *testing.T) {
+	s := newUnmigratedStore(t)
+	var jit string
+	if err := s.pool.QueryRow(context.Background(), "SHOW jit").Scan(&jit); err != nil {
+		t.Fatal(err)
+	}
+	if jit != "off" {
+		t.Fatalf("jit = %q, want off", jit)
+	}
+}
+
 // TestCanonicalLanguagesMigration stores tags the way they were stored
 // before migration 10, then runs it.
 func TestCanonicalLanguagesMigration(t *testing.T) {

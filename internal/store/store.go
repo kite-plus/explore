@@ -52,6 +52,11 @@ func OpenSchema(ctx context.Context, url, schema string) (*Store, error) {
 }
 
 func openConfig(ctx context.Context, cfg *pgxpool.Config) (*Store, error) {
+	// No query here runs long enough to gain from JIT, and a plan the
+	// planner overrates can spend seconds compiling; a jit in the URL wins.
+	if _, set := cfg.ConnConfig.RuntimeParams["jit"]; !set {
+		cfg.ConnConfig.RuntimeParams["jit"] = "off"
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
