@@ -8,6 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-10-17
+
+Explore can be searched: posts and blogs, in Chinese and English, from a field in the header. The upgrade runs one database migration, which adds a search column and its index to `entries` and takes a few seconds on a large archive while the table is locked; `.env`, `docker-compose.yaml` and the `Caddyfile` need no change.
+
+### Added
+
+- A search page at `/search` (`/en/search` in English), with a search field in the header on wider screens and a search button on phones; `/` jumps to the field. Addresses like `/search?q=photography` can be shared. Search pages stay out of search engines.
+- Posts are found by their title and feed excerpt, blogs by name, address and description. Every word must appear; Chinese matches the characters as typed, two-character words included, and other words match whole, so "AI" does not find "said". Posts with the words in the title come first, then the rest, newest first within each, and the words are marked in the results. Matching blogs sit beside the posts, before them on phones, with a page of their own for long lists; a tag whose name holds the query links to its stream. Results can be narrowed to Chinese or English blogs.
+- Before a search the page offers a few words to try and the tags; when nothing is found it says why searches miss and links to the latest posts and to suggesting a blog.
+- `GET /api/v1/search/entries` and `GET /api/v1/search/blogs` serve the same search to the apps and anyone else; see `docs/design/api.md` section 2.7.
+
 ## [0.1.23] - 2026-10-15
 
 Sign in now asks at Kite Plus which account to use, instead of coming back signed in without a word. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
