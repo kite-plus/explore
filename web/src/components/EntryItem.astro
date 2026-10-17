@@ -2,6 +2,7 @@
 import BlogAvatar from "@/components/BlogAvatar.astro";
 import { CircleCheck, CircleHelp, CircleX } from "lucide-react";
 import ExternalLink from "@/components/ExternalLink.astro";
+import Highlight from "@/components/Highlight.astro";
 import { TagIcon } from "@/components/TagIcon";
 import { dict, localePath, type Lang } from "@/i18n";
 import { withSource } from "@/lib/config";
@@ -20,9 +21,11 @@ interface Props {
   /** Tag names by slug; tags without a name are not shown. */
   tagNames?: Record<string, string>;
   tagPath?: string;
+  /** A search's words, marked in the title and excerpt. */
+  words?: string[];
 }
 
-const { lang, entry, blogLanguage, blogHost, blogName, tagNames = {}, tagPath = "/" } = Astro.props;
+const { lang, entry, blogLanguage, blogHost, blogName, tagNames = {}, tagPath = "/", words } = Astro.props;
 const tags = (entry.tags ?? []).filter((slug) => tagNames[slug]);
 const t = dict(lang);
 // Titles and excerpts stay as the author wrote them; lang tells screen
@@ -130,9 +133,9 @@ const statusClass = linkStatus === "available" || linkStatus === "unavailable" ?
         data-go-site={entry.blog?.host ?? blogHost}
         data-go-blog={entry.blog?.name ?? blogName}
         data-go-title={entry.title}
-      >{entry.title}</ExternalLink>
+      ><Highlight text={entry.title} words={words} /></ExternalLink>
     </h3>
-    {entry.excerpt && <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{entry.excerpt}</p>}
+    {entry.excerpt && <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground"><Highlight text={entry.excerpt} words={words} /></p>}
     {
       tags.length > 0 && (
         <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs" lang={t.htmlLang}>

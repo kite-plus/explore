@@ -16,6 +16,8 @@ export const GET: APIRoute = () => {
     "Disallow: /en/go",
     "Disallow: /p/",
     "Disallow: /en/p/",
+    "Disallow: /search",
+    "Disallow: /en/search",
     "",
     `Sitemap: ${publicURL()}/sitemap.xml`,
     "",

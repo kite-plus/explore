@@ -1,0 +1,162 @@
+---
+import { Search, X } from "lucide-react";
+
+import { dict, localePath, type Lang } from "@/i18n";
+import { MAX_SEARCH_LENGTH } from "@/lib/loaders";
+import { withQuery } from "@/lib/utils";
+
+interface Props {
+  lang: Lang;
+  q: string;
+  filter?: string;
+  /** False when nothing was found: that page draws its kite come down. */
+  kite?: boolean;
+}
+
+// The head of the search page: the field, and the masthead's kite tied to a
+// knot on the search button (global.css, .search-*). Before a search it
+// also says what is searched and offers a few words to try.
+const { lang, q, filter, kite = true } = Astro.props;
+const t = dict(lang).search;
+const path = localePath(lang, "/search");
+---
+
+<section class="search-head" data-search-head data-compact={q ? "" : undefined}>
+  {
+    q ? (
+      <h1 class="sr-only">{t.titleFor(q)}</h1>
+    ) : (
+      <>
+        <p class="kite-eyebrow">{t.eyebrow}</p>
+        <h1 class="mt-3 mb-2 pr-20 font-serif text-[1.5rem] leading-snug font-black tracking-wide sm:text-[2.5rem] lg:pr-0">{t.heading}</h1>
+        <p class="mb-6 max-w-xl pr-16 text-sm leading-relaxed text-muted-foreground sm:text-[0.9375rem] lg:pr-0">{t.lede}</p>
+      </>
+    )
+  }
+  <form role="search" action={path} method="get" class="relative z-10 flex max-w-[46rem] gap-2 sm:gap-2.5" data-search-form>
+    <label class="search-field">
+      <span class="sr-only">{t.label}</span>
+      <Search className="size-[1.1875rem] shrink-0 text-muted-foreground" aria-hidden="true" />
+      <input
+        type="search"
+        name="q"
+        value={q}
+        maxlength={MAX_SEARCH_LENGTH}
+        placeholder={t.placeholder}
+        autocomplete="off"
+        enterkeyhint="search"
+        autofocus={!q}
+        data-search-input
+        class="min-w-0 flex-1 bg-transparent font-medium text-foreground outline-none placeholder:font-normal placeholder:text-faint"
+      />
+      <a
+        href={withQuery(path, { lang: filter })}
+        aria-label={t.clear}
+        title={t.clear}
+        hidden={!q}
+        data-search-clear
+        class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground outline-offset-2 hover:text-foreground"
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </a>
+    </label>
+    {filter && <input type="hidden" name="lang" value={filter} />}
+    <button type="submit" class="search-submit">
+      {t.button}
+      <span class="search-knot" data-kite-knot aria-hidden="true"></span>
+    </button>
+  </form>
+  {
+    !q && (
+      <div class="mt-3.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-muted-foreground">
+        <span>{t.try}</span>
+        {t.examples.map((word) => (
+          <a href={withQuery(path, { q: word, lang: filter })} class="search-chip">
+            {word}
+          </a>
+        ))}
+      </div>
+    )
+  }
+  {
+    kite && (
+      <>
+        <div class="kite-fly" aria-hidden="true">
+          <svg class="kite-drawing" viewBox="0 8 64 64">
+            <g transform="translate(32 32) scale(.82) translate(-32 -32)" stroke-linejoin="round" stroke-width="5">
+              <path class="kite-a" d="M10 14.5 L27 21 L27 30 L10 23.5 Z"></path>
+              <path class="kite-b" d="M10 32 L27 38.5 L27 49 L10 42.5 Z"></path>
+              <path class="kite-c" d="M37 21 L54 14.5 L54 42.5 L37 49 Z"></path>
+              <path class="kite-shine" d="M10 14.5 L27 21 L10 23.5 Z"></path>
+              <path class="kite-shine dim" d="M37 21 L54 14.5 L37 49 Z"></path>
+              <path class="kite-shine dim" d="M10 32 L27 38.5 L10 42.5 Z"></path>
+              <path class="kite-tail" d="M10 44 C 6 50, 12 54, 7 60 S 9 68, 3 74" stroke-width=".5"></path>
+              <path class="kite-bow" d="M7.6 51.4 l2.6 -1.4 l.2 2.6 z"></path>
+              <path class="kite-bow gold" d="M6.6 59.6 l2.6 -1.2 l.1 2.6 z"></path>
+              <path class="kite-bow" d="M5.2 67.8 l2.6 -1.2 l.1 2.6 z"></path>
+            </g>
+          </svg>
+          <span class="kite-anchor" data-kite-anchor></span>
+        </div>
+        <svg class="kite-string" aria-hidden="true">
+          <path data-kite-line></path>
+        </svg>
+      </>
+    )
+  }
+</section>
+
+<script>
+  // The clear button empties the field in place; without the script it is
+  // a link to the empty search.
+  for (const form of document.querySelectorAll<HTMLFormElement>("[data-search-form]")) {
+    const input = form.querySelector<HTMLInputElement>("[data-search-input]");
+    const clear = form.querySelector<HTMLElement>("[data-search-clear]");
+    if (!input || !clear) continue;
+    input.addEventListener("input", () => (clear.hidden = !input.value));
+    clear.addEventListener("click", (event) => {
+      event.preventDefault();
+      input.value = "";
+      clear.hidden = true;
+      input.focus();
+    });
+  }
+
+  // The string runs from the kite down to the knot on the search button,
+  // whenever both are drawn; the kite bobs, so it follows every frame.
+  const head = document.querySelector<HTMLElement>("[data-search-head]");
+  const line = head?.querySelector<SVGPathElement>("[data-kite-line]");
+  const anchor = head?.querySelector<HTMLElement>("[data-kite-anchor]");
+  const knot = head?.querySelector<HTMLElement>("[data-kite-knot]");
+  if (head && line && anchor && knot) {
+    const svg = line.ownerSVGElement!;
+    const update = () => {
+      if (!anchor.getClientRects().length || !svg.getClientRects().length) {
+        line.setAttribute("d", "");
+        return;
+      }
+      const o = svg.getBoundingClientRect();
+      const k = anchor.getBoundingClientRect();
+      const t = knot.getBoundingClientRect();
+      const kx = k.left - o.left;
+      const ky = k.top - o.top;
+      const tx = t.left + t.width / 2 - o.left;
+      const ty = t.top + t.height / 2 - o.top;
+      // As on the stream pages' head: shallow at the knot, steep at the kite.
+      line.setAttribute(
+        "d",
+        `M${tx} ${ty} C${tx + (kx - tx) * 0.4} ${ty + (ky - ty) * 0.15}, ${kx + (tx - kx) * 0.12} ${ky + (ty - ky) * 0.45}, ${kx} ${ky}`,
+      );
+    };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      update();
+      addEventListener("resize", update);
+    } else {
+      const loop = () => {
+        update();
+        requestAnimationFrame(loop);
+      };
+      loop();
+    }
+  }
+</script>

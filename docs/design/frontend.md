@@ -1,6 +1,6 @@
 # 前端（web）
 
-> 状态：公开页面、本站账号、订阅流与博客认领已实现 · 最近更新：2026-09-24
+> 状态：公开页面、本站账号、订阅流、博客认领与搜索已实现 · 最近更新：2026-10-17
 > 不能动摇的约束见 [architecture.md §8](architecture.md#8-前端与-seo)；接口见 [api.md](api.md)。本文写前端怎么满足它们。
 > 本站账号、订阅流和账户页已实现，接口与未来 OIDC 迁移见 [accounts.md](accounts.md)。文章标签和首页标签筛选已实现。
 
@@ -49,6 +49,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 | `/recommended` | 推荐流，按天倒序、天内分高的在前（[accounts.md §3.1](accounts.md#31-推荐评分)）；可按博客语言和文章标签筛选。按页面的时区（中文 `Asia/Shanghai`，英文 `UTC`）分日期，请求时传同一个 `tz`。还没有评分时说明原因，并链接到最新 | `GET /api/v1/entries?order=recommended&tz=…`、`GET /api/v1/tags` | 按需 | `public, max-age=60` | 无筛选时收录 |
 | `/blogs` | 博客目录，含 favicon 和简短介绍 | `GET /api/v1/blogs` | 按需 | `public, max-age=300` | 收录 |
 | `/blogs/{host}` | 一个博客的介绍、文章（按页往下翻，带游标的页面 `noindex`）、文章标签和订阅地址 | `GET /api/v1/blogs/{host}`、`GET /api/v1/tags` | 按需 | `public, max-age=300` | 收录 |
+| `/search` | 搜索（[api.md §2.7](api.md#27-get-apiv1searchentries-与-get-apiv1searchblogs)），地址 `/search?q=` 可以直接分享。没有 `q` 时是大输入框、几个试搜的词和标签；有结果时文章在左，匹配的博客在右边的纸签上（窄屏放在文章前面，横着滑），标题和摘要里标出搜的词，下面按页加载；`?type=blogs` 只列博客；什么都没找到时给出换词的提示和"看看最新文章""推荐一个博客"。可按博客语言筛选。头部在中等宽度以上放一个搜索框（GET 表单，不用脚本也能用，`/` 键聚焦），更窄时和搜索页上换成放大镜按钮 | `GET /api/v1/search/entries`、`GET /api/v1/search/blogs`、`GET /api/v1/tags` | 按需 | `public, max-age=60`，没有 `q` 时 `max-age=300` | `noindex`，robots.txt 禁止 |
 | `/about` | 收录规则、退出方式、隐私说明 | —— | 按需，不调用 API | `public, max-age=86400` | 收录 |
 | `/go` | 打开原文前的过渡页（[architecture.md §6.3](architecture.md#63-链接跳回源站的保证)）：目的地在 `#` 后面，只在浏览器里读取；由 Explore 页面打开时约 0.7 秒后自动前往，从别处打开时只列出目的地 | —— | 按需，不调用 API | `public, max-age=86400` | `noindex`，robots.txt 禁止 |
 | `/notices/{id}` | 公告或广告的条目页：标题、名字、标记、发布时间和正文，有外部地址时一个"打开链接"按钮（[notices.md §2](notices.md#2-显示)） | `GET /api/v1/notices/{id}` | 按需 | `public, max-age=60` | `noindex` |
@@ -62,7 +63,7 @@ Explore 的页面几乎都是链接列表，交互很少。Astro 为这类站点
 |---|---|---|
 | `/bot` | 抓取器说明，中英对照的单页：用途、频率、退出方式、联系方式。User-Agent 指向这里，看到它的站长可能说任何语言 | 按需，`public, max-age=86400` |
 | `/sitemap.xml` | 两种语言的首页、目录、说明页和全部博客页 | 按需，`public, max-age=3600` |
-| `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面 | 按需，`public, max-age=86400`；写成接口而不是静态文件，sitemap 地址才能跟着 `EXPLORE_PUBLIC_URL` |
+| `/robots.txt` | 允许抓取，声明 sitemap 地址，禁止提交相关的页面、过渡页、分享页和搜索页 | 按需，`public, max-age=86400`；写成接口而不是静态文件，sitemap 地址才能跟着 `EXPLORE_PUBLIC_URL` |
 
 - **带筛选或翻页的列表页**（`?lang=`、`?tag=`、`?cursor=`，可以组合）一律 `noindex, follow`：时间流一直在变，翻页后的内容没有收录价值，但爬虫仍会顺着链接去作者的博客。
 - `/feed.xml`、`/blogs.opml`、`/f/`、`/api/` 不经过前端，由反向代理直接转给 Gin（§10）。

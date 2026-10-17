@@ -1,5 +1,5 @@
 import { apiURL } from "@/lib/config";
-import type { ApiError, Blog, BlogPage, Entry, Notice, Page, Submission, Tag } from "@/lib/types";
+import type { ApiError, Blog, BlogPage, Entry, Notice, Page, SearchPage, Submission, Tag } from "@/lib/types";
 import type { Lang } from "@/i18n";
 
 // Page loaders call the API from the server. The on-demand article check is
@@ -103,6 +103,12 @@ export const api = {
 
   blog: (caller: Caller, host: string, p: { cursor?: string; limit?: number } = {}) =>
     call<BlogPage>(`/api/v1/blogs/${encodeURIComponent(host)}${query({ cursor: p.cursor, limit: p.limit?.toString() })}`, { caller }),
+
+  searchEntries: (caller: Caller, p: { q: string; cursor?: string; lang?: string; limit?: number }) =>
+    call<SearchPage<Entry>>(`/api/v1/search/entries${query({ q: p.q, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { caller }),
+
+  searchBlogs: (caller: Caller, p: { q: string; cursor?: string; lang?: string; limit?: number }) =>
+    call<SearchPage<Blog>>(`/api/v1/search/blogs${query({ q: p.q, cursor: p.cursor, lang: p.lang, limit: p.limit?.toString() })}`, { caller }),
 
   submission: (caller: Caller, id: string) => call<Submission>(`/api/v1/submissions/${encodeURIComponent(id)}`, { caller }),
 

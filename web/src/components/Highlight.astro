@@ -1,0 +1,14 @@
+---
+import { highlight } from "@/lib/highlight";
+
+interface Props {
+  text: string;
+  /** A search's words (lib/highlight.ts); none leaves the text as it is. */
+  words?: string[];
+}
+
+const { text, words = [] } = Astro.props;
+const parts = words.length ? highlight(text, words) : [{ text, mark: false }];
+---
+
+{parts.map((p) => (p.mark ? <mark class="search-mark">{p.text}</mark> : p.text))}

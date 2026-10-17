@@ -62,7 +62,7 @@ const entryStreamScript = readFileSync(new URL("../src/scripts/entry-stream.js",
 const entryStreamHash = `'sha256-${createHash("sha256").update(entryStreamScript).digest("base64")}'`;
 const entryPages = new Set(["/", "/en/", "/blogs/zh.example.com", "/en/blogs/zh.example.com"]);
 
-const publicPages = ["/", "/en/", "/recommended", "/en/recommended", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot"];
+const publicPages = ["/", "/en/", "/recommended", "/en/recommended", "/blogs", "/en/blogs", "/blogs/zh.example.com", "/en/blogs/zh.example.com", "/about", "/en/about", "/bot", "/search", "/en/search?q=feeds"];
 
 describe("only local scripts, zero third parties", () => {
   for (const path of publicPages) {
@@ -132,7 +132,7 @@ describe("search engines", () => {
     assert.match(html, /<title>中文博客 - Explore<\/title>/);
   });
 
-  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/recommended?lang=zh", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`]) {
+  for (const path of ["/?cursor=page-two", "/?lang=zh", "/?tag=backend", "/recommended?lang=zh", "/blogs?lang=en", "/submit", `/submissions/11111111-2222-3333-4444-555555555555`, "/search", "/search?q=x"]) {
     test(`${path} stays out of the index`, async () => {
       const { html } = await page(path);
       assert.match(html, /<meta name="robots" content="noindex, follow">/);
@@ -155,6 +155,8 @@ describe("search engines", () => {
     assert.match(txt, /Disallow: \/submit/);
     assert.match(txt, /Disallow: \/p\//);
     assert.match(txt, /Disallow: \/en\/p\//);
+    assert.match(txt, /Disallow: \/search/);
+    assert.match(txt, /Disallow: \/en\/search/);
   });
 
   test("link previews show the Explore mark unless a page has its own image", async () => {
@@ -552,6 +554,83 @@ describe("content", () => {
   test("the directory and blog page show the source description", async () => {
     assert.match((await page("/blogs")).html, /记录代码与生活中的新发现。/);
     assert.match((await page("/blogs/zh.example.com")).html, /记录代码与生活中的新发现。/);
+  });
+});
+
+describe("search", () => {
+  const head = (html) => html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+
+  test("the header has a search field, which the search page trades for a button to itself", async () => {
+    for (const [path, action] of [["/", "/search"], ["/blogs", "/search"], ["/en/", "/en/search"]]) {
+      const header = head((await page(path)).html);
+      assert.match(header, new RegExp(`<form role="search" action="${action}" method="get"`), path);
+      assert.match(header, /<input type="search" name="q" maxlength="100"[^>]*data-header-search/, path);
+    }
+    const header = head((await page("/search")).html);
+    assert.doesNotMatch(header, /<form role="search"/);
+    assert.match(header, /<a href="\/search" aria-label="搜索" title="搜索" aria-current="page"/);
+  });
+
+  test("before a search the page offers words to try and the tags", async () => {
+    const { res, html } = await page("/search");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=300");
+    assert.match(html, /<h1[^>]*>在独立博客里找找<\/h1>/);
+    assert.match(html, /<input type="search" name="q" value maxlength="100"[^>]*autofocus/);
+    assert.match(html, /href="\/search\?q=%E6%91%84%E5%BD%B1"/, "a word to try");
+    assert.match(html, /href="\/\?tag=backend"/, "a tag to browse");
+    assert.ok(!stub.state.searches.some((s) => s.q === ""), "no search without a query");
+  });
+
+  test("results mark the words, put blogs beside the posts and page on", async () => {
+    stub.state.searches.length = 0;
+    const { res, html } = await page("/search?q=%E7%BC%93%E5%AD%98");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=60");
+    assert.match(html, /<title>「缓存」的搜索结果 - Explore<\/title>/);
+    assert.match(html, /<input type="search" name="q" value="缓存"/);
+    assert.match(html, /<mark class="search-mark">缓存<\/mark>可以随时删掉/);
+    assert.match(html, /data-search-summary>3 篇文章 · 1 个博客</);
+    assert.match(html, /<a href="\/blogs\/zh\.example\.com" class="group\/row/, "the blog beside the posts");
+    assert.match(html, /href="\/search\?q=%E7%BC%93%E5%AD%98&amp;cursor=search-two"/, "the next page keeps the query");
+    assert.match(html, /href="\/search\?q=%E7%BC%93%E5%AD%98&amp;lang=zh"/, "the language filter keeps the query");
+    assert.deepEqual(
+      stub.state.searches.map(({ path, q, limit }) => [path, q, limit]).sort(),
+      [["/api/v1/search/blogs", "缓存", "6"], ["/api/v1/search/entries", "缓存", "20"]],
+    );
+    assert.ok(stub.state.searches.every((s) => s.forwardedFor), "searches name the reader");
+
+    const next = await page("/search?q=%E7%BC%93%E5%AD%98&cursor=search-two");
+    assert.match(next.html, /data-entry-stream/);
+    assert.match(next.html, /Older post/);
+    assert.equal(stub.state.searches.filter((s) => s.path === "/api/v1/search/blogs").length, 1, "later pages go without blogs");
+  });
+
+  test("an English search marks whole words", async () => {
+    const { html } = await page("/en/search?q=feeds");
+    assert.match(html, /<html lang="en">/);
+    assert.match(html, /<title>Search results for “feeds” - Explore<\/title>/);
+    assert.match(html, /Notes on <mark class="search-mark">feeds<\/mark>/);
+    assert.match(html, /data-search-summary>3 posts · 1 blog</);
+  });
+
+  test("nothing found brings the kite down and offers ways on", async () => {
+    const { res, html } = await page("/search?q=nothing");
+    assert.equal(res.status, 200);
+    assert.match(html, /没找到「nothing」/);
+    assert.match(html, /data-search-summary>没有结果</);
+    assert.match(html, /class="search-none-kite"/);
+    assert.doesNotMatch(html, /class="kite-fly"/, "no kite flies over nothing");
+    assert.doesNotMatch(html, /data-entry-stream/);
+    assert.match(html, /href="\/submit"/);
+  });
+
+  test("the blogs alone, with a way back to everything", async () => {
+    const { html } = await page("/search?q=%E7%BC%93%E5%AD%98&type=blogs");
+    assert.match(html, /<title>与「缓存」有关的博客 - Explore<\/title>/);
+    assert.match(html, /href="\/search\?q=%E7%BC%93%E5%AD%98"/, "back to all results");
+    assert.match(html, /<a href="\/blogs\/zh\.example\.com" class="font-medium/);
+    assert.doesNotMatch(html, /data-entry-stream/);
   });
 });
 

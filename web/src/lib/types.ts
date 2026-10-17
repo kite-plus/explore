@@ -59,6 +59,13 @@ export interface Page<T> {
   next_cursor: string | null;
 }
 
+/** A page of search results; total is given on the first page only. */
+export interface SearchPage<T> extends Page<T> {
+  total: number | null;
+  /** The total is a lower bound: entry search stops counting at 1,000. */
+  total_capped: boolean;
+}
+
 export interface BlogPage {
   blog: Blog;
   entries: Entry[];

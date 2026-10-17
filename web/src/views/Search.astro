@@ -1,0 +1,233 @@
+---
+import { ArrowLeft, ArrowRight } from "lucide-react";
+
+import BlogCard from "@/components/BlogCard.astro";
+import EntryStream from "@/components/EntryStream.astro";
+import Highlight from "@/components/Highlight.astro";
+import LangFilter from "@/components/LangFilter.astro";
+import Message from "@/components/Message.astro";
+import SearchBlogRow from "@/components/SearchBlogRow.astro";
+import SearchHead from "@/components/SearchHead.astro";
+import TagGrid from "@/components/TagGrid.astro";
+import { TagIcon } from "@/components/TagIcon";
+import { ButtonLink } from "@/components/ui/button";
+import { dict, localePath, type Lang } from "@/i18n";
+import Base from "@/layouts/Base.astro";
+import type { Loaded, SearchView } from "@/lib/loaders";
+import { tagNames } from "@/lib/tags";
+import { withQuery } from "@/lib/utils";
+
+interface Props {
+  lang: Lang;
+  result: Loaded<SearchView>;
+}
+
+// The search page (docs/design/frontend.md section 2): posts in the main
+// column and the matching blogs on a paper tag beside them, which narrow
+// screens put first, sideways. ?type=blogs lists the blogs alone.
+const { lang, result } = Astro.props;
+const all = dict(lang);
+const t = all.search;
+const data = result.kind === "ok" ? result.data : undefined;
+const path = localePath(lang, "/search");
+const q = data?.q ?? "";
+const words = data?.words ?? [];
+
+const entries = data?.entries;
+const blogs = data?.blogs;
+const blogCount = blogs?.total ?? blogs?.data.length ?? 0;
+const postCount = entries?.total ?? entries?.data.length ?? 0;
+const sideBlogs = blogs?.data.slice(0, 5) ?? [];
+const nothing = Boolean(q) && !data?.paged && !data?.blogsOnly && postCount === 0 && blogCount === 0;
+const allBlogs = withQuery(path, { q, lang: data?.filter, type: "blogs" });
+const older = entries?.next_cursor && withQuery(path, { q, lang: data?.filter, cursor: entries.next_cursor });
+const moreBlogs = data?.blogsOnly && blogs?.next_cursor && withQuery(path, { q, lang: data.filter, type: "blogs", cursor: blogs.next_cursor });
+const names = data ? tagNames(data.tags, lang) : {};
+// A tag whose name holds the whole query is likely what the reader is after.
+const needle = q.toLowerCase();
+const tagHits = needle ? (data?.tags ?? []).filter((tag) => [tag.slug, tag.name.zh, tag.name.en].some((n) => n.toLowerCase().includes(needle))) : [];
+
+const title = q ? (data?.blogsOnly ? t.blogsFor(q) : t.titleFor(q)) : t.title;
+
+const summary = () => {
+  if (data?.blogsOnly) return blogs?.total != null ? t.blogs(blogs.total) : "";
+  if (!entries || entries.total == null) return "";
+  if (nothing) return t.none;
+  return [t.posts(postCount, entries.total_capped), blogs && t.blogs(blogCount)].filter(Boolean).join(" · ");
+};
+---
+
+<Base lang={lang} title={title} description={t.description} path="/search" wide flush={Boolean(data)} noindex entryChecks={Boolean(entries?.data.length)}>
+  {
+    data ? (
+      <>
+        {!data.paged && <SearchHead lang={lang} q={q} filter={data.filter} kite={!nothing} />}
+        {!q && (
+          <section class="mt-10">
+            <h2 class="font-serif text-[1.0625rem] font-bold">{t.browse}</h2>
+            <TagGrid lang={lang} path="/" tags={data.tags} class="mt-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" />
+          </section>
+        )}
+        {q && !data.paged && (
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+            <p class="text-sm text-muted-foreground" data-search-summary>{summary()}</p>
+            <LangFilter lang={lang} path="/search" current={data.filter} keep={{ q, type: data.blogsOnly ? "blogs" : undefined }} />
+          </div>
+        )}
+        {q && !data.paged && !data.blogsOnly && tagHits.length > 0 && (
+          <div class="flex flex-wrap items-center gap-2 pt-4 text-[0.8125rem] text-muted-foreground">
+            <span>{t.tags}</span>
+            {tagHits.map((tag) => (
+              <a href={withQuery(localePath(lang, "/"), { tag: tag.slug })} class="search-tag">
+                <TagIcon slug={tag.slug} className="size-3.5" />
+                <span>
+                  <Highlight text={tag.name[lang]} words={words} />
+                </span>
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </a>
+            ))}
+          </div>
+        )}
+        {data.blogsOnly && (
+          <section class="mt-5">
+            <a href={withQuery(path, { q, lang: data.filter })} class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              {t.back}
+            </a>
+            {blogs && blogs.data.length > 0 ? (
+              <ul class="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3">
+                {blogs.data.map((b) => (
+                  <BlogCard lang={lang} blog={b} words={words} />
+                ))}
+              </ul>
+            ) : (
+              <p class="py-16 text-center text-muted-foreground">{t.none}</p>
+            )}
+            {moreBlogs && (
+              <div class="mt-6">
+                <ButtonLink href={moreBlogs} variant="outline">
+                  {all.blogs.more}
+                </ButtonLink>
+              </div>
+            )}
+          </section>
+        )}
+        {nothing && (
+          <div class="flex justify-center pt-24 pb-6">
+            <section class="search-none">
+              <span class="kite-tag-hole" aria-hidden="true"></span>
+              <svg class="search-none-kite" viewBox="0 0 170 130" aria-hidden="true">
+                <path class="search-none-string" d="M131 107 C 124 124, 98 124, 90 104 S 84 74, 76 62"></path>
+                <g transform="translate(4 -26) rotate(64 40 46) scale(1.6)">
+                  <g transform="translate(32 32) scale(.82) translate(-32 -32)" stroke-linejoin="round" stroke-width="5">
+                    <path class="kite-a" d="M10 14.5 L27 21 L27 30 L10 23.5 Z"></path>
+                    <path class="kite-b" d="M10 32 L27 38.5 L27 49 L10 42.5 Z"></path>
+                    <path class="kite-c" d="M37 21 L54 14.5 L54 42.5 L37 49 Z"></path>
+                    <path class="kite-shine" d="M10 14.5 L27 21 L10 23.5 Z"></path>
+                    <path class="kite-shine dim" d="M37 21 L54 14.5 L37 49 Z"></path>
+                    <path class="kite-shine dim" d="M10 32 L27 38.5 L10 42.5 Z"></path>
+                    <path class="kite-tail" d="M10 44 C 6 50, 12 54, 7 60 S 9 68, 3 74" stroke-width=".5"></path>
+                    <path class="kite-bow" d="M7.6 51.4 l2.6 -1.4 l.2 2.6 z"></path>
+                    <path class="kite-bow gold" d="M6.6 59.6 l2.6 -1.2 l.1 2.6 z"></path>
+                  </g>
+                </g>
+              </svg>
+              <h2 class="pr-10 font-serif text-lg leading-snug font-bold sm:text-xl">{t.noneTitle(q)}</h2>
+              <ul class="mt-3 list-disc space-y-1 pl-5 text-sm leading-relaxed text-muted-foreground">
+                {t.noneTips.map((tip) => (
+                  <li>{tip}</li>
+                ))}
+              </ul>
+              <div class="mt-5 flex flex-wrap gap-2.5">
+                <ButtonLink href={localePath(lang, "/")} size="sm">
+                  {t.latest}
+                </ButtonLink>
+                <ButtonLink href={localePath(lang, "/submit")} variant="outline" size="sm">
+                  {t.submit}
+                </ButtonLink>
+              </div>
+            </section>
+          </div>
+        )}
+        {q && !data.blogsOnly && !nothing && (
+          <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-12">
+            <div class="min-w-0">
+              {blogs && blogs.data.length > 0 && (
+                <section class="-mx-4 mt-4 sm:-mx-6 lg:hidden">
+                  <div class="flex items-baseline justify-between px-4 sm:px-6">
+                    <h2 class="font-serif text-base font-bold">
+                      {t.blogsTitle}
+                      <span class="ml-1.5 font-mono text-xs font-medium text-seal">{blogCount}</span>
+                    </h2>
+                    {blogCount > blogs.data.length && (
+                      <a href={allBlogs} class="text-[0.8125rem] font-medium text-brand hover:underline">
+                        {t.allShort} →
+                      </a>
+                    )}
+                  </div>
+                  <ul class="search-strip">
+                    {blogs.data.map((b) => (
+                      <li class="search-strip-card">
+                        <SearchBlogRow lang={lang} blog={b} words={words} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {entries && entries.data.length > 0 ? (
+                <EntryStream
+                  lang={lang}
+                  entries={entries.data}
+                  tagNames={names}
+                  tagPath="/"
+                  older={older}
+                  words={words}
+                  moreLabel={t.more}
+                  endLabel={t.end}
+                />
+              ) : (
+                <p class="py-12 text-center text-sm text-muted-foreground">{t.noPosts}</p>
+              )}
+            </div>
+            {!data.paged && (
+              <aside class="hidden space-y-8 pt-5 lg:sticky lg:top-14 lg:block lg:self-start">
+                {sideBlogs.length > 0 && (
+                  <section class="kite-tag relative rounded-xl border bg-card p-5">
+                    <span class="kite-tag-hole" aria-hidden="true"></span>
+                    <h2 class="flex items-baseline gap-2 font-serif text-[1.0625rem] font-bold">
+                      {t.blogsTitle}
+                      <span class="font-mono text-xs font-medium text-seal">{blogCount}</span>
+                    </h2>
+                    <ul class="mt-1.5 divide-y divide-dashed divide-dash">
+                      {sideBlogs.map((b) => (
+                        <li class="py-2.5">
+                          <SearchBlogRow lang={lang} blog={b} words={words} />
+                        </li>
+                      ))}
+                    </ul>
+                    {blogCount > sideBlogs.length && (
+                      <a href={allBlogs} class="mt-1 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand hover:underline">
+                        {t.allBlogs(blogCount)}
+                        <ArrowRight className="size-3.5" aria-hidden="true" />
+                      </a>
+                    )}
+                  </section>
+                )}
+                <section class="text-[0.8125rem] leading-relaxed text-muted-foreground">
+                  <h2 class="mb-1.5 font-medium text-foreground">{t.order}</h2>
+                  <ul class="list-disc space-y-1 pl-4.5">
+                    {t.orderBody.map((line) => (
+                      <li>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+              </aside>
+            )}
+          </div>
+        )}
+      </>
+    ) : (
+      <Message lang={lang} kind={result.kind === "unavailable" ? "unavailable" : "notFound"} />
+    )
+  }
+</Base>

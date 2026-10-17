@@ -52,7 +52,7 @@ const submission = {
 };
 
 export function startStub() {
-  const state = { down: false, unrated: false, kitePlus: false, serverRequests: [], blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [], noticeAudiences: [] };
+  const state = { down: false, unrated: false, kitePlus: false, serverRequests: [], blogOrders: [], submits: [], reports: [], tagLists: 0, linkChecks: 0, adminRequests: [], setupRequests: [], deletedAccounts: 0, entryForwards: [], entryZones: [], noticeAudiences: [], searches: [] };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://stub");
     const lang = req.headers["accept-language"]?.startsWith("zh") ? "zh" : "en";
@@ -187,6 +187,18 @@ export function startStub() {
       if (tag) return send(200, { data: entries.first.data.filter((e) => e.tags.includes(tag)), next_cursor: null });
       if (url.searchParams.get("lang") === "zh") return send(200, { data: [entries.first.data[0]], next_cursor: null });
       return send(200, cursor === "page-two" ? entries.second : entries.first);
+    }
+    // Search finds the first page's posts, then the second's, for any query
+    // but "nothing", which finds nothing.
+    if (req.method === "GET" && (url.pathname === "/api/v1/search/entries" || url.pathname === "/api/v1/search/blogs")) {
+      const q = url.searchParams.get("q") ?? "";
+      const cursor = url.searchParams.get("cursor");
+      state.searches.push({ path: url.pathname, q, lang: url.searchParams.get("lang"), cursor, limit: url.searchParams.get("limit"), forwardedFor: req.headers["x-forwarded-for"] });
+      if (!q.trim()) return error(400, "invalid_request");
+      if (q === "nothing") return send(200, { data: [], next_cursor: null, total: 0, total_capped: false });
+      if (url.pathname === "/api/v1/search/blogs") return send(200, { data: [blogs[0]], next_cursor: null, total: cursor ? null : 1, total_capped: false });
+      if (cursor === "search-two") return send(200, { ...entries.second, total: null, total_capped: false });
+      return send(200, { data: entries.first.data, next_cursor: "search-two", total: 3, total_capped: false });
     }
     if (req.method === "GET" && url.pathname === "/api/v1/notices") {
       const audience = url.searchParams.get("audience");

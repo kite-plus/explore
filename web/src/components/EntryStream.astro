@@ -14,13 +14,18 @@ interface Props {
   older?: string | false | null;
   /** Notices and ads to place between the posts. */
   notices?: Notice[];
+  /** A search's words, marked in the posts. */
+  words?: string[];
+  /** The foot's labels, when the list is not a stream of the latest posts. */
+  moreLabel?: string;
+  endLabel?: string;
 }
 
 // Posts in one run, with no day headings; each says when it came out
 // (lib/format.ts). The stream script appends the next page as it comes.
 // A notice at position N goes after the Nth post, 0 before the first, and
 // one past the page's end goes last; the API orders those sharing a place.
-const { lang, entries, tagNames, tagPath, older, notices = [] } = Astro.props;
+const { lang, entries, tagNames, tagPath, older, notices = [], words, moreLabel, endLabel } = Astro.props;
 const at = (index: number) => notices.filter((n) => Math.min(n.position, entries.length) === index);
 ---
 
@@ -29,10 +34,10 @@ const at = (index: number) => notices.filter((n) => Math.min(n.position, entries
     entries.map((entry, index) => (
       <>
         {at(index).map((notice) => <NoticeItem lang={lang} notice={notice} />)}
-        <EntryItem lang={lang} entry={entry} tagNames={tagNames} tagPath={tagPath} />
+        <EntryItem lang={lang} entry={entry} tagNames={tagNames} tagPath={tagPath} words={words} />
       </>
     ))
   }
   {at(entries.length).map((notice) => <NoticeItem lang={lang} notice={notice} />)}
 </div>
-<LoadMore lang={lang} href={older} />
+<LoadMore lang={lang} href={older} label={moreLabel} end={endLabel} />

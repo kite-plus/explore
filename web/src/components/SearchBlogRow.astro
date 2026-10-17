@@ -1,0 +1,31 @@
+---
+import BlogAvatar from "@/components/BlogAvatar.astro";
+import Highlight from "@/components/Highlight.astro";
+import { localePath, type Lang } from "@/i18n";
+import type { Blog } from "@/lib/types";
+
+interface Props {
+  lang: Lang;
+  blog: Blog;
+  words: string[];
+}
+
+// A blog among search results beside the posts: name, host and a line
+// about it, the whole row a link to its page.
+const { lang, blog: b, words } = Astro.props;
+---
+
+<a href={localePath(lang, `/blogs/${b.host}`)} class="group/row flex gap-2.5 outline-offset-2" lang={b.language}>
+  <BlogAvatar host={b.host} name={b.name} size="md" />
+  <span class="min-w-0 flex-1">
+    <span class="block truncate text-sm leading-snug font-semibold group-hover/row:underline"><Highlight text={b.name} words={words} /></span>
+    <span class="block truncate text-xs text-muted-foreground"><Highlight text={b.host} words={words} /></span>
+    {
+      b.description && (
+        <span class="mt-0.5 line-clamp-2 text-xs leading-normal text-muted-foreground">
+          <Highlight text={b.description} words={words} />
+        </span>
+      )
+    }
+  </span>
+</a>

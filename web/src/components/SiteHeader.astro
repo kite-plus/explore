@@ -1,11 +1,12 @@
 ---
-import { CirclePlus, Compass, Info, Library, Menu, Monitor, Moon, Sun, X } from "lucide-react";
+import { CirclePlus, Compass, Info, Library, Menu, Monitor, Moon, Search, Sun, X } from "lucide-react";
 
 import Logo from "@/components/Logo.astro";
 import { AccountMenu } from "@/components/reader/AccountMenu";
 
 import { dict, localePath, type Lang } from "@/i18n";
 import { forwardedFor } from "@/lib/forwarded";
+import { MAX_SEARCH_LENGTH } from "@/lib/loaders";
 import { signInHref, signInOptions } from "@/lib/sign-in";
 
 interface Props {
@@ -31,6 +32,11 @@ const links = [
   { href: localePath(lang, "/submit"), label: t.nav.submit, icon: CirclePlus, current: path === "/submit" },
   { href: localePath(lang, "/about"), label: t.nav.about, icon: Info, current: path === "/about" },
 ];
+// A search field from medium widths up, which gives way before the links
+// do; narrower screens, and the search page, which has its own field, show
+// a button to the page instead.
+const onSearch = path === "/search";
+const searchPath = localePath(lang, "/search");
 ---
 
 <header class="sticky top-0 z-30 h-14 border-b bg-background/85 backdrop-blur-md">
@@ -45,14 +51,47 @@ const links = [
           <a
             href={l.href}
             aria-current={l.current ? "page" : undefined}
-            class="text-muted-foreground hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+            class="whitespace-nowrap text-muted-foreground hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
           >
             {l.label}
           </a>
         ))
       }
     </nav>
-    <div class="ml-auto flex items-center gap-1.5 sm:ml-0">
+    <div class="ml-auto flex min-w-0 items-center gap-1.5 sm:ml-0">
+      {
+        !onSearch && (
+          <form role="search" action={searchPath} method="get" class:list={["mr-1 hidden min-w-0 md:block", wide ? "w-60" : "w-44"]}>
+            <label class="flex h-9 items-center gap-2 rounded-lg border bg-card/70 px-2.5 text-[0.8125rem] text-faint transition-colors focus-within:border-ring focus-within:bg-card hover:border-input">
+              <Search className="size-[0.9375rem] shrink-0" aria-hidden="true" />
+              <span class="sr-only">{t.search.label}</span>
+              <input
+                type="search"
+                name="q"
+                maxlength={MAX_SEARCH_LENGTH}
+                placeholder={t.search.headerPlaceholder}
+                autocomplete="off"
+                enterkeyhint="search"
+                data-header-search
+                class="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:appearance-none"
+              />
+              <kbd aria-hidden="true" class="hidden rounded-[5px] border border-b-2 bg-background px-1.5 py-0.5 font-mono text-[0.6875rem] leading-none text-muted-foreground lg:inline">/</kbd>
+            </label>
+          </form>
+        )
+      }
+      <a
+        href={searchPath}
+        aria-label={t.nav.search}
+        title={t.nav.search}
+        aria-current={onSearch ? "page" : undefined}
+        class:list={[
+          "size-9 items-center justify-center rounded-lg text-muted-foreground outline-offset-2 transition hover:bg-accent hover:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground",
+          onSearch ? "inline-flex" : "inline-flex md:hidden",
+        ]}
+      >
+        <Search className="size-[1.125rem]" aria-hidden="true" />
+      </a>
       {/* Goes from following the system to dark, to light and back; the
           theme script sets its label. */}
       <button
@@ -99,3 +138,18 @@ const links = [
     </div>
   </div>
 </header>
+
+<script>
+  // "/" goes to the search field the page shows, unless the reader is
+  // typing somewhere already.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "/" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    const field = [...document.querySelectorAll<HTMLInputElement>("[data-search-input], [data-header-search]")].find((el) => el.getClientRects().length);
+    if (!field) return;
+    event.preventDefault();
+    field.focus();
+    field.select();
+  });
+</script>

@@ -7,6 +7,9 @@ interface Props {
   lang: Lang;
   /** The next page's address; without one, the list has ended. */
   href?: string | false | null;
+  /** The button's label and the end line, the latest stream's by default. */
+  label?: string;
+  end?: string;
 }
 
 // The foot of a list of posts. With a next page it is a link to it, which
@@ -16,6 +19,8 @@ interface Props {
 // page shows that line from the start.
 const { lang, href } = Astro.props;
 const t = dict(lang).home;
+const label = Astro.props.label ?? t.older;
+const endLine = Astro.props.end ?? t.end;
 const end =
   "flex items-center gap-4 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border";
 ---
@@ -26,20 +31,20 @@ const end =
       <a
         href={href}
         data-load-more-btn
-        data-label-older={t.older}
+        data-label-older={label}
         data-label-loading={t.loading}
         data-label-retry={t.retry}
         class="group/more inline-flex h-10 w-full max-w-xs items-center justify-center gap-2 rounded-full border bg-background text-sm font-medium text-muted-foreground shadow-xs transition-colors outline-offset-2 hover:bg-accent hover:text-foreground aria-busy:cursor-wait aria-busy:text-foreground"
       >
         <ArrowDown className="size-4 transition-transform group-hover/more:translate-y-0.5 group-aria-busy/more:hidden" aria-hidden="true" />
         <LoaderCircle className="hidden size-4 animate-spin group-aria-busy/more:block" aria-hidden="true" />
-        <span data-load-more-text>{t.older}</span>
+        <span data-load-more-text>{label}</span>
       </a>
       <div data-load-more-end class="hidden w-full">
-        <p class={end}>{t.end}</p>
+        <p class={end}>{endLine}</p>
       </div>
     </div>
   ) : (
-    <p class:list={[end, "mt-8"]}>{t.end}</p>
+    <p class:list={[end, "mt-8"]}>{endLine}</p>
   )
 }

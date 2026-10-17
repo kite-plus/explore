@@ -1,0 +1,8 @@
+---
+import { loadSearch } from "@/lib/loaders";
+import Search from "@/views/Search.astro";
+
+const result = await loadSearch(Astro, "en");
+---
+
+<Search lang="en" result={result} />

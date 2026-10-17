@@ -8,6 +8,8 @@ interface Props {
   current?: string;
   /** The tag filter in use, kept when the language changes. */
   tag?: string;
+  /** Other parameters to keep, such as a search's q. */
+  keep?: Record<string, string | undefined>;
 }
 
 // Filtering by the blogs' language uses ?lang= and has nothing to do with
@@ -16,7 +18,7 @@ interface Props {
 // one, and the script below slides it to a new choice while the filtered
 // list loads in place (lib/swap.ts). Without the script the options are
 // plain links.
-const { lang, path, current, tag } = Astro.props;
+const { lang, path, current, tag, keep } = Astro.props;
 const t = dict(lang).filter;
 const base = localePath(lang, path);
 const options = [
@@ -40,7 +42,7 @@ const index = Math.max(0, options.findIndex((o) => o.value === current));
   {
     options.map((o, i) => (
       <a
-        href={withQuery(base, { lang: o.value, tag })}
+        href={withQuery(base, { ...keep, lang: o.value, tag })}
         data-index={i}
         aria-current={o.value === current ? "page" : undefined}
         class="relative rounded-md px-3 py-1 text-center text-muted-foreground outline-offset-2 transition-colors hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"

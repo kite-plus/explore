@@ -30,6 +30,8 @@
   --dash: light-dark(#c9bca3, #3d3e45);
   --seal: light-dark(#b3432d, #cf563d);
   --gold: light-dark(#e0b25a, #ebc56c);
+  /* A search's words under a marker stroke (Highlight.astro). */
+  --mark: light-dark(rgb(224 178 90 / 0.55), rgb(235 197 108 / 0.32));
   --stamp: light-dark(#3a66c4, #5d7fcf);
   --kite-a: light-dark(#4a77d6, #9bb8ff);
   --kite-b: light-dark(#3e67c0, #7f9ff0);
@@ -82,6 +84,7 @@
     --dash: #c9bca3;
     --seal: #b3432d;
     --gold: #e0b25a;
+    --mark: rgb(224 178 90 / 0.55);
     --stamp: #3a66c4;
     --kite-a: #4a77d6;
     --kite-b: #3e67c0;
@@ -517,6 +520,187 @@
     background: var(--background);
     border: 2px solid var(--input);
   }
+  /* The search page (views/Search.astro, SearchHead.astro). Its head flies
+     the masthead's kite, tied to a knot on the search button; once there
+     are results, narrow screens leave the kite out. */
+  .search-head {
+    position: relative;
+    padding: 2.75rem 0 0.25rem;
+    &[data-compact] {
+      padding-top: 1.75rem;
+    }
+    & .kite-string {
+      display: block;
+    }
+  }
+  @media (max-width: 63.99rem) {
+    .search-head[data-compact] :is(.kite-fly, .kite-string) {
+      display: none;
+    }
+  }
+  .search-field {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 0.625rem;
+    height: 3.25rem;
+    padding: 0 0.875rem 0 1rem;
+    border: 1px solid var(--input);
+    border-radius: 0.875rem;
+    background: var(--card);
+    box-shadow: var(--paper-shadow);
+    font-size: 1.0625rem;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+    &:focus-within {
+      border-color: var(--ring);
+      box-shadow:
+        var(--paper-shadow),
+        0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+    }
+    & input::-webkit-search-cancel-button {
+      appearance: none;
+    }
+    @media (max-width: 39.99rem) {
+      height: 2.875rem;
+      border-radius: 0.75rem;
+      /* 16px keeps iOS from zooming into the field. */
+      font-size: 1rem;
+    }
+  }
+  .search-submit {
+    position: relative;
+    flex: none;
+    height: 3.25rem;
+    padding: 0 1.375rem;
+    border-radius: 0.875rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    &:hover {
+      opacity: 0.9;
+    }
+    &:focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+    @media (max-width: 39.99rem) {
+      height: 2.875rem;
+      padding: 0 0.875rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+    }
+  }
+  .search-knot {
+    position: absolute;
+    top: -0.25rem;
+    right: 0.75rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--background);
+    border: 2px solid var(--input);
+  }
+  .search-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 1.875rem;
+    padding: 0 0.75rem;
+    border: 1px dashed var(--dash);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+    color: var(--foreground);
+    transition:
+      border-color 0.15s,
+      background-color 0.15s;
+    &:hover {
+      border-style: solid;
+      border-color: var(--input);
+      background: var(--card);
+    }
+  }
+  .search-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--brand) 10%, transparent);
+    color: var(--brand);
+    font-weight: 500;
+    &:hover {
+      background: color-mix(in srgb, var(--brand) 16%, transparent);
+    }
+  }
+  .search-mark {
+    color: inherit;
+    background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 92%, transparent 92%);
+    border-radius: 2px;
+    padding-inline: 0.06em;
+    box-decoration-break: clone;
+  }
+  /* Narrow screens show the blogs before the posts, a row of paper cards
+     to swipe through. */
+  .search-strip {
+    display: flex;
+    gap: 0.625rem;
+    overflow-x: auto;
+    padding: 0.625rem 1rem 1rem;
+    scroll-padding-inline: 1rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    @media (min-width: 40rem) {
+      padding-inline: 1.5rem;
+      scroll-padding-inline: 1.5rem;
+    }
+  }
+  .search-strip-card {
+    flex: none;
+    width: 15rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.625rem;
+    background: var(--card);
+    box-shadow: var(--paper-shadow);
+    scroll-snap-align: start;
+  }
+  /* Nothing found: the kite has come down on a paper tag, its string slack. */
+  .search-none {
+    position: relative;
+    width: 100%;
+    max-width: 30rem;
+    padding: 1.875rem 1.875rem 1.625rem;
+    border: 1px solid var(--border);
+    border-radius: 0.875rem;
+    background: var(--card);
+    box-shadow: var(--paper-shadow);
+    rotate: -0.6deg;
+    @media (max-width: 39.99rem) {
+      padding: 1.5rem 1.25rem 1.375rem;
+    }
+  }
+  .search-none-kite {
+    position: absolute;
+    top: -5.125rem;
+    right: -0.625rem;
+    width: 170px;
+    height: 130px;
+    overflow: visible;
+    filter: drop-shadow(0 10px 10px var(--cloud-shadow));
+  }
+  .search-none-string {
+    fill: none;
+    stroke: var(--string);
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    opacity: 0.6;
+  }
+
   /* Long-form pages written in Markdown. */
   .prose-explore {
     @apply text-[0.95rem] leading-7;

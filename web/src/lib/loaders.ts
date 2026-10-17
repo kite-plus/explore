@@ -4,9 +4,10 @@ import { dict, localePath, type Lang } from "@/i18n";
 import { api, type Caller, type Result } from "@/lib/api";
 import { zone } from "@/lib/format";
 import { forwardedFor } from "@/lib/forwarded";
+import { searchWords } from "@/lib/highlight";
 import { safeNext } from "@/lib/next";
 import { tagList } from "@/lib/tags";
-import type { BlogPage, Blog, BlogRef, CheckReport, Entry, Notice, Page, Submission, Tag } from "@/lib/types";
+import type { BlogPage, Blog, BlogRef, CheckReport, Entry, Notice, Page, SearchPage, Submission, Tag } from "@/lib/types";
 
 // Loaders run in a page's frontmatter, the only place where the status
 // and headers can still change: Astro streams the body after that.
@@ -162,6 +163,59 @@ export async function loadBlogs(ctx: AstroGlobal, lang: Lang): Promise<Loaded<Di
   if (r.kind !== "ok") return failed(ctx, r);
   cacheControl(ctx, "public, max-age=300");
   return { kind: "ok", data: { page: r.data, filter, paged: Boolean(cursor) } };
+}
+
+/** The longest query searched, in characters, as the API takes it. */
+export const MAX_SEARCH_LENGTH = 100;
+
+export interface SearchView {
+  /** The query as searched; empty before one is typed. */
+  q: string;
+  /** Its words, to mark in the results (lib/highlight.ts). */
+  words: string[];
+  filter?: string;
+  /** The page of matching blogs alone (?type=blogs) rather than posts. */
+  blogsOnly: boolean;
+  entries?: SearchPage<Entry>;
+  /** A few matching blogs beside the posts' first page, or a page of them. */
+  blogs?: SearchPage<Blog>;
+  /** Empty when the list could not be had. */
+  tags: Tag[];
+  paged: boolean;
+}
+
+/**
+ * loadSearch is the search page: posts with a few blogs beside them, or a
+ * page of blogs alone. Without a query it only needs the tags to browse.
+ */
+export async function loadSearch(ctx: AstroGlobal, lang: Lang): Promise<Loaded<SearchView>> {
+  const q = [...(param(ctx, "q") ?? "").trim()].slice(0, MAX_SEARCH_LENGTH).join("").trim();
+  const filter = param(ctx, "lang");
+  const cursor = param(ctx, "cursor");
+  const blogsOnly = Boolean(q) && param(ctx, "type") === "blogs";
+  const from = caller(ctx, lang);
+  const base = { q, words: searchWords(q), filter, blogsOnly, paged: Boolean(cursor) };
+  if (!q) {
+    const tags = await tagList(from);
+    cacheControl(ctx, "public, max-age=300");
+    return { kind: "ok", data: { ...base, tags: tags ?? [] } };
+  }
+  if (blogsOnly) {
+    const [blogs, tags] = await Promise.all([api.searchBlogs(from, { q, lang: filter, cursor, limit: 24 }), tagList(from)]);
+    if (blogs.kind !== "ok") return failed(ctx, blogs);
+    cacheControl(ctx, "public, max-age=60");
+    return { kind: "ok", data: { ...base, blogs: blogs.data, tags: tags ?? [] } };
+  }
+  // A later page only feeds the stream script, so it goes without blogs.
+  const [entries, blogs, tags] = await Promise.all([
+    api.searchEntries(from, { q, lang: filter, cursor, limit: 20 }),
+    cursor ? undefined : api.searchBlogs(from, { q, lang: filter, limit: 6 }),
+    tagList(from),
+  ]);
+  if (entries.kind !== "ok") return failed(ctx, entries);
+  cacheControl(ctx, "public, max-age=60");
+  // The blogs are extra: without them the posts still show.
+  return { kind: "ok", data: { ...base, entries: entries.data, blogs: blogs?.kind === "ok" ? blogs.data : undefined, tags: tags ?? [] } };
 }
 
 export type BlogView = BlogPage & { tags: Tag[]; paged: boolean };
