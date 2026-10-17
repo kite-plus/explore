@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-10-17
+
+Searching posts for a common word no longer takes seconds. The upgrade runs no migration and needs no change to `.env`, `docker-compose.yaml` or the `Caddyfile`.
+
+### Fixed
+
+- Once the server had answered a few searches, a common word such as "blog" took several seconds to bring up posts: the database reused a plan made without the words and guessed badly how many blogs were visible. Each post search is now planned for its own words.
+
 ## [0.1.24] - 2026-10-17
 
 Explore can be searched: posts and blogs, in Chinese and English, from a field in the header. The upgrade runs one database migration, which adds a search column and its index to `entries` and takes a few seconds on a large archive while the table is locked; `.env`, `docker-compose.yaml` and the `Caddyfile` need no change.
